@@ -3,13 +3,12 @@ use gtk::{CssProvider, StyleContext};
 use gtk::gdk::{Display};
 use adw::{Application, ApplicationWindow};
 
-mod block_error;
 mod views;
 mod currencies;
 mod configuration;
 
-use crate::views::{assets, login, settings};
-use crate::configuration::ApplicationSettings;
+use crate::views::{login};
+use crate::configuration::application_settings::*;
 
 const APP_ID: &str = "org.BlockBreakers.Wallet";
 
@@ -41,6 +40,6 @@ pub fn build_ui(app: &Application) {
         .build(); 
 
     let window_clone = window.clone();
-    let mut app_settings = ApplicationSettings::new();
+    let app_settings = ApplicationSettings::new();
     login::login_view(window_clone, app_settings);
 }

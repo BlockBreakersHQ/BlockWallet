@@ -14,10 +14,10 @@ use fast_qr::convert::{image::ImageBuilder, Builder, Shape};
 use fast_qr::qr::QRBuilder;
 
 use crate::configuration::*;
-use crate::block_error;
+use crate::configuration::application_settings::ApplicationSettings;
 
 pub fn generate_eth_hd_wallet() -> Option<EthereumWallet> {
-    match EthereumWallet::new_hd::<wagyu_ethereum::network::Mainnet, wagyu_ethereum::wordlist::English, _>(
+    match EthereumWallet::new_hd::<wagyu_ethereum::network::Ropsten, wagyu_ethereum::wordlist::English, _>(
         &mut StdRng::from_entropy(),
         24,
         None,
@@ -136,8 +136,6 @@ impl EthereumWallet {
         let private_key = extended_private_key.to_private_key();
         let public_key = extended_public_key.to_public_key();
         let address = public_key.to_address(&EthereumFormat::Standard)?;
-        //let balance = EthereumWallet::get_balance(address.to_string());
-        //block_on(balance);
         Ok(Self {
             path: Some(path.to_string()),
             password: password.map(String::from),
@@ -147,7 +145,6 @@ impl EthereumWallet {
             private_key: Some(private_key.to_string()),
             public_key: Some(public_key.to_string()),
             address: Some(address.to_string()),
-            //balance: Some(balance.to_string()),
             ..Default::default()
         })
     }
@@ -214,26 +211,17 @@ impl EthereumWallet {
         })
     }
 
-    pub async fn get_balance(address: String) -> Result<Self, block_error::Error> {
-        println!("In get balance func");
-        let transport = match web3::transports::Http::new("https://mainnet.infura.io/v3/dcc1c768f6a148f6a0364143bc66e692:8545") {
-            Ok(t) => t,
-            Err(e) => return Err(block_error::Error::Web3Error(e))
-        };
-        println!("Here 1");
+    pub async fn get_balance(address: String) -> Option<String> {
+        let transport = web3::transports::Http::new("https://mainnet.infura.io/v3/4f115186b9564f49ae8b1f2a8850da32").ok()?;
         let web3 = web3::Web3::new(transport);
-        let mut accounts = match web3.eth().accounts().await{
-            Ok(acc) => acc,
-            Err(e) => return Err(block_error::Error::Web3Error(e))
-        };
-        println!("Here 2");
-        accounts.push(address.parse().unwrap());
-        for account in accounts {
-            let balance = web3.eth().balance(account, None).await;
-            println!("Balance of {:?}: {}", account, balance.unwrap());
-        }
-        println!("Here 3");
-        Ok(Self{ balance: Some(String::from("this is a balance")), ..Default::default()})
+        let mut accounts = web3.eth().accounts().await.ok()?;
+        let addr = address.parse().ok()?;
+        accounts.push(addr);
+
+        let balance = web3.eth().balance(accounts[0], None).await;
+        let acc_balance = format!("{}", balance.unwrap());
+        
+        return Some(acc_balance);
     }
 
     pub fn set_wallet_name(&mut self, name: String) {

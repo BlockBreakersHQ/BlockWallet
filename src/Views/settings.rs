@@ -4,10 +4,10 @@ use adw::{ApplicationWindow, HeaderBar};
 use adw::prelude::*;
 use std::sync::{Arc, Mutex};
 
-use crate::configuration::ApplicationSettings;
-use crate::views::{home, login};
+use crate::configuration::application_settings::*;
+use crate::views::{stack, login};
 
-pub fn settings_view(window: ApplicationWindow, app_settings: ApplicationSettings) {//-> ApplicationSettings {
+pub fn settings_view(window: ApplicationWindow, app_settings: ApplicationSettings) {
     let header_bar = HeaderBar::new();
     let settings_button = Button::new();
     
@@ -17,8 +17,8 @@ pub fn settings_view(window: ApplicationWindow, app_settings: ApplicationSetting
 
     header_bar.pack_start(&settings_button);
 
-    let mut app_settings_logout = Arc::new(Mutex::new(app_settings.clone()));
-    let window_logout = window.clone();
+    let app_settings_logout = Arc::new(Mutex::new(app_settings.clone()));
+    let window_logout       = window.clone();
     
     let label = gtk::Label::new(Some("this is a setting"));
     
@@ -39,7 +39,7 @@ pub fn settings_view(window: ApplicationWindow, app_settings: ApplicationSetting
     let input = gtk::Entry::builder()
         .placeholder_text("setting 1")
         .margin_top(12)
-        .margin_bottom(6)
+        .margin_bottom(12)
         .margin_start(12)
         .margin_end(12)
         .visibility(false)
@@ -70,12 +70,10 @@ pub fn settings_view(window: ApplicationWindow, app_settings: ApplicationSetting
 
     settings_button.connect_clicked(move |_| {
         if app_settings.logged_in == true {
-            home::home_view(&window, app_settings.clone());
+            stack::stack_view(&window, app_settings.clone());
         }
         else {
             login::login_view(window.clone(), app_settings.clone());
         }
     });
-
-    //return app_settings;
 }

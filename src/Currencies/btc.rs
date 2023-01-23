@@ -14,7 +14,7 @@ use fast_qr::convert::{image::ImageBuilder, Builder, Shape};
 use fast_qr::qr::QRBuilder;
 
 use crate::configuration::*;
-use crate::block_error;
+use crate::configuration::application_settings::ApplicationSettings;
 
 pub fn generate_btc_hd_wallet() -> Option<BitcoinWallet> {
     match BitcoinWallet::new_hd::<wagyu_bitcoin::network::Mainnet, wagyu_bitcoin::wordlist::English, _>(
@@ -110,6 +110,8 @@ pub struct BitcoinWallet {
     pub transaction_hex: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub balance: Option<String>,
 }
 
 impl BitcoinWallet {
@@ -230,6 +232,20 @@ impl BitcoinWallet {
             compressed: private_key.is_compressed().into(),
             ..Default::default()
         })
+    }
+
+    pub async fn get_balance(address: String) -> Option<String> {
+        /*
+        let transport = web3::transports::Http::new("https://mainnet.infura.io/v3/4f115186b9564f49ae8b1f2a8850da32").ok()?;
+        let web3 = web3::Web3::new(transport);
+        let mut accounts = web3.eth().accounts().await.ok()?;
+        let addr = address.parse().ok()?;
+        accounts.push(addr);
+
+        let balance = web3.eth().balance(accounts[0], None).await;
+        let acc_balance = format!("{}", balance.unwrap());
+        */
+        return Some(String::from("0"));
     }
 
     pub fn set_wallet_name(&mut self, name: String) {

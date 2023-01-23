@@ -1,5 +1,8 @@
 pub mod trade;
-pub mod home;
-pub mod assets;
+pub mod stack;
+pub mod wallets;
 pub mod login;
 pub mod settings;
+pub mod assets;
+pub mod home;
+pub mod header_bar;
