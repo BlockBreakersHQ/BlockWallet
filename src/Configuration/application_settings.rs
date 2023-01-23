@@ -157,6 +157,8 @@ impl ApplicationSettings {
             }
         }
 
+        
+
         let mut settings    = Vec::new();
         let mut btc_wallets = Vec::new();
         let mut eth_wallets = Vec::new();

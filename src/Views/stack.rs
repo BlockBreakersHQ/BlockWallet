@@ -37,6 +37,7 @@ pub fn stack_view(window: &ApplicationWindow, app_settings: ApplicationSettings)
     container.append(&stack_bar);
     container.append(&stack);
 
+    println!("Inside Stack!");
     let _ = app_settings_clone.write_config();
     window.show();
     let app_settings_update = app_settings_clone.clone();
