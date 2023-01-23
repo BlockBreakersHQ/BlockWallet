@@ -258,7 +258,7 @@ impl Display for EthereumWallet {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let output = [
             match &self.wallet_name {
-                Some(path) => format!("      {}          {}\n", "Wallet Name".cyan().bold(), path),
+                Some(wallet_name) => format!("      {}          {}\n", "Wallet Name".cyan().bold(), wallet_name),
                 _ => "".to_owned(),
             },
             match &self.path {

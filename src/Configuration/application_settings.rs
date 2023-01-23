@@ -125,7 +125,7 @@ impl ApplicationSettings {
 
         let mut contents = vec![];
         file.read_to_end(&mut contents)?;
-
+        
         if contents.len() <= 0 || !Path::new(&self.config_path).exists() {
             let b_wallet = ApplicationSettings::generate_btc_wallet(String::new());
             let e_wallet = ApplicationSettings::generate_eth_wallet(String::new());
@@ -140,7 +140,7 @@ impl ApplicationSettings {
             self.btc_wallets = vec![];
             self.eth_wallets = vec![];
         }
-
+        
         file.seek(SeekFrom::Start(0))?;
         let hash = &self.user_hash;
         let cocoon = Cocoon::new(hash.as_bytes());
@@ -156,9 +156,7 @@ impl ApplicationSettings {
                 modified_content.push(i);
             }
         }
-
         
-
         let mut settings    = Vec::new();
         let mut btc_wallets = Vec::new();
         let mut eth_wallets = Vec::new();
@@ -169,11 +167,11 @@ impl ApplicationSettings {
                 settings.remove(0);
             }
             else if i.contains("Sector: Bitcoin") {
-                btc_wallets = i.split("Wallet").collect();
+                btc_wallets = i.split("Wallet______").collect();
                 btc_wallets.remove(0);
             }
             else if i.contains("Sector: Ethereum") {
-                eth_wallets = i.split("Wallet").collect();
+                eth_wallets = i.split("Wallet______").collect();
                 eth_wallets.remove(0);
             }
         }
@@ -181,7 +179,7 @@ impl ApplicationSettings {
         if settings.len() > 0 {
 
         }
-
+        
         //move this into a method.
         if btc_wallets.len() > 0 {
             for btcw in &btc_wallets {
@@ -191,7 +189,7 @@ impl ApplicationSettings {
                 let mut private_key          = String::new();
                 let mut extended_private_key = String::new();
                 let mut wallet_name          = String::new();
-                
+
                 for i in attributes {
                     if i.contains("Path") {
                         let element: Vec<&str> = i.split("Path").collect();
@@ -239,7 +237,11 @@ impl ApplicationSettings {
                         Some(w) => w,
                         None => panic!("ERROR: generating Bitcoin hd wallet from mnemonic failed.")
                     };
-                    b_wallet.set_wallet_name(wallet_name);
+                    if wallet_name.len() > 0 {
+                        b_wallet.set_wallet_name(wallet_name);
+                    } else {
+                        b_wallet.set_wallet_name(String::from("Bitcoin Wallet"));
+                    }
                     let _ = &self.btc_wallets.push(b_wallet);
                 }
                 else if !private_key.is_empty() {
@@ -249,7 +251,11 @@ impl ApplicationSettings {
                         Some(w) => w,
                         None => panic!("ERROR: generating Bitcoin hd wallet from private key failed.")
                     };
-                    b_wallet.set_wallet_name(wallet_name);
+                    if wallet_name.len() > 0 {
+                        b_wallet.set_wallet_name(wallet_name);
+                    } else {
+                        b_wallet.set_wallet_name(String::from("Bitcoin Wallet"));
+                    }
                     let _ = &self.btc_wallets.push(b_wallet);
                 }
                 else if !extended_private_key.is_empty() {
@@ -259,10 +265,17 @@ impl ApplicationSettings {
                         Some(w) => w,
                         None => panic!("ERROR: generating Bitcoin hd wallet from extended private key failed.")
                     };
-                    b_wallet.set_wallet_name(wallet_name);
+                    if wallet_name.len() > 0 {
+                        b_wallet.set_wallet_name(wallet_name);
+                    } else {
+                        b_wallet.set_wallet_name(String::from("Bitcoin Wallet"));
+                    }
                     let _ = &self.btc_wallets.push(b_wallet);
                 }
             }
+        } else {
+            let b_wallet = ApplicationSettings::generate_btc_wallet(String::new());
+            self.btc_wallets.push(b_wallet);
         }
 
         if eth_wallets.len() > 0 {
@@ -321,7 +334,11 @@ impl ApplicationSettings {
                         Some(w) => w,
                         None => panic!("ERROR: generating Ethereum hd wallet from mnemonic failed.")
                     };
-                    e_wallet.set_wallet_name(wallet_name);
+                    if wallet_name.len() > 0 {
+                        e_wallet.set_wallet_name(wallet_name);
+                    } else {
+                        e_wallet.set_wallet_name(String::from("Ethereum Wallet"));
+                    }
                     let _ = &self.eth_wallets.push(e_wallet);
                 }
                 else if !private_key.is_empty() {
@@ -331,7 +348,11 @@ impl ApplicationSettings {
                         Some(w) => w,
                         None => panic!("ERROR: generating Ethereum hd wallet from private key failed.")
                     };
-                    e_wallet.set_wallet_name(wallet_name);
+                    if wallet_name.len() > 0 {
+                        e_wallet.set_wallet_name(wallet_name);
+                    } else {
+                        e_wallet.set_wallet_name(String::from("Ethereum Wallet"));
+                    }
                     let _ = &self.eth_wallets.push(e_wallet);
                 }
                 else if !extended_private_key.is_empty() {
@@ -341,10 +362,17 @@ impl ApplicationSettings {
                         Some(w) => w,
                         None => panic!("ERROR: generating Ethereum hd wallet from extended private key failed.")
                     };
-                    e_wallet.set_wallet_name(wallet_name);
+                    if wallet_name.len() > 0 {
+                        e_wallet.set_wallet_name(wallet_name);
+                    } else {
+                        e_wallet.set_wallet_name(String::from("Ethereum Wallet"));
+                    }
                     let _ = &self.eth_wallets.push(e_wallet);
                 }
             }
+        } else {
+            let e_wallet = ApplicationSettings::generate_eth_wallet(String::new());
+            self.eth_wallets.push(e_wallet);
         }
         Ok(file_content)
     }
@@ -354,7 +382,7 @@ impl ApplicationSettings {
         if &self.btc_wallets.len() > &0 {
             output += "<Entry>\n      Sector: Bitcoin\n";
             for (item, i) in (&self.btc_wallets).iter().enumerate() {
-                output += &format!("      Wallet {}", item);
+                output += &format!("      Wallet______ {}", item);
                 output += &format!("{}\n", i);
             }
             output += "<Entry>\n";
@@ -362,7 +390,7 @@ impl ApplicationSettings {
         if &self.eth_wallets.len() > &0 {
             output += "<Entry>\n      Sector: Ethereum\n";
             for (item, i) in (&self.eth_wallets).iter().enumerate() {
-                output += &format!("      Wallet {}", item);
+                output += &format!("      Wallet______ {}", item);
                 output += &format!("{}\n", i);
             }
             output += "<Entry>\n";

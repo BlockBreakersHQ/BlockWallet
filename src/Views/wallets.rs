@@ -12,6 +12,11 @@ pub fn wallet_view(mut app_settings: ApplicationSettings) -> gtk::Box {
     let btc_data_displayed = Arc::new(Mutex::new(false));
     let eth_data_displayed = Arc::new(Mutex::new(false));
 
+    //app_settings.btc_wallets[0].set_wallet_name("Btc_Wallet_1".to_string());
+    //app_settings.eth_wallets[0].set_wallet_name("Eth_Wallet_1".to_string());
+
+    //let _ = app_settings.write_config();
+
     let mut btc_wallets = app_settings.btc_wallets;
     let mut eth_wallets = app_settings.eth_wallets;
 
