@@ -432,7 +432,7 @@ impl ApplicationSettings {
 
     pub fn write_error_to_path(pathbuf: &PathBuf, err: String) {
         let mut path = PathBuf::new();
-        if pathbuf ==  &PathBuf::new() {
+        if pathbuf ==  &path {
             path = ApplicationSettings::find_error_path().unwrap();
         } else {
             path = pathbuf.to_path_buf();

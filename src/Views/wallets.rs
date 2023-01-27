@@ -1,24 +1,17 @@
 use adw::prelude::*;
-use gtk::prelude::*;
 use gtk::{Button, Orientation, Image};
 use std::sync::{Arc, Mutex};
-
 
 use crate::configuration::application_settings::*;
 use crate::currencies::eth::EthereumWallet;
 use crate::currencies::btc::BitcoinWallet;
 
-pub fn wallet_view(mut app_settings: ApplicationSettings) -> gtk::Box {
+pub fn wallet_view(app_settings: ApplicationSettings) -> gtk::Box {
     let btc_data_displayed = Arc::new(Mutex::new(false));
     let eth_data_displayed = Arc::new(Mutex::new(false));
 
-    //app_settings.btc_wallets[0].set_wallet_name("Btc_Wallet_1".to_string());
-    //app_settings.eth_wallets[0].set_wallet_name("Eth_Wallet_1".to_string());
-
-    //let _ = app_settings.write_config();
-
-    let mut btc_wallets = app_settings.btc_wallets;
-    let mut eth_wallets = app_settings.eth_wallets;
+    let btc_wallets = app_settings.btc_wallets;
+    let eth_wallets = app_settings.eth_wallets;
 
     let btc_button = Button::builder()
         .label("Bitcoin")
@@ -106,6 +99,7 @@ fn populate_btc_currency_details(btc_wallets: &Vec<BitcoinWallet>) -> gtk::Box {
             .margin_start(12)
             .margin_end(12)
             .margin_top(12)
+            .selectable(true)
             .wrap(true)
             .wrap_mode(pango::WrapMode::Char)
             .build();
@@ -121,6 +115,7 @@ fn populate_btc_currency_details(btc_wallets: &Vec<BitcoinWallet>) -> gtk::Box {
             .max_width_chars(50)
             .margin_start(12)
             .margin_end(12)
+            .selectable(true)
             .wrap(true)
             .wrap_mode(pango::WrapMode::Char)
             .build();
@@ -135,6 +130,7 @@ fn populate_btc_currency_details(btc_wallets: &Vec<BitcoinWallet>) -> gtk::Box {
             .max_width_chars(50)
             .margin_start(12)
             .margin_end(12)
+            .selectable(true)
             .wrap(true)
             .wrap_mode(pango::WrapMode::Char)
             .build();
@@ -150,6 +146,7 @@ fn populate_btc_currency_details(btc_wallets: &Vec<BitcoinWallet>) -> gtk::Box {
             .margin_start(12)
             .margin_end(12)
             .margin_bottom(12)
+            .selectable(true)
             .wrap(true)
             .wrap_mode(pango::WrapMode::Char)
             .build();
@@ -245,6 +242,7 @@ fn populate_eth_currency_details(eth_wallets: &Vec<EthereumWallet>) -> gtk::Box 
             .margin_start(12)
             .margin_end(12)
             .margin_top(12)
+            .selectable(true)
             .wrap(true)
             .wrap_mode(pango::WrapMode::Char)
             .build();
@@ -260,6 +258,7 @@ fn populate_eth_currency_details(eth_wallets: &Vec<EthereumWallet>) -> gtk::Box 
             .max_width_chars(50)
             .margin_start(12)
             .margin_end(12)
+            .selectable(true)
             .wrap(true)
             .wrap_mode(pango::WrapMode::Char)
             .build();
@@ -274,6 +273,7 @@ fn populate_eth_currency_details(eth_wallets: &Vec<EthereumWallet>) -> gtk::Box 
             .max_width_chars(50)
             .margin_start(12)
             .margin_end(12)
+            .selectable(true)
             .wrap(true)
             .wrap_mode(pango::WrapMode::Char)
             .build();
@@ -289,6 +289,7 @@ fn populate_eth_currency_details(eth_wallets: &Vec<EthereumWallet>) -> gtk::Box 
             .margin_start(12)
             .margin_end(12)
             .margin_bottom(12)
+            .selectable(true)
             .wrap(true)
             .wrap_mode(pango::WrapMode::Char)
             .build();

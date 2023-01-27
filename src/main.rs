@@ -12,8 +12,8 @@ use crate::configuration::application_settings::*;
 
 const APP_ID: &str = "org.BlockBreakers.Wallet";
 
-#[tokio::main]
-async fn main() {
+//#[tokio::main]
+fn main() {
     let app = Application::builder().application_id(APP_ID).build();
     app.connect_startup(|_| load_css());
     app.connect_activate(build_ui);

@@ -4,12 +4,15 @@ use adw::{ApplicationWindow};
 use std::thread;
 use std::time::Duration;
 
-use crate::views::{wallets, header_bar};
+use crate::views::{home, wallets, header_bar};
 use crate::configuration::application_settings::*;
 use crate::currencies::eth::EthereumWallet;
 use crate::currencies::btc::BitcoinWallet;
+use crate::currencies::currency_pairs::CurrencyPairs;
 
 pub fn stack_view(window: &ApplicationWindow, app_settings: ApplicationSettings) {
+    let currency_pairs = CurrencyPairs::new();
+    
     let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
     window.set_content(Some(&container));
 
@@ -17,16 +20,16 @@ pub fn stack_view(window: &ApplicationWindow, app_settings: ApplicationSettings)
     let stack = adw::ViewStack::new();
     let mut app_settings_clone = app_settings.clone();
 
-    let home_label = gtk::Label::new(Some("Home"));
-    stack.add_titled(&home_label, Option::<&str>::None, "Home");
+    let home_label: Option<&str> = Some("Home");
+    stack.add_titled(&home::home_view(currency_pairs), home_label, "Home");
 
-    let opt: Option<&str> = Some("Wallets");
-    stack.add_titled(&wallets::wallet_view(app_settings), opt, "Wallets");
+    let wallet_label: Option<&str> = Some("Wallets");
+    stack.add_titled(&wallets::wallet_view(app_settings), wallet_label, "Wallets");
 
     let asset_label = gtk::Label::new(Some("Assets"));
     stack.add_titled(&asset_label, Option::<&str>::None, "Assets");
 
-    let trade_label = gtk::Label::new(Some("Trade"));
+    let trade_label = gtk::Label::new(Some("Coming soon!"));
     stack.add_titled(&trade_label, Option::<&str>::None, "Trade");
 
     let stack_bar = adw::ViewSwitcherBar::new();

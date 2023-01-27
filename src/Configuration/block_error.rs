@@ -117,6 +117,12 @@ impl From<Web3Error> for Error {
     }
 }
 
+impl From<reqwest::Error> for Error {
+    fn from(error: reqwest::Error) -> Self {
+        Error::Crate("request", format!("{:?}", error))
+    }
+}
+
 impl From<cocoon::Error> for Error {
     fn from(error: cocoon::Error) -> Self {
         Error::Crate("cocoon", format!("{:?}", error))
