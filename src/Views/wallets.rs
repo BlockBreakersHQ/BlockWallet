@@ -33,19 +33,19 @@ pub fn wallet_view(app_settings: ApplicationSettings) -> (gtk::Box, ApplicationS
 
     eth_button.add_css_class("eth_button");
 
-    let asset_box = Arc::new(Mutex::new(gtk::Box::builder()
+    let wallet_box = Arc::new(Mutex::new(gtk::Box::builder()
         .orientation(Orientation::Vertical)
         .margin_top(12)
         .margin_bottom(12)
         .build()));
 
-    asset_box.lock().unwrap().append(&btc_button);
-    asset_box.lock().unwrap().append(&eth_button);
+    wallet_box.lock().unwrap().append(&btc_button);
+    wallet_box.lock().unwrap().append(&eth_button);
 
     let btc_currency_details = populate_btc_currency_details(&btc_wallets);
     let eth_currency_details = populate_eth_currency_details(&eth_wallets);
-    asset_box.lock().unwrap().insert_child_after(&btc_currency_details, Some(&btc_button));
-    asset_box.lock().unwrap().insert_child_after(&eth_currency_details, Some(&eth_button));
+    wallet_box.lock().unwrap().insert_child_after(&btc_currency_details, Some(&btc_button));
+    wallet_box.lock().unwrap().insert_child_after(&eth_currency_details, Some(&eth_button));
     let btc_currency_details_clone = btc_currency_details.clone();
     let eth_currency_details_clone = eth_currency_details.clone();
 
@@ -73,7 +73,7 @@ pub fn wallet_view(app_settings: ApplicationSettings) -> (gtk::Box, ApplicationS
         }
     });
 
-    return (asset_box.lock().unwrap().clone(), app_settings);
+    return (wallet_box.lock().unwrap().clone(), app_settings);
 }
 
 fn populate_btc_currency_details(btc_wallets: &Vec<BitcoinWallet>) -> gtk::Box {

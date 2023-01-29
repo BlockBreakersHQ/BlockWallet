@@ -6,7 +6,7 @@ use std::time::Duration;
 use chrono;
 use cocoon::{Cocoon};
 use glib::{clone, Continue, MainContext, PRIORITY_DEFAULT};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::currencies::eth;
 use crate::currencies::eth::EthereumWallet;
@@ -491,7 +491,7 @@ impl ApplicationSettings {
                     }));
                 }
             });
-    
+
             receiver.attach(
                 None,
                 clone!(@weak balance_arc => @default-return Continue(false),
@@ -500,7 +500,7 @@ impl ApplicationSettings {
                         if price_text != "Uninitialized" {
                             *out_balance = price_text;
                         }
-    
+
                         Continue(true)
                     }
                 ),

@@ -217,6 +217,7 @@ impl EthereumWallet {
     }
 
     pub async fn get_balance(address: String) -> Option<String> {
+
         let transport = web3::transports::Http::new("https://mainnet.infura.io/v3/4f115186b9564f49ae8b1f2a8850da32").ok()?;
         let web3 = web3::Web3::new(transport);
         let mut accounts = web3.eth().accounts().await.ok()?;

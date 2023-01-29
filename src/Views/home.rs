@@ -7,7 +7,12 @@ use std::time::Duration;
 use crate::currencies::currency_pairs::CurrencyPairs;
 
 pub fn home_view(mut currency_pairs: CurrencyPairs) -> gtk::Box {
-    let home_box = gtk::Box::new(Orientation::Vertical, 15);
+    let home_box = gtk::Box::builder()
+        .orientation(Orientation::Vertical)
+        .margin_top(12)
+        .margin_bottom(12)
+        .build();
+
     let btc_box = gtk::Box::new(Orientation::Horizontal, 185);
 
     let btc_label  = gtk::Label::builder()
