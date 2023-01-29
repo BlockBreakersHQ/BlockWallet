@@ -1,5 +1,5 @@
 use gtk::prelude::*;
-use gtk::{Orientation};
+use gtk::Orientation;
 use glib::{clone, Continue, MainContext, PRIORITY_DEFAULT};
 use std::thread;
 use std::time::Duration;

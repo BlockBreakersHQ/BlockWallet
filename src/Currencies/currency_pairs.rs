@@ -62,7 +62,7 @@ impl CurrencyPairs {
     }
 
     pub async fn get_eth_price() -> Result<String, block_error::Error> {
-        let resp = match reqwest::get("https://api.kine.exchange/market/api/price/ETHUSD").await?.text().await {
+        let resp = match reqwest::get("https://api.0x.org/swap/v1/quote?buyToken=USDC&sellToken=ETH&sellAmount=100000000000000000").await?.text().await {
             Ok(r)  => r,
             Err(_) => return Ok(String::from("Uninitialized"))
         };
@@ -72,7 +72,7 @@ impl CurrencyPairs {
             Err(_) => return Ok(String::from("Uninitialized"))
         };
 
-        return Ok(json["data"]["price"].to_string());
+        return Ok(json["price"].to_string());
     }
 }
 

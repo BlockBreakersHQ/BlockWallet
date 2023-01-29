@@ -1,13 +1,9 @@
 use gtk::prelude::*;
 use adw::prelude::*;
 use adw::{ApplicationWindow};
-use std::thread;
-use std::time::Duration;
 
-use crate::views::{home, wallets, header_bar};
+use crate::views::{assets, home, wallets, header_bar};
 use crate::configuration::application_settings::*;
-use crate::currencies::eth::EthereumWallet;
-use crate::currencies::btc::BitcoinWallet;
 use crate::currencies::currency_pairs::CurrencyPairs;
 
 pub fn stack_view(window: &ApplicationWindow, app_settings: ApplicationSettings) {
@@ -16,18 +12,22 @@ pub fn stack_view(window: &ApplicationWindow, app_settings: ApplicationSettings)
     let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
     window.set_content(Some(&container));
 
+    app_settings.update_balances();
+
     let header_bar = header_bar::header_bar_view(window.clone(), app_settings.clone());
     let stack = adw::ViewStack::new();
     let mut app_settings_clone = app_settings.clone();
+    //let mut app_settings_update = app_settings.clone();
 
     let home_label: Option<&str> = Some("Home");
     stack.add_titled(&home::home_view(currency_pairs), home_label, "Home");
 
+    let (wallet_box, app_settings) = wallets::wallet_view(app_settings);
     let wallet_label: Option<&str> = Some("Wallets");
-    stack.add_titled(&wallets::wallet_view(app_settings), wallet_label, "Wallets");
+    stack.add_titled(&wallet_box, wallet_label, "Wallets");
 
-    let asset_label = gtk::Label::new(Some("Assets"));
-    stack.add_titled(&asset_label, Option::<&str>::None, "Assets");
+    let asset_label: Option<&str> = Some("Assets");
+    stack.add_titled(&assets::asset_view(app_settings), asset_label, "Assets");
 
     let trade_label = gtk::Label::new(Some("Coming soon!"));
     stack.add_titled(&trade_label, Option::<&str>::None, "Trade");
@@ -42,42 +42,4 @@ pub fn stack_view(window: &ApplicationWindow, app_settings: ApplicationSettings)
 
     let _ = app_settings_clone.write_config();
     window.show();
-    let app_settings_update = app_settings_clone.clone();
-
-    thread::spawn(move || {
-        let runtime = tokio::runtime::Runtime::new().unwrap();
-        let btc_wallet_count = app_settings_update.btc_wallets.len();
-        let eth_wallet_count = app_settings_update.eth_wallets.len();
-
-        loop {
-            std::thread::sleep(Duration::from_millis(1000));
-            let mut btc_wallets = app_settings_update.btc_wallets.clone();
-            let mut eth_wallets = app_settings_update.eth_wallets.clone();
-            let _ = runtime.block_on(runtime.spawn(async move {
-                for i in 0..btc_wallet_count {
-                    let btc_address_raw = match &btc_wallets[i].address {
-                        Some(address) => String::from(address),
-                        None => continue
-                    };
-    
-                    btc_wallets[i].balance = match BitcoinWallet::get_balance(btc_address_raw).await {
-                        Some(sat) => Some((sat.parse::<f64>().unwrap() / 100000000.0).to_string()),
-                        None => Some(String::from("0"))
-                    };
-                }
-                
-                for i in 0..eth_wallet_count {
-                    let eth_address_raw = match &eth_wallets[i].address {
-                        Some(address) => String::from(address),
-                        None => continue
-                    };
-    
-                    eth_wallets[i].balance = match EthereumWallet::get_balance(eth_address_raw).await {
-                        Some(gwei) => Some((gwei.parse::<f64>().unwrap() / 1000000000000000000.0).to_string()),
-                        None => Some(String::from("0"))
-                    };
-                }
-            }));
-        }
-    });
 }

@@ -12,6 +12,7 @@ use rand::{rngs::StdRng, Rng, SeedableRng};
 use serde::{Serialize};
 use fast_qr::convert::{image::ImageBuilder, Builder, Shape};
 use fast_qr::qr::QRBuilder;
+use std::sync::{Arc, Mutex};
 
 use crate::configuration::*;
 use crate::configuration::application_settings::ApplicationSettings;
@@ -102,11 +103,10 @@ pub struct EthereumWallet {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub address: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub balance: Option<Arc<Mutex<String>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub network: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub transaction_hex: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub balance: Option<String>,
+    
 }
 
 impl EthereumWallet {
@@ -118,6 +118,7 @@ impl EthereumWallet {
             private_key: Some(private_key.to_string()),
             public_key: Some(public_key.to_string()),
             address: Some(address.to_string()),
+            balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
             ..Default::default()
         })
     }
@@ -145,6 +146,7 @@ impl EthereumWallet {
             private_key: Some(private_key.to_string()),
             public_key: Some(public_key.to_string()),
             address: Some(address.to_string()),
+            balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
             ..Default::default()
         })
     }
@@ -171,6 +173,7 @@ impl EthereumWallet {
             private_key: Some(private_key.to_string()),
             public_key: Some(public_key.to_string()),
             address: Some(address.to_string()),
+            balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
             ..Default::default()
         })
     }
@@ -195,6 +198,7 @@ impl EthereumWallet {
             private_key: Some(private_key.to_string()),
             public_key: Some(public_key.to_string()),
             address: Some(address.to_string()),
+            balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
             ..Default::default()
         })
     }
@@ -207,6 +211,7 @@ impl EthereumWallet {
             private_key: Some(private_key.to_string()),
             public_key: Some(public_key.to_string()),
             address: Some(address.to_string()),
+            balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
             ..Default::default()
         })
     }
@@ -303,12 +308,6 @@ impl Display for EthereumWallet {
             },
             match &self.network {
                 Some(network) => format!("      {}              {}\n", "Network".cyan().bold(), network),
-                _ => "".to_owned(),
-            },
-            match &self.transaction_hex {
-                Some(transaction_hex) => {
-                    format!("      {}      {}\n", "Transaction Hex".cyan().bold(), transaction_hex)
-                }
                 _ => "".to_owned(),
             },
         ]

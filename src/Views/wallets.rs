@@ -6,12 +6,12 @@ use crate::configuration::application_settings::*;
 use crate::currencies::eth::EthereumWallet;
 use crate::currencies::btc::BitcoinWallet;
 
-pub fn wallet_view(app_settings: ApplicationSettings) -> gtk::Box {
+pub fn wallet_view(app_settings: ApplicationSettings) -> (gtk::Box, ApplicationSettings) {
     let btc_data_displayed = Arc::new(Mutex::new(false));
     let eth_data_displayed = Arc::new(Mutex::new(false));
 
-    let btc_wallets = app_settings.btc_wallets;
-    let eth_wallets = app_settings.eth_wallets;
+    let btc_wallets = app_settings.clone().btc_wallets;
+    let eth_wallets = app_settings.clone().eth_wallets;
 
     let btc_button = Button::builder()
         .label("Bitcoin")
@@ -73,7 +73,7 @@ pub fn wallet_view(app_settings: ApplicationSettings) -> gtk::Box {
         }
     });
 
-    return asset_box.lock().unwrap().clone();
+    return (asset_box.lock().unwrap().clone(), app_settings);
 }
 
 fn populate_btc_currency_details(btc_wallets: &Vec<BitcoinWallet>) -> gtk::Box {
