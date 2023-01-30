@@ -59,7 +59,7 @@ impl ApplicationSettings {
         }
     }
 
-    fn generate_btc_wallet(wallet_name: String) -> BitcoinWallet {
+    pub fn generate_btc_wallet(wallet_name: String) -> BitcoinWallet {
 
         let btc_wallet = match btc::generate_btc_hd_wallet() {
             Some(wallet) => Some(wallet),
@@ -81,7 +81,7 @@ impl ApplicationSettings {
         return bitcoin_wallet;
     }
 
-    fn generate_eth_wallet(wallet_name: String) -> EthereumWallet {
+    pub fn generate_eth_wallet(wallet_name: String) -> EthereumWallet {
         let eth_wallet = match eth::generate_eth_hd_wallet() {
             Some(wallet) => Some(wallet),
             None => None
@@ -102,7 +102,7 @@ impl ApplicationSettings {
         return ethereum_wallet;
     }
 
-    fn find_config_path() -> io::Result<PathBuf> {
+    pub fn find_config_path() -> io::Result<PathBuf> {
         let mut cpath = env::current_exe()?;
         cpath.pop();
         cpath.push("Config.dic");
@@ -114,6 +114,13 @@ impl ApplicationSettings {
         cpath.pop();
         cpath.push("Error.log");
         Ok(cpath)
+    }
+
+    pub fn find_images_path() -> io::Result<PathBuf> {
+        let mut ipath = env::current_exe()?;
+        ipath.pop();
+        ipath.push("Images");
+        Ok(ipath)
     }
 
     pub fn read_config(&mut self) -> Result<String, block_error::Error> {

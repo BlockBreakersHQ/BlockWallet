@@ -4,6 +4,7 @@ use adw::prelude::*;
 use adw::{ApplicationWindow};
 use sha3::{Digest, Sha3_256};
 use std::sync::{Arc, Mutex};
+use std::path::PathBuf;
 
 use crate::configuration::application_settings::*;
 use crate::views::{stack, header_bar};
@@ -11,7 +12,15 @@ use crate::views::{stack, header_bar};
 pub fn login_view(window: ApplicationWindow, app_settings: ApplicationSettings) {
     let header_bar = header_bar::header_bar_view(window.clone(), app_settings.clone());
 
-    let login_logo = Image::from_file("Logo.png");
+    let logo_path = match ApplicationSettings::find_images_path(){
+        Ok(mut lp) => {
+            lp.push("Logo.png");
+            lp
+        },
+        Err(_) => PathBuf::new()
+    };
+
+    let login_logo = Image::from_file(logo_path);
     login_logo.set_pixel_size(300);
 
     let button = Button::builder()

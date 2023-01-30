@@ -3,6 +3,7 @@ use gtk::{Button, Orientation, Image};
 use adw::{ApplicationWindow, HeaderBar};
 use adw::prelude::*;
 use std::sync::{Arc, Mutex};
+use std::path::PathBuf;
 
 use crate::configuration::application_settings::*;
 use crate::views::{stack, login};
@@ -10,8 +11,16 @@ use crate::views::{stack, login};
 pub fn settings_view(window: ApplicationWindow, app_settings: ApplicationSettings) {
     let header_bar = HeaderBar::new();
     let settings_button = Button::new();
+
+    let cog_path = match ApplicationSettings::find_images_path(){
+        Ok(mut cog) => {
+            cog.push("cog.png");
+            cog
+        },
+        Err(_) => PathBuf::new()
+    };
     
-    let settings_icon = Image::from_file("cog.png");
+    let settings_icon = Image::from_file(cog_path);
     settings_icon.set_pixel_size(25);
     settings_button.set_child(Some(&settings_icon));
 

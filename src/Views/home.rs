@@ -30,22 +30,7 @@ pub fn home_view(mut currency_pairs: CurrencyPairs) -> gtk::Box {
     btc_box.append(&btc_label);
     btc_box.append(&btc_price_label);
 
-    let eth_box = gtk::Box::new(Orientation::Horizontal, 185);
-    let eth_label  = gtk::Label::builder()
-        .label("ETH")
-        .margin_top(12)
-        .margin_start(50)
-        .build();
-
-    let eth_price_label  = gtk::Label::builder()
-        .label("Uninitialized")
-        .margin_top(12)
-        .margin_end(50)
-        .build();
-
-    eth_box.append(&eth_label);
-    eth_box.append(&eth_price_label);
-
+    let eth_box = generate_currency_box(String::from("ETH"));
     home_box.append(&btc_box);
     home_box.append(&eth_box);
 
@@ -81,15 +66,65 @@ pub fn home_view(mut currency_pairs: CurrencyPairs) -> gtk::Box {
                     currency_pairs.btc_usd = Some(price_text.0.to_string());
                 }
                 
-                if price_text.1 != "Uninitialized" {
+                /*if price_text.1 != "Uninitialized" {
                     eth_price_label.set_label(&price_text.1);
                     currency_pairs.eth_usd = Some(price_text.1.to_string());
-                }
+                }*/
 
                 Continue(true)
             }
         ),
     );
-
     return home_box.clone();
+}
+    
+
+
+pub fn generate_currency_box(ticker: String) -> gtk::Box {
+    let currency_box = gtk::Box::new(Orientation::Horizontal, 185);
+    let currency_label  = gtk::Label::builder()
+        .label(&ticker)
+        .margin_top(12)
+        .margin_start(50)
+        .build();
+
+    let currency_price_label  = gtk::Label::builder()
+        .label("Uninitialized")
+        .margin_top(12)
+        .margin_end(50)
+        .build();
+
+        currency_box.append(&currency_label);
+        currency_box.append(&currency_price_label);
+
+    let (sender, receiver) = MainContext::channel(PRIORITY_DEFAULT);
+
+    thread::spawn(move || {
+        loop {
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            let sender = sender.clone();
+            let _ = runtime.block_on(runtime.spawn(async move {
+                let currency_label = match CurrencyPairs::get_eth_price().await {
+                    Ok(label)  => label,
+                    Err(_) => String::from("Uninitialized")
+                };
+
+                sender.send(currency_label).expect("Could not send through channel");
+            }));
+            thread::sleep(Duration::from_secs(60));
+        }
+    });
+
+    receiver.attach(
+        None,
+        clone!(@weak currency_box => @default-return Continue(false),
+            move |price_text| {
+                if price_text != "Uninitialized" {
+                    currency_price_label.set_label(&price_text);
+                }
+                Continue(true)
+            }
+        ),
+    );
+    return currency_box;
 }
