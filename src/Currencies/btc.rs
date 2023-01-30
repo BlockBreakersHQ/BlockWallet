@@ -10,8 +10,10 @@ use colored::*;
 use core::{fmt, fmt::Display, str::FromStr};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serde::{Serialize};
+use serde_json::from_str;
 use fast_qr::convert::{image::ImageBuilder, Builder, Shape};
 use fast_qr::qr::QRBuilder;
+use std::sync::{Arc, Mutex};
 
 use crate::configuration::*;
 use crate::configuration::application_settings::ApplicationSettings;
@@ -111,7 +113,7 @@ pub struct BitcoinWallet {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub balance: Option<String>,
+    pub balance: Option<Arc<Mutex<String>>>,
 }
 
 impl BitcoinWallet {
@@ -157,6 +159,7 @@ impl BitcoinWallet {
             format: Some(address.format().to_string()),
             network: Some(N::NAME.to_string()),
             compressed: Some(compressed),
+            balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
             ..Default::default()
         })
     }
@@ -187,6 +190,7 @@ impl BitcoinWallet {
             format: Some(address.format().to_string()),
             network: Some(N::NAME.to_string()),
             compressed: Some(compressed),
+            balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
             ..Default::default()
         })
     }
@@ -215,6 +219,7 @@ impl BitcoinWallet {
             format: Some(address.format().to_string()),
             network: Some(N::NAME.to_string()),
             compressed: Some(compressed),
+            balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
             ..Default::default()
         })
     }
@@ -230,22 +235,27 @@ impl BitcoinWallet {
             network: Some(N::NAME.to_string()),
             format: Some(address.format().to_string()),
             compressed: private_key.is_compressed().into(),
+            balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
             ..Default::default()
         })
     }
 
     pub async fn get_balance(address: String) -> Option<String> {
-        /*
-        let transport = web3::transports::Http::new("https://mainnet.infura.io/v3/4f115186b9564f49ae8b1f2a8850da32").ok()?;
-        let web3 = web3::Web3::new(transport);
-        let mut accounts = web3.eth().accounts().await.ok()?;
-        let addr = address.parse().ok()?;
-        accounts.push(addr);
+        let balance_endpoint = format!("https://blockchain.info/q/getreceivedbyaddress/{}", address);
+        let resp = match reqwest::get(balance_endpoint).await.ok()?.text().await {
+            Ok(r)  => r,
+            Err(_) => return None
+        };
 
-        let balance = web3.eth().balance(accounts[0], None).await;
-        let acc_balance = format!("{}", balance.unwrap());
-        */
-        return Some(String::from("0"));
+        let mut balance = match from_str::<f64>(&resp) {
+            Ok(b)  => b,
+            Err(_) => return None
+        };
+
+        if balance > 0.0 {
+            balance = balance / 100000000.0;
+        }
+        return Some(balance.to_string());
     }
 
     pub fn set_wallet_name(&mut self, name: String) {

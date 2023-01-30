@@ -6,7 +6,7 @@ use std::time::Duration;
 use chrono;
 use cocoon::{Cocoon};
 use glib::{clone, Continue, MainContext, PRIORITY_DEFAULT};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use crate::currencies::eth;
 use crate::currencies::eth::EthereumWallet;
@@ -454,8 +454,61 @@ impl ApplicationSettings {
     pub fn update_balances(&self) {
         let mut run_before = false;
 
+        for i in 0..self.btc_wallets.len() {
+            let btc_balance_arc = match &self.btc_wallets[i].balance {
+                Some(b) => Arc::clone(b),
+                None    => panic!("ERROR: failed aquiring balance mutex.")
+            };
+    
+            let address = match &self.btc_wallets[i].address {
+                Some(b) => String::from(b),
+                None    => String::from("Uninitialized")
+            };
+    
+            let (sender, receiver) = MainContext::channel(PRIORITY_DEFAULT);
+    
+            thread::spawn(move || {
+                loop {
+                    let runtime = tokio::runtime::Runtime::new().unwrap();
+                    let sender  = sender.clone();
+                    let address = address.clone();
+    
+                    if run_before == false {
+                        thread::sleep(Duration::from_secs(1));
+                        run_before = true;
+                    }
+                    else {
+                        thread::sleep(Duration::from_secs(10));
+                    }
+    
+                    let _ = runtime.block_on(runtime.spawn(async move {
+                        let btc_price = match BitcoinWallet::get_balance(address).await {
+                            Some(label)  => label,
+                            None         => String::from("Uninitialized")
+                        };
+    
+                        sender.send(btc_price).expect("Could not send through channel");
+                    }));
+                }
+            });
+
+            receiver.attach(
+                None,
+                clone!(@weak btc_balance_arc => @default-return Continue(false),
+                    move |price_text| {
+                        let mut btc_balance = btc_balance_arc.lock().unwrap();
+                        if price_text != "Uninitialized" {
+                            *btc_balance = price_text;
+                        }
+
+                        Continue(true)
+                    }
+                ),
+            );
+        }
+
         for i in 0..self.eth_wallets.len() {
-            let balance_arc = match &self.eth_wallets[i].balance {
+            let eth_balance_arc = match &self.eth_wallets[i].balance {
                 Some(b) => Arc::clone(b),
                 None    => panic!("ERROR: failed aquiring balance mutex.")
             };
@@ -494,11 +547,11 @@ impl ApplicationSettings {
 
             receiver.attach(
                 None,
-                clone!(@weak balance_arc => @default-return Continue(false),
+                clone!(@weak eth_balance_arc => @default-return Continue(false),
                     move |price_text| {
-                        let mut out_balance = balance_arc.lock().unwrap();
+                        let mut eth_balance = eth_balance_arc.lock().unwrap();
                         if price_text != "Uninitialized" {
-                            *out_balance = price_text;
+                            *eth_balance = price_text;
                         }
 
                         Continue(true)

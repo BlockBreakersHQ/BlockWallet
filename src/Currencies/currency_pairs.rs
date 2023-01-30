@@ -16,36 +16,6 @@ impl CurrencyPairs {
             eth_usd             : Some(String::from("0"))
         }
     }
-    
-    pub async fn set_btc_price(&mut self) -> Result<(), reqwest::Error> {
-        let resp = match reqwest::get("https://api.kine.exchange/market/api/price/BTCUSD").await?.text().await {
-            Ok(r)  => r,
-            Err(_) => return Ok(())
-        };
-        
-        let json: Value = match serde_json::from_str(&resp) {
-            Ok(r)  => r,
-            Err(_) => return Ok(())
-        };
-
-        self.btc_usd = Some(json["data"]["price"].to_string());
-        Ok(())
-    }
-
-    pub async fn set_eth_price(&mut self) -> Result<(), block_error::Error> {
-        let resp = match reqwest::get("https://api.kine.exchange/market/api/price/ETHUSD").await?.text().await {
-            Ok(r)  => r,
-            Err(_) => return Ok(())
-        };
-
-        let json: Value = match serde_json::from_str(&resp) {
-            Ok(r)  => r,
-            Err(_) => return Ok(())
-        };
-
-        self.eth_usd = Some(json["data"]["price"].to_string());
-        Ok(())
-    }
 
     pub async fn get_btc_price() -> Result<String, block_error::Error> {
         let resp = match reqwest::get("https://api.kine.exchange/market/api/price/BTCUSD").await?.text().await {

@@ -6,13 +6,13 @@ use adw::{Application, ApplicationWindow};
 mod views;
 mod currencies;
 mod configuration;
+mod tests;
 
 use crate::views::{login};
 use crate::configuration::application_settings::*;
 
 const APP_ID: &str = "org.BlockBreakers.Wallet";
 
-//#[tokio::main]
 fn main() {
     let app = Application::builder().application_id(APP_ID).build();
     app.connect_startup(|_| load_css());

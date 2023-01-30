@@ -1,6 +1,6 @@
 use std::time::Duration;
 use std::thread;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use gtk::Orientation;
 use gtk::prelude::*;
 use glib::{clone, Continue, MainContext, PRIORITY_DEFAULT};
@@ -21,14 +21,14 @@ pub fn asset_view(app_settings: ApplicationSettings) -> gtk::Box {
         .margin_start(50)
         .build();
     
-    let btc_price_label  = gtk::Label::builder()
+    let btc_balance_label  = gtk::Label::builder()
         .label("Uninitialized")
         .margin_top(12)
         .margin_end(50)
         .build();
 
     btc_box.append(&btc_label);
-    btc_box.append(&btc_price_label);
+    btc_box.append(&btc_balance_label);
 
     let eth_box = gtk::Box::new(Orientation::Horizontal, 185);
     let eth_label  = gtk::Label::builder()
@@ -53,15 +53,19 @@ pub fn asset_view(app_settings: ApplicationSettings) -> gtk::Box {
 
     thread::spawn(move || {
         loop {
-            let runtime = tokio::runtime::Runtime::new().unwrap();
             let sender  = sender.clone();
 
-            let arc_balance = match &app_settings.eth_wallets[0].balance {
+            let btc_balance = match &app_settings.btc_wallets[0].balance {
                 Some(b) => b,
                 None    => panic!("An error occurred in assets")
             };
 
-            let balance = Arc::clone(&arc_balance);
+            let eth_balance = match &app_settings.eth_wallets[0].balance {
+                Some(b) => b,
+                None    => panic!("An error occurred in assets")
+            };
+
+            let balance = (Arc::clone(&btc_balance), Arc::clone(&eth_balance));
 
             sender.send(balance).expect("Could not send through channel");
             thread::sleep(Duration::from_secs(10));
@@ -72,9 +76,12 @@ pub fn asset_view(app_settings: ApplicationSettings) -> gtk::Box {
         None,
         clone!(@weak eth_balance_label => @default-return Continue(false),
             move |balance_text| {
-                //let mut out_balance = eth_balance_label.lock().unwrap();
-                if *balance_text.lock().unwrap() != "Uninitialized" {
-                    eth_balance_label.set_label(&*balance_text.lock().unwrap());
+                if *balance_text.0.lock().unwrap() != "Uninitialized" {
+                    btc_balance_label.set_label(&*balance_text.0.lock().unwrap());
+                }
+
+                if *balance_text.1.lock().unwrap() != "Uninitialized" {
+                    eth_balance_label.set_label(&*balance_text.1.lock().unwrap());
                 }
 
                 Continue(true)
