@@ -1,6 +1,7 @@
 use adw::{HeaderBar, ApplicationWindow};
 use gtk::{Image, Button};
 use gtk::prelude::*;
+use std::path::PathBuf;
 
 use crate::configuration::application_settings::*;
 use crate::views::settings;
@@ -9,11 +10,19 @@ pub fn header_bar_view(window: ApplicationWindow, mut app_settings: ApplicationS
     if app_settings.logged_in == false {
         app_settings = ApplicationSettings::new();
     }
+
+    let settings_icon_path = match ApplicationSettings::find_images_path(){
+        Ok(mut lp) => {
+            lp.push("cog.png");
+            lp
+        },
+        Err(_) => PathBuf::new()
+    };
     
     let header_bar = HeaderBar::new();
     let settings_button = Button::new();
     
-    let settings_icon = Image::from_file("cog.png");
+    let settings_icon = Image::from_file(settings_icon_path);
     settings_icon.set_pixel_size(25);
     settings_button.set_child(Some(&settings_icon));
 
