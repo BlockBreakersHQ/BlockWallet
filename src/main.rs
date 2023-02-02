@@ -2,6 +2,9 @@ use gtk::prelude::*;
 use gtk::{CssProvider, StyleContext};
 use gtk::gdk::{Display};
 use adw::{Application, ApplicationWindow};
+use std::path::{Path, PathBuf};
+use std::thread;
+use std::fs;
 
 mod views;
 mod currencies;
@@ -9,9 +12,14 @@ mod configuration;
 mod tests;
 
 use crate::views::{login};
+use crate::configuration::initialization;
 use crate::configuration::application_settings::*;
+//use crate::currencies::currencies::Currency;
+//use crate::currencies::Currencies;
+use crate::currencies::tokens::Tokens;
 
 const APP_ID: &str = "org.BlockBreakers.Wallet";
+
 
 fn main() {
     let app = Application::builder().application_id(APP_ID).build();
@@ -32,7 +40,49 @@ fn load_css() {
 }
 
 pub fn build_ui(app: &Application) {    
-   let window = ApplicationWindow::builder()
+    let icon_path = match ApplicationSettings::find_images_path(){
+        Ok(mut lp) => {
+            lp.push("Icons");
+            lp
+        },
+        Err(_) => PathBuf::new()
+    };
+
+    let currency_path = match ApplicationSettings::find_config_path(){
+        Ok(mut cp) => {
+            cp.pop();
+            cp.push("CurrencyDetails.json");
+            cp
+        },
+        Err(_) => PathBuf::new()
+    };
+
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    if !Path::new(&icon_path).is_dir() {
+        thread::spawn(move || {
+            let _ = runtime.block_on(runtime.spawn(async move {
+                initialization::download_icons().await;
+            }));
+        });
+    } else if !Path::new(&currency_path).exists() {
+        thread::spawn(move || {
+            let _ = runtime.block_on(runtime.spawn(async move {
+                initialization::download_token_details().await;
+            }));
+        });
+    }
+
+    let mut currencies = currencies::tokens::Tokens::new();
+    let json = fs::read_to_string(currency_path).expect("Unable to read file");
+    currencies = match initialization::parse_token_details(&json, currencies.clone()) {
+        Ok(c) => c,
+        Err(e) => {
+            ApplicationSettings::write_error_to_path(&ApplicationSettings::find_error_path().unwrap(), e.to_string());
+            currencies
+        }
+    };
+
+    let window = ApplicationWindow::builder()
         .application(app)
         .title("BlockWallet")
         .default_width(360)

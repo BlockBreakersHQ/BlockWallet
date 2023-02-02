@@ -28,7 +28,15 @@ window.background {
     color: white;
 }
 
-label.failed_login {
-    color: red;
+label-currency_name {
+    color: white;
     font-weight: bold;
+    font-family: Helvetica;
+    font-size: 18px;
+}
+
+label-currency_ticker {
+    color: gray;
+    font-family: Helvetica;
+    font-size: 12px;
 }

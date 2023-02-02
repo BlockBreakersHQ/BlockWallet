@@ -2,29 +2,26 @@ use serde_json::Value;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::thread;
-use glib::{clone, Continue, MainContext, PRIORITY_DEFAULT, ObjectType};
 use crate::configuration::*;
 
 #[derive(Clone, Debug)]
 pub struct CurrencyPairs {
     pub default_currency    : Option<Token>,
     pub pairs               : Vec<((Token, Token), Arc<Mutex<String>>)>,
-    pub btc_usd             : Arc<Mutex<String>>
 }
 
 impl CurrencyPairs {
     pub fn new() -> CurrencyPairs {
         let mut pairs = Vec::new();
-        pairs.push(((Token::BTC, Token::USDC), Arc::new(Mutex::new(String::from("Uninitialized")))));
-        pairs.push(((Token::ETH, Token::USDC), Arc::new(Mutex::new(String::from("Uninitialized")))));
+        pairs.push(((Token::BTC,   Token::USDC), Arc::new(Mutex::new(String::from("Uninitialized")))));
+        pairs.push(((Token::ETH,   Token::USDC), Arc::new(Mutex::new(String::from("Uninitialized")))));
         pairs.push(((Token::MATIC, Token::USDC), Arc::new(Mutex::new(String::from("Uninitialized")))));
-        pairs.push(((Token::WBTC, Token::USDC), Arc::new(Mutex::new(String::from("Uninitialized")))));
-        pairs.push(((Token::UNI, Token::USDC), Arc::new(Mutex::new(String::from("Uninitialized")))));
+        pairs.push(((Token::WBTC,  Token::USDC), Arc::new(Mutex::new(String::from("Uninitialized")))));
+        pairs.push(((Token::UNI,   Token::USDC), Arc::new(Mutex::new(String::from("Uninitialized")))));
 
         CurrencyPairs {
             default_currency    : Some(Token::USDC),
             pairs               : pairs,
-            btc_usd             : Arc::new(Mutex::new(String::from("Uninitialized"))),
         }
     }
 
@@ -63,7 +60,7 @@ impl CurrencyPairs {
             let len = pairs.len();
             loop {
                 for i in 0..len {
-                    let current_price = Arc::clone(&pairs[i].1);
+                    let current_price = pairs[i].1.clone();
                     let token         = pairs[i].0.0.clone();
                     thread::spawn(move || {
                         let runtime = tokio::runtime::Runtime::new().unwrap();
@@ -91,6 +88,7 @@ impl CurrencyPairs {
         });
     }
 }
+
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Token {
@@ -122,6 +120,17 @@ impl Token {
             Token::MATIC => "Polygon",
             Token::WBTC  => "Wrapped Bitcoin",
             Token::UNI   => "Uniswap",
+        }
+    }
+
+    pub fn image(&self) -> &'static str {
+        match self {
+            Token::USDC  => "usdc.png",
+            Token::BTC   => "btc.png",
+            Token::ETH   => "eth.png",
+            Token::MATIC => "matic.png",
+            Token::WBTC  => "wbtc.png",
+            Token::UNI   => "uni.png",
         }
     }
 }

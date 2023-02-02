@@ -1,0 +1,149 @@
+use std::error::Error;
+use std::collections::HashMap;
+use std::fs::*;
+use std::fs;
+use std::io::Write;
+use std::path::PathBuf;
+use std::future::Future;
+use serde::Deserialize;
+
+use crate::ApplicationSettings;
+use crate::currencies::tokens::Tokens;
+use crate::currencies::tokens::Token;
+
+#[derive(Debug, Deserialize)]
+struct L1 {
+    #[serde(flatten)]
+    tokens: HashMap<String, L2>,
+}
+
+#[derive(Debug, Deserialize)]
+struct L2 {
+    #[serde(flatten)]
+    address: HashMap<String, L3>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+struct L3 {
+    symbol       : String,
+    name         : String,
+    decimals     : i32,
+    address      : String,
+    logoURI      : String,
+}
+
+pub async fn download_icons() -> Result<String, Box<dyn Error>> {
+    let resp = reqwest::get("https://api.1inch.io/v5.0/1/tokens")
+        .await?
+        .text()
+        .await?;
+
+    let cpath = match ApplicationSettings::find_config_path(){
+        Ok(mut cp) => {
+            cp.pop();
+            cp.push("CurrencyDetails.json");
+            cp
+        },
+        Err(_) => PathBuf::new()
+    };
+
+    let ipath = match ApplicationSettings::find_images_path(){
+        Ok(mut ip) => {
+            ip.push("Icons");
+            ip
+        },
+        Err(_) => PathBuf::new()
+    };
+
+    fs::create_dir_all(ipath)?;
+    if !cpath.exists() {
+        match File::create(cpath.clone()) {
+            Ok(mut cf) => {
+                write!(cf, "{}", resp);
+            },
+            Err(e) => {
+                ApplicationSettings::write_error_to_path(&ApplicationSettings::find_error_path()?, e.to_string());
+            }
+        };
+    }
+
+    let tokens_parsed: HashMap<String, L2> = serde_json::from_str(&resp)?;
+    let currencies: &L2 = &tokens_parsed.get("tokens").unwrap();
+
+    for (key, _value) in &currencies.address {
+        let currency: &L3 = &currencies.address.get(key).unwrap();
+        if !currency.symbol.contains("REALTOKEN") {
+            let icon = reqwest::get(currency.logoURI.clone()).await?;
+            let icon_path = format!("Icons/{}.png", currency.symbol);
+            let mut out = File::create(icon_path.clone()).expect("failed to create file");
+
+            out.write_all(&mut icon.bytes().await?)?;
+        }
+    }
+    Ok(resp)
+}
+
+pub async fn download_token_details() -> Result<String, Box<dyn Error>> {
+    let resp = reqwest::get("https://api.1inch.io/v5.0/1/tokens")
+        .await?
+        .text()
+        .await?;
+
+    let cpath = match ApplicationSettings::find_config_path(){
+        Ok(mut cp) => {
+            cp.pop();
+            cp.push("CurrencyDetails.json");
+            cp
+        },
+        Err(_) => PathBuf::new()
+    };
+
+    if !cpath.exists() {
+        match File::create(cpath.clone()) {
+            Ok(mut cf) => {
+                write!(cf, "{}", resp);
+            },
+            Err(e) => {
+                ApplicationSettings::write_error_to_path(&ApplicationSettings::find_error_path()?, e.to_string());
+            }
+        };
+    }
+    Ok(resp)
+}
+
+pub fn parse_token_details(currency_json: &str, mut tokens: Tokens) -> Result<Tokens, Box<dyn Error>> {
+    let tokens_parsed: HashMap<String, L2> = serde_json::from_str(&currency_json)?;
+    let contracts: &L2 = &tokens_parsed.get("tokens").unwrap();
+
+    let mut icon_path = match ApplicationSettings::find_images_path(){
+        Ok(mut ip) => {
+            ip.push("Icons");
+            ip
+        },
+        Err(_) => PathBuf::new()
+    };
+
+    let mut usable_keys: HashMap<String, L3> = HashMap::new();
+
+    for (key, value) in &contracts.address {
+        let currency: &L3 = &contracts.address.get(key).unwrap();
+        if !currency.symbol.contains("REALTOKEN") {
+            usable_keys.insert(String::from(key), value.clone());
+        }
+    }
+
+    for (key, _value) in &usable_keys {
+        icon_path.push(format!("{}.png", usable_keys.get(key).unwrap().symbol));
+        tokens.tokens.push(
+            Token {
+                symbol:     usable_keys.get(key).unwrap().symbol.clone(),
+                name:       usable_keys.get(key).unwrap().name.clone(),
+                decimals:   usable_keys.get(key).unwrap().decimals,
+                address:    usable_keys.get(key).unwrap().address.clone(),
+                logo:       icon_path.clone()
+            },
+        );
+    }
+
+    Ok(tokens)
+}
