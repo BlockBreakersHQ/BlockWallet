@@ -12,7 +12,7 @@ pub struct Tokens {
 
 impl Tokens {
     pub fn new() -> Self {
-        let mut btc_path = match ApplicationSettings::find_images_path(){
+        let btc_path = match ApplicationSettings::find_images_path(){
             Ok(mut bp) => {
                 bp.push("Icons/btc.png");
                 bp
@@ -35,15 +35,15 @@ impl Tokens {
             tokens: tokens
         }
     }
-    /*
+
     pub fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut output = String::new();
-        for currency in self.tokens.iter() {
-            output.push_str(&format!("{}\n", currency.display()));
+        for token in self.tokens.iter() {
+            output.push_str(&format!("{}\n", token));
         }
         write!(f, "{}", output)
     }
-    */
+
     pub fn len(&self) -> usize {
         self.tokens.len()
     }
@@ -59,7 +59,7 @@ pub struct Token {
 }
 
 impl Token {
-    pub fn new(name: String, ticker: String, address: String, logo: PathBuf, digits: i32, starred: bool) -> Self {
+    pub fn new(name: String, ticker: String, address: String, logo: PathBuf, digits: i32) -> Self {
         Token {
             name    : name,
             symbol  : ticker,

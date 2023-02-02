@@ -14,9 +14,6 @@ mod tests;
 use crate::views::{login};
 use crate::configuration::initialization;
 use crate::configuration::application_settings::*;
-//use crate::currencies::currencies::Currency;
-//use crate::currencies::Currencies;
-use crate::currencies::tokens::Tokens;
 
 const APP_ID: &str = "org.BlockBreakers.Wallet";
 
@@ -61,13 +58,23 @@ pub fn build_ui(app: &Application) {
     if !Path::new(&icon_path).is_dir() {
         thread::spawn(move || {
             let _ = runtime.block_on(runtime.spawn(async move {
-                initialization::download_icons().await;
+                match initialization::download_icons().await {
+                    Ok(_) => (),
+                    Err(e) => {
+                        ApplicationSettings::write_error_to_path(&ApplicationSettings::find_error_path().unwrap(), e.to_string());
+                    }
+                };
             }));
         });
     } else if !Path::new(&currency_path).exists() {
         thread::spawn(move || {
             let _ = runtime.block_on(runtime.spawn(async move {
-                initialization::download_token_details().await;
+                match initialization::download_token_details().await {
+                    Ok(_) => (),
+                    Err(e) => {
+                        ApplicationSettings::write_error_to_path(&ApplicationSettings::find_error_path().unwrap(), e.to_string());
+                    }
+                };
             }));
         });
     }
@@ -87,7 +94,7 @@ pub fn build_ui(app: &Application) {
         .title("BlockWallet")
         .default_width(360)
         .default_height(720)
-        .build(); 
+        .build();
 
     let window_clone = window.clone();
     let app_settings = ApplicationSettings::new();

@@ -4,12 +4,10 @@ use std::fs::*;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
-use std::future::Future;
 use serde::Deserialize;
 
 use crate::ApplicationSettings;
-use crate::currencies::tokens::Tokens;
-use crate::currencies::tokens::Token;
+use crate::currencies::tokens::*;
 
 #[derive(Debug, Deserialize)]
 struct L1 {
@@ -59,7 +57,7 @@ pub async fn download_icons() -> Result<String, Box<dyn Error>> {
     if !cpath.exists() {
         match File::create(cpath.clone()) {
             Ok(mut cf) => {
-                write!(cf, "{}", resp);
+                let _ = write!(cf, "{}", resp);
             },
             Err(e) => {
                 ApplicationSettings::write_error_to_path(&ApplicationSettings::find_error_path()?, e.to_string());
@@ -101,7 +99,7 @@ pub async fn download_token_details() -> Result<String, Box<dyn Error>> {
     if !cpath.exists() {
         match File::create(cpath.clone()) {
             Ok(mut cf) => {
-                write!(cf, "{}", resp);
+                let _ = write!(cf, "{}", resp);
             },
             Err(e) => {
                 ApplicationSettings::write_error_to_path(&ApplicationSettings::find_error_path()?, e.to_string());
