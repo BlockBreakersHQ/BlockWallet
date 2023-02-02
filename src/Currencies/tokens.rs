@@ -36,16 +36,20 @@ impl Tokens {
         }
     }
 
+    
+
+    pub fn len(&self) -> usize {
+        self.tokens.len()
+    }
+}
+
+impl Display for Tokens {
     pub fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut output = String::new();
         for token in self.tokens.iter() {
             output.push_str(&format!("{}\n", token));
         }
         write!(f, "{}", output)
-    }
-
-    pub fn len(&self) -> usize {
-        self.tokens.len()
     }
 }
 
