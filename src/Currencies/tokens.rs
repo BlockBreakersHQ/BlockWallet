@@ -44,7 +44,7 @@ impl Tokens {
 }
 
 impl Display for Tokens {
-    pub fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut output = String::new();
         for token in self.tokens.iter() {
             output.push_str(&format!("{}\n", token));

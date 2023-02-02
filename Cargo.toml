@@ -12,6 +12,7 @@ cocoon = "0.3.2"
 colored = "2.0.0"
 fast_qr = { version = "0.7.0", features = ["image"] }
 fragile = "2.0.0"
+futures = "0.3.25"
 gdk4 = { version = "0.5.5", features = ["v4_6"] }
 gio = "0.16.7"
 glib = "0.16.7"
@@ -20,8 +21,9 @@ hex = "0.4.3"
 image = "0.24.5"
 pango = "0.16.5"
 rand =  "0.7.3" #needs to be updated to latest version.
+reqwest = "0.11.14"
 rustc-hex = "2.1.0"
-serde = { version = "1.0.152", features = ["derive"] }
+serde = { version = "1.0.152", features = ["derive", "rc"] }
 serde_json = "1.0.91"
 sha3 = "0.10.6"
 tokio = "1.24.1"
