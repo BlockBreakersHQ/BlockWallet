@@ -82,7 +82,10 @@ pub fn generate_currency_box(element: ((Token, Token), Arc<Mutex<String>>)) -> g
     thread::spawn(move || {
         loop {
             let out_string = element.1.lock().unwrap().clone();
-            sender.send(out_string).expect("Could not send through channel");
+            match sender.send(out_string) {
+                Ok(_) => {},
+                Err(_) => {}
+            };
             thread::sleep(Duration::from_secs(1));
         }
     });

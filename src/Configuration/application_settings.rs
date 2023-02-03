@@ -12,6 +12,7 @@ use crate::currencies::eth;
 use crate::currencies::eth::EthereumWallet;
 use crate::currencies::btc;
 use crate::currencies::btc::BitcoinWallet;
+use crate::currencies::tokens::Tokens;
 use crate::configuration::block_error;
 
 #[derive(Clone, Debug)]
@@ -21,11 +22,12 @@ pub struct ApplicationSettings {
     pub user_hash   : String,
     pub btc_wallets : Vec<BitcoinWallet>,
     pub eth_wallets : Vec<EthereumWallet>,
+    pub tokens      : Tokens,
     pub logged_in   : bool
 }
 
 impl ApplicationSettings {
-    pub fn new() -> Self {
+    pub fn new(tokens: Tokens) -> Self {
         let cpath = ApplicationSettings::find_config_path().unwrap();
         let epath = ApplicationSettings::find_error_path().unwrap();
 
@@ -55,6 +57,7 @@ impl ApplicationSettings {
             user_hash   : hash,
             btc_wallets : bitcoin_wallets,
             eth_wallets : ethereum_wallets,
+            tokens      : tokens,
             logged_in   : false
         }
     }
@@ -494,7 +497,13 @@ impl ApplicationSettings {
                             None         => String::from("Uninitialized")
                         };
     
-                        sender.send(btc_price).expect("Could not send through channel");
+                        match sender.send(btc_price) {
+                            Ok(_) => (),
+                            Err(e) => {
+                                let epath = ApplicationSettings::find_error_path().unwrap();
+                                ApplicationSettings::write_error_to_path(&epath, format!("ERROR: Sending through channel: Home page: {}", e));
+                            }
+                        };
                     }));
                 }
             });

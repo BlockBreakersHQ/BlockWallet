@@ -8,7 +8,7 @@ use crate::views::settings;
 
 pub fn header_bar_view(window: ApplicationWindow, mut app_settings: ApplicationSettings) -> adw::HeaderBar {
     if app_settings.logged_in == false {
-        app_settings = ApplicationSettings::new();
+        app_settings = ApplicationSettings::new(app_settings.tokens);
     }
 
     let settings_icon_path = match ApplicationSettings::find_images_path(){

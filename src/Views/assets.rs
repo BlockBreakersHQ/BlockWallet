@@ -67,7 +67,10 @@ pub fn asset_view(app_settings: ApplicationSettings) -> gtk::Box {
 
             let balance = (Arc::clone(&btc_balance), Arc::clone(&eth_balance));
 
-            sender.send(balance).expect("Could not send through channel");
+            match sender.send(balance) {
+                Ok(_) => {},
+                Err(_) => {}
+            };
             thread::sleep(Duration::from_secs(10));
         }
     });

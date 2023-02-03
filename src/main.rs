@@ -79,13 +79,13 @@ pub fn build_ui(app: &Application) {
         });
     }
 
-    let mut currencies = currencies::tokens::Tokens::new();
+    let mut tokens = currencies::tokens::Tokens::new();
     let json = fs::read_to_string(currency_path).expect("Unable to read file");
-    currencies = match initialization::parse_token_details(&json, currencies.clone()) {
+    tokens = match initialization::parse_token_details(&json, tokens.clone()) {
         Ok(c) => c,
         Err(e) => {
             ApplicationSettings::write_error_to_path(&ApplicationSettings::find_error_path().unwrap(), e.to_string());
-            currencies
+            tokens
         }
     };
 
@@ -97,6 +97,6 @@ pub fn build_ui(app: &Application) {
         .build();
 
     let window_clone = window.clone();
-    let app_settings = ApplicationSettings::new();
+    let app_settings = ApplicationSettings::new(tokens);
     login::login_view(window_clone, app_settings);
 }
