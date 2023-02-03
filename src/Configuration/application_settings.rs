@@ -54,27 +54,49 @@ impl ApplicationSettings {
             ethereum_wallets.push(e_wallet);
 
             for i in 0..tokens.len() {
-                if tokens.tokens[i].symbol == "BTC" {
-                    starred.push(tokens.tokens[i].clone());
-                } else if tokens.tokens[i].symbol == "ETH" {
-                    starred.push(tokens.tokens[i].clone());
-                } else if tokens.tokens[i].symbol == "MATIC" {
-                    starred.push(tokens.tokens[i].clone());
-                } else if tokens.tokens[i].symbol == "WBTC" {
-                    starred.push(tokens.tokens[i].clone());
-                } else if tokens.tokens[i].symbol == "UNI" {
-                    starred.push(tokens.tokens[i].clone());
-                } else if tokens.tokens[i].symbol == "BNB" {
-                    starred.push(tokens.tokens[i].clone());
-                } else if tokens.tokens[i].symbol == "SHIB" {
-                    starred.push(tokens.tokens[i].clone());
-                } else if tokens.tokens[i].symbol == "TRON" {
-                    starred.push(tokens.tokens[i].clone());
-                } else if tokens.tokens[i].symbol == "LINK" {
-                    starred.push(tokens.tokens[i].clone());
+                if tokens.eth_tokens[i].symbol == "BTC" {
+                    starred.push(tokens.eth_tokens[i].clone());
+                } else if tokens.eth_tokens[i].symbol == "ETH" {
+                    starred.push(tokens.eth_tokens[i].clone());
+                } else if tokens.eth_tokens[i].symbol == "MATIC" {
+                    starred.push(tokens.eth_tokens[i].clone());
+                } else if tokens.eth_tokens[i].symbol == "WBTC" {
+                    starred.push(tokens.eth_tokens[i].clone());
+                } else if tokens.eth_tokens[i].symbol == "UNI" {
+                    starred.push(tokens.eth_tokens[i].clone());
+                } else if tokens.eth_tokens[i].symbol == "BNB" {
+                    starred.push(tokens.eth_tokens[i].clone());
+                } else if tokens.eth_tokens[i].symbol == "SHIB" {
+                    starred.push(tokens.eth_tokens[i].clone());
+                } else if tokens.eth_tokens[i].symbol == "TRON" {
+                    starred.push(tokens.eth_tokens[i].clone());
+                } else if tokens.eth_tokens[i].symbol == "LINK" {
+                    starred.push(tokens.eth_tokens[i].clone());
                 }
             }
         }
+
+        /*for i in 0..tokens.len() {
+            if tokens.eth_tokens[i].symbol == "CRO" {
+                starred.push(tokens.eth_tokens[i].clone());
+            } else if tokens.eth_tokens[i].symbol == "QNT" {
+                starred.push(tokens.eth_tokens[i].clone());
+            } else if tokens.eth_tokens[i].symbol == "MANA" {
+                starred.push(tokens.eth_tokens[i].clone());
+            } else if tokens.eth_tokens[i].symbol == "MAKER" {
+                starred.push(tokens.eth_tokens[i].clone());
+            } else if tokens.eth_tokens[i].symbol == "LRC" {
+                starred.push(tokens.eth_tokens[i].clone());
+            } else if tokens.eth_tokens[i].symbol == "ENJ" {
+                starred.push(tokens.eth_tokens[i].clone());
+            } else if tokens.eth_tokens[i].symbol == "BAT" {
+                starred.push(tokens.eth_tokens[i].clone());
+            } else if tokens.eth_tokens[i].symbol == "APE" {
+                starred.push(tokens.eth_tokens[i].clone());
+            } else if tokens.eth_tokens[i].symbol == "SAND" {
+                starred.push(tokens.eth_tokens[i].clone());
+            }
+        }*/
 
         ApplicationSettings {
             config_path : cpath,
@@ -200,33 +222,9 @@ impl ApplicationSettings {
         let mut btc_wallets = Vec::new();
         let mut eth_wallets = Vec::new();
 
-        if settings.len() <= 0 {
-            for i in 0..self.tokens.len() {
-                if self.tokens.tokens[i].symbol == "BTC" {
-                    self.starred.push(self.tokens.tokens[i].clone());
-                } else if self.tokens.tokens[i].symbol == "ETH" {
-                    self.starred.push(self.tokens.tokens[i].clone());
-                } else if self.tokens.tokens[i].symbol == "MATIC" {
-                    self.starred.push(self.tokens.tokens[i].clone());
-                } else if self.tokens.tokens[i].symbol == "WBTC" {
-                    self.starred.push(self.tokens.tokens[i].clone());
-                } else if self.tokens.tokens[i].symbol == "UNI" {
-                    self.starred.push(self.tokens.tokens[i].clone());
-                } else if self.tokens.tokens[i].symbol == "BNB" {
-                    self.starred.push(self.tokens.tokens[i].clone());
-                } else if self.tokens.tokens[i].symbol == "SHIB" {
-                    self.starred.push(self.tokens.tokens[i].clone());
-                } else if self.tokens.tokens[i].symbol == "TRON" {
-                    self.starred.push(self.tokens.tokens[i].clone());
-                } else if self.tokens.tokens[i].symbol == "LINK" {
-                    self.starred.push(self.tokens.tokens[i].clone());
-                }
-            }
-        }
-
         for i in modified_content {
             if i.contains("Sector: Settings") {
-                settings = i.split("\n").collect();
+                settings = i.split("Starred______\n").collect();
                 settings.remove(0);
             }
             else if i.contains("Sector: Bitcoin") {
@@ -239,8 +237,47 @@ impl ApplicationSettings {
             }
         }
 
-        if settings.len() > 0 {
+        if settings.len() <= 0 {
+            for i in 0..self.tokens.len() {
+                if self.tokens.eth_tokens[i].symbol == "BTC" {
+                    self.starred.push(self.tokens.eth_tokens[i].clone());
+                } else if self.tokens.eth_tokens[i].symbol == "ETH" {
+                    self.starred.push(self.tokens.eth_tokens[i].clone());
+                } else if self.tokens.eth_tokens[i].symbol == "MATIC" {
+                    self.starred.push(self.tokens.eth_tokens[i].clone());
+                } else if self.tokens.eth_tokens[i].symbol == "WBTC" {
+                    self.starred.push(self.tokens.eth_tokens[i].clone());
+                } else if self.tokens.eth_tokens[i].symbol == "UNI" {
+                    self.starred.push(self.tokens.eth_tokens[i].clone());
+                } else if self.tokens.eth_tokens[i].symbol == "BNB" {
+                    self.starred.push(self.tokens.eth_tokens[i].clone());
+                } else if self.tokens.eth_tokens[i].symbol == "SHIB" {
+                    self.starred.push(self.tokens.eth_tokens[i].clone());
+                } else if self.tokens.eth_tokens[i].symbol == "TRON" {
+                    self.starred.push(self.tokens.eth_tokens[i].clone());
+                } else if self.tokens.eth_tokens[i].symbol == "LINK" {
+                    self.starred.push(self.tokens.eth_tokens[i].clone());
+                }
+            }
+        } else {
+            for setting in settings {
+                
+                let t: Vec<&str> = setting.split("\n").collect();
+                for mut i in t {
+                    if i.len() <= 0 {
+                        continue;
+                    }
+                    if i.contains("ETH") {
+                        let mut symbol = i.replace("      ETH TOKEN:", "");
+                        for j in 0..self.tokens.eth_tokens.len() {
+                            if self.tokens.eth_tokens[j].symbol == symbol {
+                                self.starred.push(self.tokens.eth_tokens[j].clone());
+                            }
+                        }
+                    }
 
+                }
+            }
         }
         
         //move this into a method.
@@ -442,6 +479,14 @@ impl ApplicationSettings {
 
     pub fn write_config(&mut self) -> Result<bool, Error> {
         let mut output = String::new();
+        if &self.starred.len() > &0 {
+            output += "<Entry>\n      Sector: Settings\n";
+            output += &format!("      Starred______\n");
+            for token in &self.starred {
+                output += &format!("      ETH TOKEN:{}\n", token.symbol);
+            }
+            output += "<Entry>\n";
+        }
         if &self.btc_wallets.len() > &0 {
             output += "<Entry>\n      Sector: Bitcoin\n";
             for (item, i) in (&self.btc_wallets).iter().enumerate() {

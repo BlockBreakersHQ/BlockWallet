@@ -7,7 +7,7 @@ use crate::ApplicationSettings;
 
 #[derive(Clone, Debug)]
 pub struct Tokens {
-    pub tokens: Vec<Token>
+    pub eth_tokens: Vec<Token>
 }
 
 impl Tokens {
@@ -28,23 +28,23 @@ impl Tokens {
             decimals: 8
         };
 
-        let mut tokens = Vec::new();
-        tokens.push(t);
+        let mut eth_tokens = Vec::new();
+        eth_tokens.push(t);
 
         Tokens {
-            tokens: tokens
+            eth_tokens: eth_tokens
         }
     }
 
     pub fn len(&self) -> usize {
-        self.tokens.len()
+        self.eth_tokens.len()
     }
 }
 
 impl Display for Tokens {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut output = String::new();
-        for token in self.tokens.iter() {
+        for token in self.eth_tokens.iter() {
             output.push_str(&format!("{}\n", token));
         }
         write!(f, "{}", output)
