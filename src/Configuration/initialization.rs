@@ -145,6 +145,7 @@ pub fn parse_token_details(currency_json: &str, mut tokens: Tokens) -> Result<To
                 logo:       icon_path.clone()
             },
         );
+        icon_path.pop();
     }
 
     Ok(tokens)

@@ -71,7 +71,7 @@ pub fn asset_view(app_settings: ApplicationSettings) -> gtk::Box {
                 Ok(_) => {},
                 Err(_) => {}
             };
-            thread::sleep(Duration::from_secs(10));
+            thread::sleep(Duration::from_secs(20));
         }
     });
 

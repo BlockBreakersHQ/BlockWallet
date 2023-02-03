@@ -2,26 +2,45 @@ use serde_json::Value;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::thread;
+use std::path::Path;
+
 use crate::configuration::*;
+use crate::currencies::tokens::*;
 
 #[derive(Clone, Debug)]
 pub struct CurrencyPairs {
-    pub default_currency    : Option<Token>,
-    pub pairs               : Vec<((Token, Token), Arc<Mutex<String>>)>,
+    pub default_currency    : Token,
+    pub pairs               : Vec<(Token, Arc<Mutex<String>>)>,
 }
 
 impl CurrencyPairs {
-    pub fn new() -> CurrencyPairs {
-        let mut pairs = Vec::new();
-        pairs.push(((Token::BTC,   Token::USDC), Arc::new(Mutex::new(String::from("Uninitialized")))));
-        pairs.push(((Token::ETH,   Token::USDC), Arc::new(Mutex::new(String::from("Uninitialized")))));
-        pairs.push(((Token::MATIC, Token::USDC), Arc::new(Mutex::new(String::from("Uninitialized")))));
-        pairs.push(((Token::WBTC,  Token::USDC), Arc::new(Mutex::new(String::from("Uninitialized")))));
-        pairs.push(((Token::UNI,   Token::USDC), Arc::new(Mutex::new(String::from("Uninitialized")))));
+    pub fn new(tokens: Tokens) -> CurrencyPairs {
+        let mut pairs: Vec<(Token, Arc<Mutex<String>>)> = Vec::new();
+        let default = Token {
+            name    : String::from("USD Coin"),
+            symbol  : String::from("USDC"),
+            address : String::from("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
+            logo    : Path::new("/Users/andy/Documents/Dev/BlockWallet/target/debug/Images/Icons/USDC.png").to_path_buf(),
+            decimals: 6
+        };
+
+        for token in tokens.tokens {
+            if token.symbol == "BTC" {
+                pairs.push((token, Arc::new(Mutex::new(String::from("Uninitialized")))));
+            } else if token.symbol == "ETH" {
+                pairs.push((token, Arc::new(Mutex::new(String::from("Uninitialized")))));
+            } else if token.symbol == "MATIC" {
+                pairs.push((token, Arc::new(Mutex::new(String::from("Uninitialized")))));
+            } else if token.symbol == "WBTC" {
+                pairs.push((token, Arc::new(Mutex::new(String::from("Uninitialized")))));
+            } else if token.symbol == "UNI" {
+                pairs.push((token, Arc::new(Mutex::new(String::from("Uninitialized")))));
+            }
+        }
 
         CurrencyPairs {
-            default_currency    : Some(Token::USDC),
-            pairs               : pairs,
+            default_currency    : default,
+            pairs               : pairs
         }
     }
 
@@ -36,44 +55,54 @@ impl CurrencyPairs {
             Err(_) => return Ok(String::from("Uninitialized"))
         };
 
-        return Ok(json["data"]["price"].to_string());
+        return Ok(json["data"]["price"].to_string().replace("\"", ""));
     }
 
-    pub async fn get_currency_price() -> Result<String, block_error::Error> {
-        let resp = match reqwest::get("https://api.0x.org/swap/v1/quote?buyToken=USDC&sellToken=ETH&sellAmount=100000000000000000").await?.text().await {
+    pub async fn get_currency_price(from_token: Token, to_token: Token) -> Result<String, block_error::Error> {
+        let digits = CurrencyPairs::get_exponent(from_token.decimals);
+
+        let url = format!("https://api.1inch.io/v5.0/1/quote?fromTokenAddress={}&toTokenAddress={}&amount={}", from_token.address, to_token.address, digits.to_string());
+        let resp = match reqwest::get(url).await?.text().await {
             Ok(r)  => r,
             Err(_) => return Ok(String::from("Uninitialized"))
         };
+
 
         let json: Value = match serde_json::from_str(&resp) {
             Ok(r)  => r,
             Err(_) => return Ok(String::from("Uninitialized"))
         };
 
-        return Ok(json["price"].to_string());
+        let token_amount = json["toTokenAmount"].to_string().replace("\"", "");
+        let token_float  = token_amount.parse::<i64>().unwrap();
+        let token_final  = token_float as f64 / CurrencyPairs::get_exponent(to_token.decimals);
+        
+        return Ok(token_final.to_string());
     }
 
     pub fn update_token_balances(&self) {
         let pairs = self.pairs.clone();
+        let default = self.default_currency.clone();
         
         thread::spawn(move || {
             let len = pairs.len();
             loop {
                 for i in 0..len {
                     let current_price = pairs[i].1.clone();
-                    let token         = pairs[i].0.0.clone();
+                    let token         = pairs[i].0.clone();
+                    let default       = default.clone();
                     thread::spawn(move || {
                         let runtime = tokio::runtime::Runtime::new().unwrap();
                         let _ = runtime.block_on(runtime.spawn(async move {
                             let currency_quote;
-                            if token == Token::BTC {
+                            if token.symbol == "BTC" {
                                 currency_quote = match CurrencyPairs::get_btc_price().await {
                                     Ok(quote) => quote,
                                     Err(_)    => String::from("Uninitialized")
                                 };
                             }
                             else {
-                                currency_quote = match CurrencyPairs::get_currency_price().await {
+                                currency_quote = match CurrencyPairs::get_currency_price(token, default).await {
                                     Ok(quote) => quote,
                                     Err(_)    => String::from("Uninitialized")
                                 };
@@ -83,54 +112,35 @@ impl CurrencyPairs {
                         }));
                     });
                 }
-                thread::sleep(Duration::from_secs(1));
+                thread::sleep(Duration::from_secs(60));
             }
         });
     }
-}
 
+    fn get_exponent(exponent: i32) -> f64 {
+        let digits: f64 = match exponent {
+            18 => 100000000000000000.0,
+            17 => 10000000000000000.0,
+            16 => 1000000000000000.0,
+            15 => 100000000000000.0,
+            14 => 10000000000000.0,
+            13 => 1000000000000.0,
+            12 => 100000000000.0,
+            11 => 10000000000.0,
+            10 => 1000000000.0,
+            9  => 100000000.0,
+            8  => 10000000.0,
+            7  => 1000000.0,
+            6  => 100000.0,
+            5  => 10000.0,
+            4  => 1000.0,
+            3  => 100.0,
+            2  => 10.0,
+            1  => 1.0,
+            0  => 0.0,
+            _  => 0.0
+        };
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Token {
-    USDC,
-    BTC,
-    ETH,
-    MATIC,
-    WBTC,
-    UNI
-}
-
-impl Token {
-    pub fn ticker(&self) -> &'static str {
-        match self {
-            Token::USDC  => "USDC",
-            Token::BTC   => "BTC",
-            Token::ETH   => "ETH",
-            Token::MATIC => "MATIC",
-            Token::WBTC  => "WBTC",
-            Token::UNI   => "UNI",
-        }
-    }
-
-    pub fn name(&self) -> &'static str {
-        match self {
-            Token::USDC  => "USD Coin",
-            Token::BTC   => "Bitcoin",
-            Token::ETH   => "Ethereum",
-            Token::MATIC => "Polygon",
-            Token::WBTC  => "Wrapped Bitcoin",
-            Token::UNI   => "Uniswap",
-        }
-    }
-
-    pub fn image(&self) -> &'static str {
-        match self {
-            Token::USDC  => "usdc.png",
-            Token::BTC   => "btc.png",
-            Token::ETH   => "eth.png",
-            Token::MATIC => "matic.png",
-            Token::WBTC  => "wbtc.png",
-            Token::UNI   => "uni.png",
-        }
+        return digits;
     }
 }

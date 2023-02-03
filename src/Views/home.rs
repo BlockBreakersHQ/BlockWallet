@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 use crate::ApplicationSettings;
 use crate::currencies::currency_pairs::*;
+use crate::currencies::tokens::Token;
 
 pub fn home_view(currency_pairs: CurrencyPairs) -> gtk::Box {
     let home_box = gtk::Box::builder()
@@ -24,7 +25,7 @@ pub fn home_view(currency_pairs: CurrencyPairs) -> gtk::Box {
     return home_box.clone();
 }
 
-pub fn generate_currency_box(element: ((Token, Token), Arc<Mutex<String>>)) -> gtk::Box {
+pub fn generate_currency_box(element: (Token, Arc<Mutex<String>>)) -> gtk::Box {
     let currency_box = gtk::Box::new(Orientation::Horizontal, 5);
     let icon_box     = gtk::Box::new(Orientation::Vertical, 0);
     let name_box     = gtk::Box::new(Orientation::Vertical, 0);
@@ -33,19 +34,20 @@ pub fn generate_currency_box(element: ((Token, Token), Arc<Mutex<String>>)) -> g
     let icon_path = match ApplicationSettings::find_images_path(){
         Ok(mut lp) => {
             lp.push("Icons");
-            lp.push(element.0.0.image());
+            lp.push(format!("{}.png", element.0.symbol));
             lp
         },
         Err(_) => PathBuf::new()
     };
 
-    let icon = Image::from_file(icon_path);
+    let icon = Image::from_file(element.0.logo);
+    
     icon.set_pixel_size(50);
     icon.set_margin_start(12);
     icon.set_margin_bottom(8);
 
     let currency_name  = gtk::Label::builder()
-        .label(&element.0.0.name())
+        .label(&element.0.name)
         .margin_top(5)
         .margin_start(5)
         .halign(Align::Start)
@@ -53,7 +55,7 @@ pub fn generate_currency_box(element: ((Token, Token), Arc<Mutex<String>>)) -> g
         .build();
 
     let currency_ticker  = gtk::Label::builder()
-        .label(&element.0.0.ticker())
+        .label(&element.0.symbol)
         .margin_top(5)
         .margin_start(5)
         .halign(Align::Start)
