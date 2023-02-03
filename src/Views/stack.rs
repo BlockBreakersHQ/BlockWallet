@@ -7,7 +7,7 @@ use crate::configuration::application_settings::*;
 use crate::currencies::currency_pairs::CurrencyPairs;
 
 pub fn stack_view(window: &ApplicationWindow, app_settings: ApplicationSettings) {
-    let currency_pairs = CurrencyPairs::new(app_settings.tokens.clone());
+    let currency_pairs = CurrencyPairs::new(app_settings.clone());
     currency_pairs.update_token_balances();
 
     let container = gtk::Box::new(gtk::Orientation::Vertical, 0);

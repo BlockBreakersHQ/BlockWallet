@@ -6,6 +6,7 @@ use std::path::Path;
 
 use crate::configuration::*;
 use crate::currencies::tokens::*;
+use crate::ApplicationSettings;
 
 #[derive(Clone, Debug)]
 pub struct CurrencyPairs {
@@ -14,7 +15,7 @@ pub struct CurrencyPairs {
 }
 
 impl CurrencyPairs {
-    pub fn new(tokens: Tokens) -> CurrencyPairs {
+    pub fn new(app_settings: ApplicationSettings) -> CurrencyPairs {
         let mut pairs: Vec<(Token, Arc<Mutex<String>>)> = Vec::new();
         let default = Token {
             name    : String::from("USD Coin"),
@@ -24,18 +25,8 @@ impl CurrencyPairs {
             decimals: 6
         };
 
-        for token in tokens.tokens {
-            if token.symbol == "BTC" {
+        for token in app_settings.starred {
                 pairs.push((token, Arc::new(Mutex::new(String::from("Uninitialized")))));
-            } else if token.symbol == "ETH" {
-                pairs.push((token, Arc::new(Mutex::new(String::from("Uninitialized")))));
-            } else if token.symbol == "MATIC" {
-                pairs.push((token, Arc::new(Mutex::new(String::from("Uninitialized")))));
-            } else if token.symbol == "WBTC" {
-                pairs.push((token, Arc::new(Mutex::new(String::from("Uninitialized")))));
-            } else if token.symbol == "UNI" {
-                pairs.push((token, Arc::new(Mutex::new(String::from("Uninitialized")))));
-            }
         }
 
         CurrencyPairs {

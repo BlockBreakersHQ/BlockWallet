@@ -12,7 +12,7 @@ use crate::currencies::eth;
 use crate::currencies::eth::EthereumWallet;
 use crate::currencies::btc;
 use crate::currencies::btc::BitcoinWallet;
-use crate::currencies::tokens::Tokens;
+use crate::currencies::tokens::*;
 use crate::configuration::block_error;
 
 #[derive(Clone, Debug)]
@@ -23,6 +23,7 @@ pub struct ApplicationSettings {
     pub btc_wallets : Vec<BitcoinWallet>,
     pub eth_wallets : Vec<EthereumWallet>,
     pub tokens      : Tokens,
+    pub starred     : Vec<Token>,
     pub logged_in   : bool
 }
 
@@ -43,12 +44,36 @@ impl ApplicationSettings {
             };
         }
 
+        let mut starred = Vec::new();
+
         if !std::path::Path::new(&cpath).exists() {
             let b_wallet = ApplicationSettings::generate_btc_wallet(String::new());
             let e_wallet = ApplicationSettings::generate_eth_wallet(String::new());
 
             bitcoin_wallets.push(b_wallet);
             ethereum_wallets.push(e_wallet);
+
+            for i in 0..tokens.len() {
+                if tokens.tokens[i].symbol == "BTC" {
+                    starred.push(tokens.tokens[i].clone());
+                } else if tokens.tokens[i].symbol == "ETH" {
+                    starred.push(tokens.tokens[i].clone());
+                } else if tokens.tokens[i].symbol == "MATIC" {
+                    starred.push(tokens.tokens[i].clone());
+                } else if tokens.tokens[i].symbol == "WBTC" {
+                    starred.push(tokens.tokens[i].clone());
+                } else if tokens.tokens[i].symbol == "UNI" {
+                    starred.push(tokens.tokens[i].clone());
+                } else if tokens.tokens[i].symbol == "BNB" {
+                    starred.push(tokens.tokens[i].clone());
+                } else if tokens.tokens[i].symbol == "SHIB" {
+                    starred.push(tokens.tokens[i].clone());
+                } else if tokens.tokens[i].symbol == "TRON" {
+                    starred.push(tokens.tokens[i].clone());
+                } else if tokens.tokens[i].symbol == "LINK" {
+                    starred.push(tokens.tokens[i].clone());
+                }
+            }
         }
 
         ApplicationSettings {
@@ -58,6 +83,7 @@ impl ApplicationSettings {
             btc_wallets : bitcoin_wallets,
             eth_wallets : ethereum_wallets,
             tokens      : tokens,
+            starred     : starred,
             logged_in   : false
         }
     }
@@ -173,6 +199,30 @@ impl ApplicationSettings {
         let mut settings    = Vec::new();
         let mut btc_wallets = Vec::new();
         let mut eth_wallets = Vec::new();
+
+        if settings.len() <= 0 {
+            for i in 0..self.tokens.len() {
+                if self.tokens.tokens[i].symbol == "BTC" {
+                    self.starred.push(self.tokens.tokens[i].clone());
+                } else if self.tokens.tokens[i].symbol == "ETH" {
+                    self.starred.push(self.tokens.tokens[i].clone());
+                } else if self.tokens.tokens[i].symbol == "MATIC" {
+                    self.starred.push(self.tokens.tokens[i].clone());
+                } else if self.tokens.tokens[i].symbol == "WBTC" {
+                    self.starred.push(self.tokens.tokens[i].clone());
+                } else if self.tokens.tokens[i].symbol == "UNI" {
+                    self.starred.push(self.tokens.tokens[i].clone());
+                } else if self.tokens.tokens[i].symbol == "BNB" {
+                    self.starred.push(self.tokens.tokens[i].clone());
+                } else if self.tokens.tokens[i].symbol == "SHIB" {
+                    self.starred.push(self.tokens.tokens[i].clone());
+                } else if self.tokens.tokens[i].symbol == "TRON" {
+                    self.starred.push(self.tokens.tokens[i].clone());
+                } else if self.tokens.tokens[i].symbol == "LINK" {
+                    self.starred.push(self.tokens.tokens[i].clone());
+                }
+            }
+        }
 
         for i in modified_content {
             if i.contains("Sector: Settings") {
