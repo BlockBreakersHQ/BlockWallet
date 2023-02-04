@@ -16,12 +16,24 @@ pub fn home_view(currency_pairs: CurrencyPairs) -> gtk::Box {
         .margin_top(12)
         .margin_bottom(12)
         .build();
+
+    let scrollable_box = gtk::Box::builder()
+        .orientation(Orientation::Vertical)
+        .margin_top(12)
+        .margin_bottom(12)
+        .vexpand(true)
+        .build();
     
     for element in currency_pairs.pairs {
         let currency_box = generate_currency_box(element);
-        home_box.append(&currency_box);
+        scrollable_box.append(&currency_box);
     }
+
+    let scrollable_container = gtk::ScrolledWindow::builder()
+        .child(&scrollable_box)
+        .build();
     
+    home_box.append(&scrollable_container);
     return home_box.clone();
 }
 
@@ -65,7 +77,7 @@ pub fn generate_currency_box(element: (Token, Arc<Mutex<String>>)) -> gtk::Box {
     let currency_price_label  = gtk::Label::builder()
         .label(&*element.1.lock().unwrap())
         .margin_top(5)
-        .margin_end(5)
+        .margin_end(12)
         .halign(Align::End)
         .hexpand(true)
         .css_name("label-currency_price")
@@ -103,6 +115,10 @@ pub fn generate_currency_box(element: (Token, Arc<Mutex<String>>)) -> gtk::Box {
             }
         ),
     );
+
+    let scrollable_container = gtk::ScrolledWindow::builder()
+        .child(&currency_box)
+        .build();
     
     return currency_box;
 }
