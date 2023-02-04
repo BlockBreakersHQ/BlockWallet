@@ -54,8 +54,7 @@ pub fn wallet_view(app_settings: ApplicationSettings) -> (gtk::Box, ApplicationS
             *btc_data_displayed.lock().unwrap() = true;
             btc_currency_details.set_visible(true);
             eth_currency_details_clone.set_visible(false);
-        }
-        else {
+        } else {
             *btc_data_displayed.lock().unwrap() = false;
             btc_currency_details.set_visible(false);
         }
@@ -66,8 +65,7 @@ pub fn wallet_view(app_settings: ApplicationSettings) -> (gtk::Box, ApplicationS
             *eth_data_displayed.lock().unwrap() = true;
             eth_currency_details.set_visible(true);
             btc_currency_details_clone.set_visible(false);
-        }
-        else {
+        } else {
             *eth_data_displayed.lock().unwrap() = false;
             eth_currency_details.set_visible(false);
         }
@@ -179,8 +177,7 @@ fn populate_btc_currency_details(btc_wallets: &Vec<BitcoinWallet>) -> gtk::Box {
             if qr_box.get_visible() == false {
                 qr_box.set_visible(true);
                 button.set_label("Hide QR Code");
-            }
-            else {
+            } else {
                 qr_box.set_visible(false);
                 button.set_label("Show QR Code");
             }
@@ -206,8 +203,7 @@ fn populate_btc_currency_details(btc_wallets: &Vec<BitcoinWallet>) -> gtk::Box {
             if wallet_box.get_visible() == false {
                 wallet_box.set_visible(true);
                 button.set_label("Hide wallet details");
-            }
-            else {
+            } else {
                 wallet_box.set_visible(false);
                 button.set_label("Show wallet details");
             }
@@ -322,8 +318,7 @@ fn populate_eth_currency_details(eth_wallets: &Vec<EthereumWallet>) -> gtk::Box 
             if qr_box.get_visible() == false {
                 qr_box.set_visible(true);
                 button.set_label("Hide QR Code");
-            }
-            else {
+            } else {
                 qr_box.set_visible(false);
                 button.set_label("Show QR Code");
             }
@@ -349,8 +344,7 @@ fn populate_eth_currency_details(eth_wallets: &Vec<EthereumWallet>) -> gtk::Box 
             if wallet_box.get_visible() == false {
                 wallet_box.set_visible(true);
                 button.set_label("Hide wallet details");
-            }
-            else {
+            } else {
                 wallet_box.set_visible(false);
                 button.set_label("Show wallet details");
             }

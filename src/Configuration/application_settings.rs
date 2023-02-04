@@ -76,28 +76,6 @@ impl ApplicationSettings {
             }
         }
 
-        /*for i in 0..tokens.len() {
-            if tokens.eth_tokens[i].symbol == "CRO" {
-                starred.push(tokens.eth_tokens[i].clone());
-            } else if tokens.eth_tokens[i].symbol == "QNT" {
-                starred.push(tokens.eth_tokens[i].clone());
-            } else if tokens.eth_tokens[i].symbol == "MANA" {
-                starred.push(tokens.eth_tokens[i].clone());
-            } else if tokens.eth_tokens[i].symbol == "MAKER" {
-                starred.push(tokens.eth_tokens[i].clone());
-            } else if tokens.eth_tokens[i].symbol == "LRC" {
-                starred.push(tokens.eth_tokens[i].clone());
-            } else if tokens.eth_tokens[i].symbol == "ENJ" {
-                starred.push(tokens.eth_tokens[i].clone());
-            } else if tokens.eth_tokens[i].symbol == "BAT" {
-                starred.push(tokens.eth_tokens[i].clone());
-            } else if tokens.eth_tokens[i].symbol == "APE" {
-                starred.push(tokens.eth_tokens[i].clone());
-            } else if tokens.eth_tokens[i].symbol == "SAND" {
-                starred.push(tokens.eth_tokens[i].clone());
-            }
-        }*/
-
         ApplicationSettings {
             config_path : cpath,
             error_path  : epath,
@@ -263,12 +241,12 @@ impl ApplicationSettings {
             for setting in settings {
                 
                 let t: Vec<&str> = setting.split("\n").collect();
-                for mut i in t {
+                for i in t {
                     if i.len() <= 0 {
                         continue;
                     }
                     if i.contains("ETH") {
-                        let mut symbol = i.replace("      ETH TOKEN:", "");
+                        let symbol = i.replace("      ETH TOKEN:", "");
                         for j in 0..self.tokens.eth_tokens.len() {
                             if self.tokens.eth_tokens[j].symbol == symbol {
                                 self.starred.push(self.tokens.eth_tokens[j].clone());

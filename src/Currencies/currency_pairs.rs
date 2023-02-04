@@ -58,7 +58,6 @@ impl CurrencyPairs {
             Err(_) => return Ok(String::from("Uninitialized"))
         };
 
-
         let json: Value = match serde_json::from_str(&resp) {
             Ok(r)  => r,
             Err(_) => return Ok(String::from("Uninitialized"))
@@ -67,6 +66,9 @@ impl CurrencyPairs {
         let token_amount = json["toTokenAmount"].to_string().replace("\"", "");
         let token_float  = token_amount.parse::<i64>().unwrap();
         let token_final  = token_float as f64 / CurrencyPairs::get_exponent(to_token.decimals);
+        if to_token.symbol == "USDC" {
+            return Ok(format!("${:.5}", token_final));
+        }
         
         return Ok(token_final.to_string());
     }
@@ -91,8 +93,7 @@ impl CurrencyPairs {
                                     Ok(quote) => quote,
                                     Err(_)    => String::from("Uninitialized")
                                 };
-                            }
-                            else {
+                            } else {
                                 currency_quote = match CurrencyPairs::get_currency_price(token, default).await {
                                     Ok(quote) => quote,
                                     Err(_)    => String::from("Uninitialized")

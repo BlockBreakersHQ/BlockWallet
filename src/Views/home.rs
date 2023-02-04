@@ -4,9 +4,7 @@ use glib::{clone, Continue, MainContext, PRIORITY_DEFAULT};
 use std::thread;
 use std::time::Duration;
 use std::sync::{Arc, Mutex};
-use std::path::PathBuf;
 
-use crate::ApplicationSettings;
 use crate::currencies::currency_pairs::*;
 use crate::currencies::tokens::Token;
 
@@ -42,15 +40,6 @@ pub fn generate_currency_box(element: (Token, Arc<Mutex<String>>)) -> gtk::Box {
     let icon_box     = gtk::Box::new(Orientation::Vertical, 0);
     let name_box     = gtk::Box::new(Orientation::Vertical, 0);
     let price_box    = gtk::Box::new(Orientation::Vertical, 0);
-
-    let icon_path = match ApplicationSettings::find_images_path(){
-        Ok(mut lp) => {
-            lp.push("Icons");
-            lp.push(format!("{}.png", element.0.symbol));
-            lp
-        },
-        Err(_) => PathBuf::new()
-    };
 
     let icon = Image::from_file(element.0.logo);
     
