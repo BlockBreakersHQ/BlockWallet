@@ -1,3 +1,5 @@
+use adw::ApplicationWindow;
+use adw::prelude::*;
 use gtk::prelude::*;
 use gtk::{Orientation, Image, Align};
 use glib::{clone, Continue, MainContext, PRIORITY_DEFAULT};
@@ -7,8 +9,9 @@ use std::sync::{Arc, Mutex};
 
 use crate::currencies::currency_pairs::*;
 use crate::currencies::tokens::Token;
+use crate::views::currency::currency_view;
 
-pub fn home_view(currency_pairs: CurrencyPairs) -> gtk::Box {
+pub fn home_view(window: ApplicationWindow, currency_pairs: CurrencyPairs) -> gtk::Box {
     let home_box = gtk::Box::builder()
         .orientation(Orientation::Vertical)
         .margin_top(12)
@@ -21,18 +24,46 @@ pub fn home_view(currency_pairs: CurrencyPairs) -> gtk::Box {
         .margin_bottom(12)
         .vexpand(true)
         .build();
+    scrollable_box.set_widget_name("scrollable_box");
     
+    let currency_detail_box = gtk::Box::builder()
+        .orientation(Orientation::Vertical)
+        .margin_top(12)
+        .margin_bottom(12)
+        .visible(false)
+        .build();
+
     for element in currency_pairs.pairs {
-        let currency_box = generate_currency_box(element);
+        let currency_box = generate_currency_box(element.clone());
+        let currency_detail_clone = currency_detail_box.clone();
+        let scroll_clone = scrollable_box.clone();
+        let gesture = gtk::GestureClick::new();
+        let e = element.0.clone();
+        gesture.connect_released(move |gesture, _, _, _| {
+            gesture.set_state(gtk::EventSequenceState::Claimed);
+            scroll_clone.set_visible(false);
+            
+            match currency_detail_clone.first_child() {
+                Some(fc) => currency_detail_clone.remove(&fc),
+                None => {}
+            };
+
+            currency_detail_clone.append(&currency_view(e.clone()));
+            currency_detail_clone.set_visible(true);
+        });
+        currency_box.add_controller(&gesture);
         scrollable_box.append(&currency_box);
     }
 
     let scrollable_container = gtk::ScrolledWindow::builder()
         .child(&scrollable_box)
+        .name("scrollable_container")
         .build();
     
     home_box.append(&scrollable_container);
-    return home_box.clone();
+    home_box.append(&currency_detail_box);
+
+    home_box
 }
 
 pub fn generate_currency_box(element: (Token, Arc<Mutex<String>>)) -> gtk::Box {

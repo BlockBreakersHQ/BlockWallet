@@ -11,16 +11,19 @@ pub fn stack_view(window: &ApplicationWindow, app_settings: ApplicationSettings)
     currency_pairs.update_token_balances();
 
     let container = gtk::Box::new(gtk::Orientation::Vertical, 0);
+
     window.set_content(Some(&container));
 
+    let window_clone = window.clone();
     app_settings.update_balances();
 
     let header_bar = header_bar::header_bar_view(window.clone(), app_settings.clone());
     let stack = adw::ViewStack::new();
     let mut app_settings_clone = app_settings.clone();
 
+    let home = home::home_view(window_clone.clone(), currency_pairs.clone());
     let home_label: Option<&str> = Some("Home");
-    stack.add_titled(&home::home_view(currency_pairs), home_label, "Home");
+    stack.add_titled(&home, home_label, "Home");
 
     let (wallet_box, app_settings) = wallets::wallet_view(app_settings);
     let wallet_label: Option<&str> = Some("Wallets");
@@ -33,12 +36,25 @@ pub fn stack_view(window: &ApplicationWindow, app_settings: ApplicationSettings)
     stack.add_titled(&trade_label, Option::<&str>::None, "Trade");
 
     let stack_bar = adw::ViewSwitcherBar::new();
+    stack_bar.set_widget_name("stack_bar");
     stack_bar.set_stack(Some(&stack));
     stack_bar.set_reveal(true);
 
     container.append(&header_bar);
     container.append(&stack_bar);
     container.append(&stack);
+
+    let stack_clone = stack.clone();
+    let home_clone = home.clone();
+
+    stack.connect_visible_child_notify(move |_| {
+        if &stack_clone.visible_child_name().unwrap() == "Home" {
+            home_clone.last_child().unwrap().set_visible(false);
+
+            //home_box.first_child = scrollable_container, scrollable_container.first_child = GtkViewport, GtkViewport.first_child = scrollable_box
+            home_clone.first_child().unwrap().first_child().unwrap().first_child().unwrap().set_visible(true);
+        }
+    });
 
     let _ = app_settings_clone.write_config();
     window.show();

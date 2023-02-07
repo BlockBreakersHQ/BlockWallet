@@ -6,3 +6,4 @@ pub mod settings;
 pub mod assets;
 pub mod home;
 pub mod header_bar;
+pub mod currency;
