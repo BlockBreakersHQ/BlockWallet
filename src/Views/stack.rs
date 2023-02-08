@@ -40,10 +40,10 @@ pub fn stack_view(window: &ApplicationWindow, app_settings: ApplicationSettings)
     stack_bar.set_stack(Some(&stack));
     stack_bar.set_reveal(true);
 
-    container.append(&header_bar);
     container.append(&stack_bar);
-    container.append(&stack);
-
+    container.prepend(&stack);
+    container.prepend(&header_bar);    
+    
     let stack_clone = stack.clone();
     let home_clone = home.clone();
 
