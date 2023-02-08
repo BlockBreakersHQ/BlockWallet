@@ -6,7 +6,7 @@ use gtk::prelude::*;
 use glib::{clone, Continue, MainContext, PRIORITY_DEFAULT};
 use crate::ApplicationSettings;
 
-pub fn asset_view(app_settings: ApplicationSettings) -> gtk::Box {
+pub fn asset_view(app_settings: ApplicationSettings) -> (gtk::Box, ApplicationSettings) {
     let asset_box = gtk::Box::builder()
         .orientation(Orientation::Vertical)
         .margin_top(12)
@@ -50,6 +50,7 @@ pub fn asset_view(app_settings: ApplicationSettings) -> gtk::Box {
     asset_box.append(&eth_box);
 
     let (sender, receiver) = MainContext::channel(PRIORITY_DEFAULT);
+    let app_settings_clone = app_settings.clone();
 
     thread::spawn(move || {
         loop {
@@ -92,5 +93,5 @@ pub fn asset_view(app_settings: ApplicationSettings) -> gtk::Box {
         ),
     );
 
-    return asset_box;
+    return (asset_box, app_settings_clone);
 }

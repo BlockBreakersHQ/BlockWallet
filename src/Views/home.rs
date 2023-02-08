@@ -1,6 +1,4 @@
-use adw::ApplicationWindow;
 use adw::prelude::*;
-use gtk::prelude::*;
 use gtk::{Orientation, Image, Align};
 use glib::{clone, Continue, MainContext, PRIORITY_DEFAULT};
 use std::thread;
@@ -11,7 +9,7 @@ use crate::currencies::currency_pairs::*;
 use crate::currencies::tokens::Token;
 use crate::views::currency::currency_view;
 
-pub fn home_view(window: ApplicationWindow, currency_pairs: CurrencyPairs) -> gtk::Box {
+pub fn home_view(currency_pairs: CurrencyPairs) -> gtk::Box {
     let home_box = gtk::Box::builder()
         .orientation(Orientation::Vertical)
         .margin_top(12)
@@ -136,9 +134,5 @@ pub fn generate_currency_box(element: (Token, Arc<Mutex<String>>)) -> gtk::Box {
         ),
     );
 
-    let scrollable_container = gtk::ScrolledWindow::builder()
-        .child(&currency_box)
-        .build();
-    
     return currency_box;
 }

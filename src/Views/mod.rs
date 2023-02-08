@@ -7,3 +7,4 @@ pub mod assets;
 pub mod home;
 pub mod header_bar;
 pub mod currency;
+pub mod transactions;
