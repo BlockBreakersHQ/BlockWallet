@@ -13,6 +13,19 @@ pub fn wallet_view(app_settings: ApplicationSettings) -> (gtk::Box, ApplicationS
     let btc_wallets = app_settings.clone().btc_wallets;
     let eth_wallets = app_settings.clone().eth_wallets;
 
+    let scrollable_box = gtk::Box::builder()
+        .orientation(Orientation::Vertical)
+        .margin_top(12)
+        .margin_bottom(12)
+        .vexpand(true)
+        .build();
+    scrollable_box.set_widget_name("wallet_scrollable_box");
+
+    let scrollable_container = gtk::ScrolledWindow::builder()
+        .child(&scrollable_box)
+        .name("wallet_scrollable_container")
+        .build();
+
     let btc_button = Button::builder()
         .label("Bitcoin")
         .margin_top(6)
@@ -38,14 +51,15 @@ pub fn wallet_view(app_settings: ApplicationSettings) -> (gtk::Box, ApplicationS
         .margin_top(12)
         .margin_bottom(12)
         .build()));
-
-    wallet_box.lock().unwrap().append(&btc_button);
-    wallet_box.lock().unwrap().append(&eth_button);
+    
+    scrollable_box.append(&btc_button);
+    scrollable_box.append(&eth_button);
+    wallet_box.lock().unwrap().append(&scrollable_container);
 
     let btc_currency_details = populate_btc_currency_details(&btc_wallets);
     let eth_currency_details = populate_eth_currency_details(&eth_wallets);
-    wallet_box.lock().unwrap().insert_child_after(&btc_currency_details, Some(&btc_button));
-    wallet_box.lock().unwrap().insert_child_after(&eth_currency_details, Some(&eth_button));
+    scrollable_box.append(&btc_currency_details);
+    scrollable_box.append(&eth_currency_details);
     let btc_currency_details_clone = btc_currency_details.clone();
     let eth_currency_details_clone = eth_currency_details.clone();
 
