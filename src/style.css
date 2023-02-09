@@ -40,3 +40,21 @@ label-currency_ticker {
     font-family: Helvetica;
     font-size: 12px;
 }
+
+btc_wallet_details {
+    font-weight: bold;
+    font-family: Helvetica;
+    font-size: 12px;
+}
+
+eth_wallet_details {
+    font-weight: bold;
+    font-family: Helvetica;
+    font-size: 12px;
+}
+
+wallet_expander_row {
+    font-weight: bold;
+    font-family: Helvetica;
+    font-size: 12px;
+}
