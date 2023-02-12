@@ -1,6 +1,6 @@
 use gtk::prelude::*;
 use gtk::{CssProvider, StyleContext};
-use gtk::gdk::{Display};
+use gtk::gdk::Display;
 use adw::{Application, ApplicationWindow};
 use std::path::{Path, PathBuf};
 use std::thread;
@@ -21,8 +21,22 @@ const APP_ID: &str = "org.BlockBreakers.Wallet";
 fn main() {
     let app = Application::builder().application_id(APP_ID).build();
     app.connect_startup(|_| load_css());
+    app.connect_startup(|_| load_images());
     app.connect_activate(build_ui);
     app.run();
+}
+
+fn load_images() {
+    let icon_path = match ApplicationSettings::find_images_path(){
+        Ok(mut lp) => {
+            lp.push("Icons");
+            lp
+        },
+        Err(_) => PathBuf::new()
+    };          
+
+    let icons = gtk::IconTheme::for_display(&Display::default().expect("Could not connect to a display."));
+    icons.add_search_path(icon_path);
 }
 
 fn load_css() {

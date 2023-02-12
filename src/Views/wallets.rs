@@ -208,6 +208,7 @@ fn populate_btc_currency_details(btc_wallets: &Vec<BitcoinWallet>) -> gtk::Box {
             .margin_end(12)
             .height_request(40)
             .css_name("wallet_expander_row")
+            .icon_name("btc")
             .build();
 
         expander.add_row(&btc_mnemonic_label);
@@ -362,7 +363,7 @@ fn populate_eth_currency_details(eth_wallets: &Vec<EthereumWallet>) -> gtk::Box 
             .margin_end(12)
             .height_request(40)
             .css_name("wallet_expander_row")
-            //.icon_name(&str)
+            .icon_name("ETH")
             .build();
 
         expander.add_row(&eth_mnemonic_label);
