@@ -22,7 +22,7 @@ pub fn home_view(currency_pairs: CurrencyPairs) -> gtk::Box {
         .margin_bottom(12)
         .vexpand(true)
         .build();
-    scrollable_box.set_widget_name("scrollable_box");
+    scrollable_box.set_widget_name("home_scrollable_box");
     
     let currency_detail_box = gtk::Box::builder()
         .orientation(Orientation::Vertical)

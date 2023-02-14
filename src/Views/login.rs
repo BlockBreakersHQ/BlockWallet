@@ -30,7 +30,6 @@ pub fn login_view(window: ApplicationWindow, app_settings: ApplicationSettings) 
         .margin_start(12)
         .margin_end(12)
         .build();
-    
     button.add_css_class("login_button");
 
     let input = gtk::Entry::builder()
@@ -42,9 +41,13 @@ pub fn login_view(window: ApplicationWindow, app_settings: ApplicationSettings) 
         .visibility(false)
         .build();
 
-    let failed_login = gtk::Label::new(Some("Login attempt failed."));
-    failed_login.set_visible(false);
-    failed_login.add_css_class("failed_login");
+    let failed_login = gtk::Label::builder()
+        .label("Login attempt failed.")
+        .margin_top(5)
+        .margin_start(5)
+        .visible(false)
+        .css_name("label-error")
+        .build();
 
     let login_box = gtk::Box::builder()
         .orientation(Orientation::Vertical)
