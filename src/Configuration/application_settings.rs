@@ -649,23 +649,4 @@ impl ApplicationSettings {
             );
         }
     }
-    
-    /*pub fn on_exit(&self) {
-        let action_quit = gio::SimpleAction::new("quit", None);
-        self.add_action(&action_quit);
-
-        action_quit.connect_activate(clone!(@weak self as app => move |_, _| {
-            for appwindow in app.windows() {
-                appwindow.close();
-            }
-
-            if self.user_hash.lock().unwrap().to_string().len() > 1 {
-                self.write_config(self.user_hash.lock().unwrap().to_string());
-            }
-            
-            if app.windows().is_empty() {
-                app.quit();
-            }
-        }));
-    }*/
 }

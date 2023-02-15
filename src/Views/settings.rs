@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use crate::configuration::application_settings::*;
 use crate::views::{stack, login};
 
-pub fn settings_view(window: ApplicationWindow, app_settings: ApplicationSettings) {
+pub fn settings_view(window: ApplicationWindow, app_settings: Arc<Mutex<ApplicationSettings>>) {
     let header_bar = HeaderBar::new();
     let settings_button = Button::new();
 
@@ -26,7 +26,7 @@ pub fn settings_view(window: ApplicationWindow, app_settings: ApplicationSetting
 
     header_bar.pack_start(&settings_button);
 
-    let app_settings_logout = Arc::new(Mutex::new(app_settings.clone()));
+    let app_settings_logout = app_settings.clone();
     let window_logout       = window.clone();
     
     let label = gtk::Label::new(Some("this is a setting"));
@@ -61,7 +61,7 @@ pub fn settings_view(window: ApplicationWindow, app_settings: ApplicationSetting
     setting_box.append(&label);
     setting_box.append(&input);
     setting_box.append(&button);
-    if app_settings.logged_in == true {
+    if app_settings.lock().unwrap().logged_in == true {
         setting_box.append(&logout_button);
     }
 
@@ -78,11 +78,11 @@ pub fn settings_view(window: ApplicationWindow, app_settings: ApplicationSetting
     });
 
     settings_button.connect_clicked(move |_| {
-        if app_settings.logged_in == true {
-            stack::stack_view(&window, app_settings.clone());
+        if app_settings.lock().unwrap().logged_in == true {
+            stack::stack_view(&window, app_settings.lock().unwrap().clone());
         }
         else {
-            login::login_view(window.clone(), app_settings.clone());
+            login::login_view(window.clone(), app_settings.lock().unwrap().clone());
         }
     });
 }

@@ -10,7 +10,7 @@ use crate::configuration::application_settings::*;
 use crate::views::{stack, header_bar};
 
 pub fn login_view(window: ApplicationWindow, app_settings: ApplicationSettings) {
-    let header_bar = header_bar::header_bar_view(window.clone(), app_settings.clone());
+    let header_bar = header_bar::header_bar_view(window.clone(), Arc::new(Mutex::new(app_settings.clone())));
 
     let logo_path = match ApplicationSettings::find_images_path(){
         Ok(mut lp) => {

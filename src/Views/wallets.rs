@@ -1,7 +1,6 @@
 use adw::prelude::*;
 use gtk::{Button, Orientation, Image};
 use std::sync::{Arc, Mutex};
-use std::path::PathBuf;
 
 use crate::configuration::application_settings::*;
 use crate::currencies::eth;
@@ -9,12 +8,12 @@ use crate::currencies::eth::EthereumWallet;
 use crate::currencies::btc;
 use crate::currencies::btc::BitcoinWallet;
 
-pub fn wallet_view(app_settings: ApplicationSettings) -> (gtk::Box, ApplicationSettings) {
+pub fn wallet_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, Arc<Mutex<ApplicationSettings>>) {
     let btc_data_displayed = Arc::new(Mutex::new(false));
     let eth_data_displayed = Arc::new(Mutex::new(false));
 
-    let btc_wallets = app_settings.clone().btc_wallets;
-    let eth_wallets = app_settings.clone().eth_wallets;
+    let btc_wallets = app_settings.lock().unwrap().btc_wallets.clone();
+    let eth_wallets = app_settings.lock().unwrap().eth_wallets.clone();
 
     let scrollable_box = gtk::Box::builder()
         .orientation(Orientation::Vertical)
@@ -73,7 +72,8 @@ pub fn wallet_view(app_settings: ApplicationSettings) -> (gtk::Box, ApplicationS
     let btc_currency_details_clone = btc_currency_details.clone();
     let eth_currency_details_clone = eth_currency_details.clone();
 
-    let new_wallet_box = new_wallet_box(Arc::new(Mutex::new(app_settings.clone())), Arc::new(Mutex::new(btc_currency_details.clone())),
+    let app_settings_clone = app_settings.clone();
+    let new_wallet_box = new_wallet_box(app_settings_clone, Arc::new(Mutex::new(btc_currency_details.clone())),
         Arc::new(Mutex::new(eth_currency_details.clone())), Arc::new(Mutex::new(scrollable_container.clone())));
     wallet_box.lock().unwrap().append(&scrollable_container);
     wallet_box.lock().unwrap().append(&new_wallet_box);
@@ -368,14 +368,6 @@ fn populate_eth_currency_details(eth_wallets: &Vec<EthereumWallet>) -> gtk::Box 
             }
         });
 
-        let btc_path = match ApplicationSettings::find_images_path(){
-            Ok(mut bp) => {
-                bp.push("Icons/btc.png");
-                bp
-            },
-            Err(_) => PathBuf::new()
-        };
-
         let expander = adw::ExpanderRow::builder()
             .title(&wallet_name)
             .margin_start(12)
@@ -657,14 +649,6 @@ fn add_eth_wallet(eth_box: &mut gtk::Box, ethw: &EthereumWallet) -> gtk::Box {
         }
     });
 
-    let btc_path = match ApplicationSettings::find_images_path(){
-        Ok(mut bp) => {
-            bp.push("Icons/btc.png");
-            bp
-        },
-        Err(_) => PathBuf::new()
-    };
-
     let expander = adw::ExpanderRow::builder()
         .title(&wallet_name)
         .margin_start(12)
@@ -726,8 +710,8 @@ fn eth_qr_box(ethw: &EthereumWallet) -> gtk::Box {
     return qr_box;
 }
 
-fn new_wallet_box(mut app_settings: Arc<Mutex<ApplicationSettings>>, mut btc_box: Arc<Mutex<gtk::Box>>, 
-    mut eth_box: Arc<Mutex<gtk::Box>>, scrollable_container: Arc<Mutex<gtk::ScrolledWindow>>) -> gtk::Box {
+fn new_wallet_box(app_settings: Arc<Mutex<ApplicationSettings>>, btc_box: Arc<Mutex<gtk::Box>>, 
+    eth_box: Arc<Mutex<gtk::Box>>, scrollable_container: Arc<Mutex<gtk::ScrolledWindow>>) -> gtk::Box {
     let new_wallet_box = gtk::Box::builder()
         .orientation(Orientation::Vertical)
         .visible(false)
@@ -781,10 +765,9 @@ fn new_wallet_box(mut app_settings: Arc<Mutex<ApplicationSettings>>, mut btc_box
     new_wallet_box.append(&create_wallet_button);
 
     let new_wallet_box_clone = new_wallet_box.clone();
-
+    
     create_wallet_button.connect_clicked(move |_button| {
         let mut path = String::from("m/44'/60'/0'/0'/");
-
         if token_selector.selected() == 0 {
             path += &app_settings.lock().unwrap().btc_wallets.len().to_string();
             let mnemonic = match app_settings.lock().unwrap().btc_wallets[0].mnemonic.clone() {
@@ -830,8 +813,6 @@ fn new_wallet_box(mut app_settings: Arc<Mutex<ApplicationSettings>>, mut btc_box
             new_wallet_box.set_visible(false);
             scrollable_container.lock().unwrap().set_visible(true);
         }
-        println!("Create Wallet");
-        println!("Token: {}", token_selector.selected());
     });
 
     return new_wallet_box_clone;

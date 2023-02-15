@@ -1,6 +1,5 @@
 use gtk::prelude::*;
 use gtk::{Orientation};
-use adw::ApplicationWindow;
 use crate::currencies::tokens::Token;
 
 pub fn currency_view(token: Token) -> gtk::Box {
