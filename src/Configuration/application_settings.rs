@@ -685,6 +685,7 @@ impl ApplicationSettings {
         }
 
         for i in 0..self.eth_wallets.len() {
+            let etherscan_key = String::from(&self.etherscan_key.clone());
             let eth_balance_arc = match &self.eth_wallets[i].balance {
                 Some(b) => Arc::clone(b),
                 None    => panic!("ERROR: failed aquiring balance mutex.")
@@ -702,6 +703,7 @@ impl ApplicationSettings {
                     let runtime = tokio::runtime::Runtime::new().unwrap();
                     let sender  = sender.clone();
                     let address = address.clone();
+                    let etherscan_key = etherscan_key.clone();
     
                     if run_before == false {
                         thread::sleep(Duration::from_secs(1));
@@ -712,7 +714,7 @@ impl ApplicationSettings {
                     }
     
                     let _ = runtime.block_on(runtime.spawn(async move {
-                        let eth_price = match EthereumWallet::get_balance(address).await {
+                        let eth_price = match EthereumWallet::get_balance(address, etherscan_key.clone()).await {
                             Some(label)  => label,
                             None         => String::from("Uninitialized")
                         };

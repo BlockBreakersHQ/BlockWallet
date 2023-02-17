@@ -217,14 +217,14 @@ impl EthereumWallet {
         })
     }
 
-    pub async fn get_balance(address: String) -> Option<String> {
+    pub async fn get_balance(address: String, etherscan_key: String) -> Option<String> {
         let etherscan_get_multiple_address_balance_url = 
             format!("https://api.etherscan.io/api\
             ?module=account\
             &action=balance\
             &address={}\
             &tag=latest\
-            &apikey=JGGW8XBH1T4FXNXGXDG728CSH7PR8XABJC", address);
+            &apikey=[{}]", address, etherscan_key);
 
         let resp = match reqwest::get(etherscan_get_multiple_address_balance_url).await {
             Ok(resp) => resp,
