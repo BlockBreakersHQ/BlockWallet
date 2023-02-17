@@ -1,12 +1,36 @@
 use std::time::Duration;
 use std::thread;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use gtk::Orientation;
 use gtk::prelude::*;
 use glib::{clone, Continue, MainContext, PRIORITY_DEFAULT};
 use crate::ApplicationSettings;
 
-pub fn asset_view(app_settings: ApplicationSettings) -> (gtk::Box, ApplicationSettings) {
+pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, Arc<Mutex<ApplicationSettings>>) {
+    let asset_box = gtk::Box::builder()
+        .orientation(Orientation::Vertical)
+        .margin_top(12)
+        .margin_bottom(12)
+        .build();
+
+    let scrollable_box = gtk::Box::builder()
+        .orientation(Orientation::Vertical)
+        .margin_top(12)
+        .margin_bottom(12)
+        .vexpand(true)
+        .build();
+    scrollable_box.set_widget_name("assets_scrollable_box");
+
+    let scrollable_container = gtk::ScrolledWindow::builder()
+        .child(&scrollable_box)
+        .name("assets_scrollable_container")
+        .build();
+
+    return (asset_box, app_settings);
+}
+
+/*
+pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, Arc<Mutex<ApplicationSettings>>) {
     let asset_box = gtk::Box::builder()
         .orientation(Orientation::Vertical)
         .margin_top(12)
@@ -56,13 +80,13 @@ pub fn asset_view(app_settings: ApplicationSettings) -> (gtk::Box, ApplicationSe
         loop {
             let sender  = sender.clone();
 
-            let btc_balance = match &app_settings.btc_wallets[0].balance {
-                Some(b) => b,
+            let btc_balance = match &app_settings.lock().unwrap().btc_wallets[0].balance {
+                Some(b) => b.clone(),
                 None    => panic!("An error occurred in assets")
             };
 
-            let eth_balance = match &app_settings.eth_wallets[0].balance {
-                Some(b) => b,
+            let eth_balance = match &app_settings.lock().unwrap().eth_wallets[0].balance {
+                Some(b) => b.clone(),
                 None    => panic!("An error occurred in assets")
             };
 
@@ -95,3 +119,4 @@ pub fn asset_view(app_settings: ApplicationSettings) -> (gtk::Box, ApplicationSe
 
     return (asset_box, app_settings_clone);
 }
+*/

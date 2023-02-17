@@ -28,9 +28,9 @@ pub fn stack_view(window: &ApplicationWindow, app_settings_orig: ApplicationSett
     let wallet_label: Option<&str> = Some("Wallets");
     stack.add_titled(&wallet_box, wallet_label, "Wallets");
 
-    //let (asset_box, app_settings) = assets::asset_view(app_settings);
-    //let asset_label: Option<&str> = Some("Assets");
-    //stack.add_titled(&asset_box, asset_label, "Assets");
+    let (asset_box, app_settings) = assets::asset_view(app_settings);
+    let asset_label: Option<&str> = Some("Assets");
+    stack.add_titled(&asset_box, asset_label, "Assets");
 
     //let (trade_box, app_settings) = transactions::transaction_view(app_settings);
     //let trade_label: Option<&str> = Some("Coming soon!");
@@ -61,6 +61,6 @@ pub fn stack_view(window: &ApplicationWindow, app_settings_orig: ApplicationSett
         let _ = app_settings.lock().unwrap().write_config();
         Inhibit(false)
     });
-    
+
     window.show();
 }

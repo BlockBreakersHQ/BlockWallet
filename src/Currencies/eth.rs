@@ -10,6 +10,7 @@ use colored::*;
 use core::{fmt, fmt::Display, str::FromStr};
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use serde::{Serialize};
+use serde_json::Value;
 use fast_qr::convert::{image::ImageBuilder, Builder, Shape};
 use fast_qr::qr::QRBuilder;
 use std::sync::{Arc, Mutex};
@@ -217,17 +218,30 @@ impl EthereumWallet {
     }
 
     pub async fn get_balance(address: String) -> Option<String> {
+        let etherscan_get_multiple_address_balance_url = 
+            format!("https://api.etherscan.io/api\
+            ?module=account\
+            &action=balance\
+            &address={}\
+            &tag=latest\
+            &apikey=JGGW8XBH1T4FXNXGXDG728CSH7PR8XABJC", address);
 
-        let transport = web3::transports::Http::new("https://mainnet.infura.io/v3/4f115186b9564f49ae8b1f2a8850da32").ok()?;
-        let web3 = web3::Web3::new(transport);
-        let mut accounts = web3.eth().accounts().await.ok()?;
-        let addr = address.parse().ok()?;
-        accounts.push(addr);
+        let resp = match reqwest::get(etherscan_get_multiple_address_balance_url).await {
+            Ok(resp) => resp,
+            Err(_) => return Some(String::from("Uninitialized"))
+        };
 
-        let balance = web3.eth().balance(accounts[0], None).await;
-        let acc_balance = format!("{}", balance.unwrap());
-        
-        return Some(acc_balance);
+        let text = match resp.text().await {
+            Ok(text) => text,
+            Err(_) => return Some(String::from("Uninitialized"))
+        };
+
+        let json: Value = match serde_json::from_str(&text) {
+            Ok(r)  => r,
+            Err(_) => return Some(String::from("Uninitialized"))
+        };
+
+        return Some(json["result"].to_string().replace("\"", ""));
     }
 
     pub fn set_wallet_name(&mut self, name: String) {

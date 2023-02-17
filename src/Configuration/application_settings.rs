@@ -1,4 +1,4 @@
-use std::{env, io, thread};
+use std::{env, io, thread, fs};
 use std::io::{Error, ErrorKind, Write, Read, Seek, SeekFrom};
 use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
@@ -17,14 +17,16 @@ use crate::configuration::block_error;
 
 #[derive(Clone, Debug)]
 pub struct ApplicationSettings {
-    pub config_path : PathBuf,
-    pub error_path  : PathBuf,
-    pub user_hash   : String,
-    pub btc_wallets : Vec<BitcoinWallet>,
-    pub eth_wallets : Vec<EthereumWallet>,
-    pub tokens      : Tokens,
-    pub starred     : Vec<Token>,
-    pub logged_in   : bool
+    pub config_path   : PathBuf,
+    pub error_path    : PathBuf,
+    pub user_hash     : String,
+    pub btc_wallets   : Vec<BitcoinWallet>,
+    pub eth_wallets   : Vec<EthereumWallet>,
+    pub tokens        : Tokens,
+    pub starred       : Vec<Token>,
+    pub logged_in     : bool,
+    pub infura_key    : String,
+    pub etherscan_key : String
 }
 
 impl ApplicationSettings {
@@ -45,6 +47,8 @@ impl ApplicationSettings {
         }
 
         let mut starred = Vec::new();
+        let mut i_key = String::new();
+        let mut e_key = String::new();
 
         if !std::path::Path::new(&cpath).exists() {
             let b_wallet = ApplicationSettings::generate_btc_wallet(String::new());
@@ -74,17 +78,52 @@ impl ApplicationSettings {
                     starred.push(tokens.eth_tokens[i].clone());
                 }
             }
+
+            let mut ypath = match env::current_exe() {
+                Ok(path) => path,
+                Err(why) => panic!("couldn't get executable directory: {}", why)
+            };
+            ypath.pop();
+            ypath.push("Config.yml");
+
+            if !ypath.exists() {
+                match File::create(&ypath) {
+                    Ok(file) => {
+                        let data = "INFURA_KEY=\nETHERSCAN_KEY=\n";
+                        fs::write(ypath, data).expect("Unable to write file");
+                    },
+                    Err(why) => panic!("couldn't create {}: {}", &ypath.clone().display(), why)
+                };
+            } else {
+                let printable_path = ypath.clone();
+                let mut content = match fs::read_to_string(ypath) {
+                    Ok(content) => content,
+                    Err(why) => panic!("couldn't read {}: {}", printable_path.display(), why)
+                };
+
+                let contents: Vec<&str> = content.split("\n").collect();
+    
+                for i in 0..contents.len() {
+                    if contents[i].contains("INFURA_KEY=") {
+                        i_key = contents[i].split("=").collect::<Vec<&str>>()[1].to_string();
+                    } else if contents[i].contains("ETHERSCAN_KEY=") {
+                        e_key = contents[i].split("=").collect::<Vec<&str>>()[1].to_string();
+                    }
+                }
+            }
         }
 
         ApplicationSettings {
-            config_path : cpath,
-            error_path  : epath,
-            user_hash   : hash,
-            btc_wallets : bitcoin_wallets,
-            eth_wallets : ethereum_wallets,
-            tokens      : tokens,
-            starred     : starred,
-            logged_in   : false
+            config_path   : cpath,
+            error_path    : epath,
+            user_hash     : hash,
+            btc_wallets   : bitcoin_wallets,
+            eth_wallets   : ethereum_wallets,
+            tokens        : tokens,
+            starred       : starred,
+            logged_in     : false,
+            infura_key    : i_key,
+            etherscan_key : e_key
         }
     }
 
@@ -236,6 +275,44 @@ impl ApplicationSettings {
                 } else if self.tokens.eth_tokens[i].symbol == "LINK" {
                     self.starred.push(self.tokens.eth_tokens[i].clone());
                 }
+
+                let mut i_key = String::new();
+                let mut e_key = String::new();
+
+                let mut ypath = match env::current_exe() {
+                    Ok(path) => path,
+                    Err(why) => panic!("couldn't get executable directory: {}", why)
+                };
+                ypath.pop();
+                ypath.push("Config.yml");
+    
+                if !ypath.exists() {
+                    match File::create(&ypath) {
+                        Ok(file) => {
+                            let data = "INFURA_KEY=\nETHERSCAN_KEY=\n";
+                            fs::write(ypath, data).expect("Unable to write file");
+                        },
+                        Err(why) => panic!("couldn't create {}: {}", &ypath.clone().display(), why)
+                    };
+                } else {
+                    let printable_path = ypath.clone();
+                    let mut content = match fs::read_to_string(ypath) {
+                        Ok(content) => content,
+                        Err(why) => panic!("couldn't read {}: {}", printable_path.display(), why)
+                    };
+    
+                    let contents: Vec<&str> = content.split("\n").collect();
+        
+                    for i in 0..contents.len() {
+                        if contents[i].contains("INFURA_KEY=") {
+                            i_key = contents[i].split("=").collect::<Vec<&str>>()[1].to_string();
+                        } else if contents[i].contains("ETHERSCAN_KEY=") {
+                            e_key = contents[i].split("=").collect::<Vec<&str>>()[1].to_string();
+                        }
+                    }
+                }
+                self.infura_key = i_key;
+                self.etherscan_key = e_key;
             }
         } else {
             for setting in settings {
@@ -252,8 +329,11 @@ impl ApplicationSettings {
                                 self.starred.push(self.tokens.eth_tokens[j].clone());
                             }
                         }
+                    } else if i.contains("INFURA_KEY=") {
+                        self.infura_key = i.split("=").collect::<Vec<&str>>()[1].to_string();
+                    } else if i.contains("ETHERSCAN_KEY=") {
+                        self.etherscan_key = i.split("=").collect::<Vec<&str>>()[1].to_string();
                     }
-
                 }
             }
         }

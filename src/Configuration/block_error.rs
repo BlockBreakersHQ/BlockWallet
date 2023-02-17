@@ -12,13 +12,10 @@ pub enum Error {
     DerivationPathError(DerivationPathError),
     ExtendedPrivateKeyError(ExtendedPrivateKeyError),
     ExtendedPublicKeyError(ExtendedPublicKeyError),
-    //InvalidMnemonicForPrivateSpendKey,
     PrivateKeyError(PrivateKeyError),
     PublicKeyError(PublicKeyError),
     MnemonicError(MnemonicError),
     TransactionError(TransactionError),
-    //UnsupportedLanguage,
-    //Web3Error(Web3Error)
 }
 
 impl From<std::io::Error> for Error {
