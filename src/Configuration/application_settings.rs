@@ -537,11 +537,19 @@ impl ApplicationSettings {
 
     pub fn write_config(&mut self) -> Result<bool, Error> {
         let mut output = String::new();
-        if &self.starred.len() > &0 {
+        if &self.starred.len() > &0 || &self.infura_key.len() > &0 || &self.etherscan_key.len() > &0 {
             output += "<Entry>\n      Sector: Settings\n";
-            output += &format!("      Starred______\n");
-            for token in &self.starred {
-                output += &format!("      ETH TOKEN:{}\n", token.symbol);
+            if &self.starred.len() > &0 {
+                output += &format!("      Starred______\n");
+                for token in &self.starred {
+                    output += &format!("      ETH TOKEN:{}\n", token.symbol);
+                }
+            }
+            if &self.infura_key.len() > &0 {
+                output += &format!("      INFURA_KEY={}\n", self.infura_key);
+            }
+            if &self.etherscan_key.len() > &0 {
+                output += &format!("      ETHERSCAN_KEY={}\n", self.etherscan_key);
             }
             output += "<Entry>\n";
         }
