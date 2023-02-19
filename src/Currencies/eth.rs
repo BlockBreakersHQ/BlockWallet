@@ -276,7 +276,7 @@ impl EthereumWallet {
         self.transactions = Some(Arc::new(Mutex::new(eth_transactions.clone())));
         println!("eth_transations.len(): {}", eth_transactions.len());
         for eth_transaction in eth_transactions {
-            println!("eth_tokenSymbol: {} contractAddress = {}", eth_transaction.tokenSymbol.unwrap(), eth_transaction.contractAddress.unwrap());
+            
         }
     }
 

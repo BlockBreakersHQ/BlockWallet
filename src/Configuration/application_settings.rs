@@ -57,45 +57,43 @@ impl ApplicationSettings {
             bitcoin_wallets.push(b_wallet);
             ethereum_wallets.push(e_wallet);
 
-            let eth_tokens = tokens.eth_tokens.clone();
-
             for (key, valye) in tokens.eth_tokens.clone() {
-                if eth_tokens[&key].symbol == "BTC" {
-                    starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "ETH" {
-                    starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "MATIC" {
-                    starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "WBTC" {
-                    starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "UNI" {
-                    starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "BNB" {
-                    starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "SHIB" {
-                    starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "TRON" {
-                    starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "LINK" {
-                    starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "QNT" {
-                    starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "APE" {
-                    starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "FTM" {
-                    starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "GRT" {
-                    starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "SAND" {
-                    starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "MANA" {
-                    starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "AXS" {
-                    starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "CHZ" {
-                    starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "CRV" {
-                    starred.push(eth_tokens[&key].clone());
+                if tokens.eth_tokens[&key].symbol == "BTC" {
+                    starred.push(tokens.eth_tokens[&key].clone());
+                } else if tokens.eth_tokens[&key].symbol == "ETH" {
+                    starred.push(tokens.eth_tokens[&key].clone());
+                } else if tokens.eth_tokens[&key].symbol == "MATIC" {
+                    starred.push(tokens.eth_tokens[&key].clone());
+                } else if tokens.eth_tokens[&key].symbol == "WBTC" {
+                    starred.push(tokens.eth_tokens[&key].clone());
+                } else if tokens.eth_tokens[&key].symbol == "UNI" {
+                    starred.push(tokens.eth_tokens[&key].clone());
+                } else if tokens.eth_tokens[&key].symbol == "BNB" {
+                    starred.push(tokens.eth_tokens[&key].clone());
+                } else if tokens.eth_tokens[&key].symbol == "SHIB" {
+                    starred.push(tokens.eth_tokens[&key].clone());
+                } else if tokens.eth_tokens[&key].symbol == "TRON" {
+                    starred.push(tokens.eth_tokens[&key].clone());
+                } else if tokens.eth_tokens[&key].symbol == "LINK" {
+                    starred.push(tokens.eth_tokens[&key].clone());
+                } else if tokens.eth_tokens[&key].symbol == "QNT" {
+                    starred.push(tokens.eth_tokens[&key].clone());
+                } else if tokens.eth_tokens[&key].symbol == "APE" {
+                    starred.push(tokens.eth_tokens[&key].clone());
+                } else if tokens.eth_tokens[&key].symbol == "FTM" {
+                    starred.push(tokens.eth_tokens[&key].clone());
+                } else if tokens.eth_tokens[&key].symbol == "GRT" {
+                    starred.push(tokens.eth_tokens[&key].clone());
+                } else if tokens.eth_tokens[&key].symbol == "SAND" {
+                    starred.push(tokens.eth_tokens[&key].clone());
+                } else if tokens.eth_tokens[&key].symbol == "MANA" {
+                    starred.push(tokens.eth_tokens[&key].clone());
+                } else if tokens.eth_tokens[&key].symbol == "AXS" {
+                    starred.push(tokens.eth_tokens[&key].clone());
+                } else if tokens.eth_tokens[&key].symbol == "CHZ" {
+                    starred.push(tokens.eth_tokens[&key].clone());
+                } else if tokens.eth_tokens[&key].symbol == "CRV" {
+                    starred.push(tokens.eth_tokens[&key].clone());
                 }
             }
 
@@ -274,46 +272,44 @@ impl ApplicationSettings {
             }
         }
 
-        let eth_tokens = self.tokens.eth_tokens.clone();
-
         if settings.len() <= 0 {
             for (key, valye) in self.tokens.eth_tokens.clone() {
-                if eth_tokens[&key].symbol == "BTC" {
-                    self.starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "ETH" {
-                    self.starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "MATIC" {
-                    self.starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "WBTC" {
-                    self.starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "UNI" {
-                    self.starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "BNB" {
-                    self.starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "SHIB" {
-                    self.starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "TRON" {
-                    self.starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "LINK" {
-                    self.starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "QNT" {
-                    self.starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "APE" {
-                    self.starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "FTM" {
-                    self.starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "GRT" {
-                    self.starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "SAND" {
-                    self.starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "MANA" {
-                    self.starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "AXS" {
-                    self.starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "CHZ" {
-                    self.starred.push(eth_tokens[&key].clone());
-                } else if eth_tokens[&key].symbol == "CRV" {
-                    self.starred.push(eth_tokens[&key].clone());
+                if self.tokens.eth_tokens[&key].symbol == "BTC" {
+                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                } else if self.tokens.eth_tokens[&key].symbol == "ETH" {
+                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                } else if self.tokens.eth_tokens[&key].symbol == "MATIC" {
+                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                } else if self.tokens.eth_tokens[&key].symbol == "WBTC" {
+                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                } else if self.tokens.eth_tokens[&key].symbol == "UNI" {
+                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                } else if self.tokens.eth_tokens[&key].symbol == "BNB" {
+                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                } else if self.tokens.eth_tokens[&key].symbol == "SHIB" {
+                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                } else if self.tokens.eth_tokens[&key].symbol == "TRON" {
+                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                } else if self.tokens.eth_tokens[&key].symbol == "LINK" {
+                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                } else if self.tokens.eth_tokens[&key].symbol == "QNT" {
+                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                } else if self.tokens.eth_tokens[&key].symbol == "APE" {
+                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                } else if self.tokens.eth_tokens[&key].symbol == "FTM" {
+                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                } else if self.tokens.eth_tokens[&key].symbol == "GRT" {
+                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                } else if self.tokens.eth_tokens[&key].symbol == "SAND" {
+                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                } else if self.tokens.eth_tokens[&key].symbol == "MANA" {
+                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                } else if self.tokens.eth_tokens[&key].symbol == "AXS" {
+                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                } else if self.tokens.eth_tokens[&key].symbol == "CHZ" {
+                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                } else if self.tokens.eth_tokens[&key].symbol == "CRV" {
+                    self.starred.push(self.tokens.eth_tokens[&key].clone());
                 }
 
                 let mut i_key = String::new();
