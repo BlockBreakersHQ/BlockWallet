@@ -1,11 +1,5 @@
 use wagyu_ethereum::*;
-use wagyu_model::Mnemonic;
-use wagyu_model::mnemonic::MnemonicCount;
-use wagyu_model::MnemonicExtended;
-use wagyu_model::ExtendedPrivateKey;
-use wagyu_model::ExtendedPublicKey;
-use wagyu_model::PublicKey;
-use wagyu_model::PrivateKey;
+use wagyu_model::*;
 use colored::*;
 use core::{fmt, fmt::Display, str::FromStr};
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -14,9 +8,12 @@ use serde_json::Value;
 use fast_qr::convert::{image::ImageBuilder, Builder, Shape};
 use fast_qr::qr::QRBuilder;
 use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
 
 use crate::configuration::*;
 use crate::configuration::application_settings::ApplicationSettings;
+use crate::currencies::transactions::*;
+use crate::currencies::tokens::*;
 
 pub fn generate_eth_hd_wallet() -> Option<EthereumWallet> {
     match EthereumWallet::new_hd::<wagyu_ethereum::network::Ropsten, wagyu_ethereum::wordlist::English, _>(
@@ -107,6 +104,10 @@ pub struct EthereumWallet {
     pub balance: Option<Arc<Mutex<String>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub network: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub erc20_balances: Option<Arc<Mutex<HashMap<String, Token>>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transactions: Option<Arc<Mutex<Vec<EthTransaction>>>>,
     
 }
 
@@ -218,7 +219,7 @@ impl EthereumWallet {
     }
 
     pub async fn get_balance(address: String, etherscan_key: String) -> Option<String> {
-        let etherscan_get_multiple_address_balance_url = 
+        let etherscan_get_address_balance_url = 
             format!("https://api.etherscan.io/api\
             ?module=account\
             &action=balance\
@@ -226,7 +227,7 @@ impl EthereumWallet {
             &tag=latest\
             &apikey=[{}]", address, etherscan_key);
 
-        let resp = match reqwest::get(etherscan_get_multiple_address_balance_url).await {
+        let resp = match reqwest::get(etherscan_get_address_balance_url).await {
             Ok(resp) => resp,
             Err(_) => return Some(String::from("Uninitialized"))
         };
@@ -242,6 +243,41 @@ impl EthereumWallet {
         };
 
         return Some(json["result"].to_string().replace("\"", ""));
+    }
+
+    pub async fn get_erc20_balances(&mut self, etherscan_key: String) {
+        let eth_transaction_url = format!("https://api.etherscan.io/api\
+            ?module=account\
+            &action=tokentx\
+            &address={}\
+            &startblock={}\
+            &apikey={}", "0x189B9cBd4AfF470aF2C0102f365FC1823d857965", 0, etherscan_key.clone());
+
+        let resp = match reqwest::get(eth_transaction_url).await {
+            Ok(resp) => resp,
+            Err(_) => return
+        };
+
+        let text = match resp.text().await {
+            Ok(text) => text,
+            Err(_) => return
+        };
+
+        let json: Value = match serde_json::from_str(&text) {
+            Ok(r)  => r,
+            Err(_) => return
+        };
+
+        let eth_transactions: Vec<EthTransaction> = match serde_json::from_str(&json["result"].to_string()) {
+            Ok(eth_transactions) => eth_transactions,
+            Err(e) => panic!("Error parsing eth_transactions: {}", e)
+        };
+
+        self.transactions = Some(Arc::new(Mutex::new(eth_transactions.clone())));
+        println!("eth_transations.len(): {}", eth_transactions.len());
+        for eth_transaction in eth_transactions {
+            println!("eth_tokenSymbol: {} contractAddress = {}", eth_transaction.tokenSymbol.unwrap(), eth_transaction.contractAddress.unwrap());
+        }
     }
 
     pub fn set_wallet_name(&mut self, name: String) {

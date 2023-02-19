@@ -138,7 +138,7 @@ pub fn parse_token_details(currency_json: &str, mut tokens: Tokens) -> Result<To
 
     for (key, _value) in &usable_keys {
         icon_path.push(format!("{}.png", usable_keys.get(key).unwrap().symbol));
-        tokens.eth_tokens.push(
+        tokens.eth_tokens.insert(usable_keys.get(key).unwrap().symbol.clone(),
             Token {
                 symbol:     usable_keys.get(key).unwrap().symbol.clone(),
                 name:       usable_keys.get(key).unwrap().name.clone(),

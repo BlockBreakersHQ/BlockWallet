@@ -2,12 +2,14 @@ use colored::Colorize;
 use std::path::PathBuf;
 use std::fmt;
 use std::fmt::Display;
+use std::collections::HashMap;
+use serde::Serialize;
 
 use crate::ApplicationSettings;
 
 #[derive(Clone, Debug)]
 pub struct Tokens {
-    pub eth_tokens: Vec<Token>
+    pub eth_tokens: HashMap<String, Token>
 }
 
 impl Tokens {
@@ -28,8 +30,8 @@ impl Tokens {
             decimals: 8
         };
 
-        let mut eth_tokens = Vec::new();
-        eth_tokens.push(t);
+        let mut eth_tokens = HashMap::new();
+        eth_tokens.insert(String::from("BTC"), t);
 
         Tokens {
             eth_tokens: eth_tokens
@@ -44,14 +46,14 @@ impl Tokens {
 impl Display for Tokens {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut output = String::new();
-        for token in self.eth_tokens.iter() {
-            output.push_str(&format!("{}\n", token));
+        for (key, value) in &self.eth_tokens {
+            output.push_str(&format!("{}\n", value));
         }
         write!(f, "{}", output)
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Debug, Clone)]
 pub struct Token {
     pub name    : String,
     pub symbol  : String,

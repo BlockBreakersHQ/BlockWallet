@@ -57,25 +57,45 @@ impl ApplicationSettings {
             bitcoin_wallets.push(b_wallet);
             ethereum_wallets.push(e_wallet);
 
-            for i in 0..tokens.len() {
-                if tokens.eth_tokens[i].symbol == "BTC" {
-                    starred.push(tokens.eth_tokens[i].clone());
-                } else if tokens.eth_tokens[i].symbol == "ETH" {
-                    starred.push(tokens.eth_tokens[i].clone());
-                } else if tokens.eth_tokens[i].symbol == "MATIC" {
-                    starred.push(tokens.eth_tokens[i].clone());
-                } else if tokens.eth_tokens[i].symbol == "WBTC" {
-                    starred.push(tokens.eth_tokens[i].clone());
-                } else if tokens.eth_tokens[i].symbol == "UNI" {
-                    starred.push(tokens.eth_tokens[i].clone());
-                } else if tokens.eth_tokens[i].symbol == "BNB" {
-                    starred.push(tokens.eth_tokens[i].clone());
-                } else if tokens.eth_tokens[i].symbol == "SHIB" {
-                    starred.push(tokens.eth_tokens[i].clone());
-                } else if tokens.eth_tokens[i].symbol == "TRON" {
-                    starred.push(tokens.eth_tokens[i].clone());
-                } else if tokens.eth_tokens[i].symbol == "LINK" {
-                    starred.push(tokens.eth_tokens[i].clone());
+            let eth_tokens = tokens.eth_tokens.clone();
+
+            for (key, valye) in tokens.eth_tokens.clone() {
+                if eth_tokens[&key].symbol == "BTC" {
+                    starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "ETH" {
+                    starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "MATIC" {
+                    starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "WBTC" {
+                    starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "UNI" {
+                    starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "BNB" {
+                    starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "SHIB" {
+                    starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "TRON" {
+                    starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "LINK" {
+                    starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "QNT" {
+                    starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "APE" {
+                    starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "FTM" {
+                    starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "GRT" {
+                    starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "SAND" {
+                    starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "MANA" {
+                    starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "AXS" {
+                    starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "CHZ" {
+                    starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "CRV" {
+                    starred.push(eth_tokens[&key].clone());
                 }
             }
 
@@ -88,7 +108,7 @@ impl ApplicationSettings {
 
             if !ypath.exists() {
                 match File::create(&ypath) {
-                    Ok(file) => {
+                    Ok(_) => {
                         let data = "INFURA_KEY=\nETHERSCAN_KEY=\n";
                         fs::write(ypath, data).expect("Unable to write file");
                     },
@@ -96,7 +116,7 @@ impl ApplicationSettings {
                 };
             } else {
                 let printable_path = ypath.clone();
-                let mut content = match fs::read_to_string(ypath) {
+                let content = match fs::read_to_string(ypath) {
                     Ok(content) => content,
                     Err(why) => panic!("couldn't read {}: {}", printable_path.display(), why)
                 };
@@ -254,26 +274,46 @@ impl ApplicationSettings {
             }
         }
 
+        let eth_tokens = self.tokens.eth_tokens.clone();
+
         if settings.len() <= 0 {
-            for i in 0..self.tokens.len() {
-                if self.tokens.eth_tokens[i].symbol == "BTC" {
-                    self.starred.push(self.tokens.eth_tokens[i].clone());
-                } else if self.tokens.eth_tokens[i].symbol == "ETH" {
-                    self.starred.push(self.tokens.eth_tokens[i].clone());
-                } else if self.tokens.eth_tokens[i].symbol == "MATIC" {
-                    self.starred.push(self.tokens.eth_tokens[i].clone());
-                } else if self.tokens.eth_tokens[i].symbol == "WBTC" {
-                    self.starred.push(self.tokens.eth_tokens[i].clone());
-                } else if self.tokens.eth_tokens[i].symbol == "UNI" {
-                    self.starred.push(self.tokens.eth_tokens[i].clone());
-                } else if self.tokens.eth_tokens[i].symbol == "BNB" {
-                    self.starred.push(self.tokens.eth_tokens[i].clone());
-                } else if self.tokens.eth_tokens[i].symbol == "SHIB" {
-                    self.starred.push(self.tokens.eth_tokens[i].clone());
-                } else if self.tokens.eth_tokens[i].symbol == "TRON" {
-                    self.starred.push(self.tokens.eth_tokens[i].clone());
-                } else if self.tokens.eth_tokens[i].symbol == "LINK" {
-                    self.starred.push(self.tokens.eth_tokens[i].clone());
+            for (key, valye) in self.tokens.eth_tokens.clone() {
+                if eth_tokens[&key].symbol == "BTC" {
+                    self.starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "ETH" {
+                    self.starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "MATIC" {
+                    self.starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "WBTC" {
+                    self.starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "UNI" {
+                    self.starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "BNB" {
+                    self.starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "SHIB" {
+                    self.starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "TRON" {
+                    self.starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "LINK" {
+                    self.starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "QNT" {
+                    self.starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "APE" {
+                    self.starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "FTM" {
+                    self.starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "GRT" {
+                    self.starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "SAND" {
+                    self.starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "MANA" {
+                    self.starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "AXS" {
+                    self.starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "CHZ" {
+                    self.starred.push(eth_tokens[&key].clone());
+                } else if eth_tokens[&key].symbol == "CRV" {
+                    self.starred.push(eth_tokens[&key].clone());
                 }
 
                 let mut i_key = String::new();
@@ -288,7 +328,7 @@ impl ApplicationSettings {
     
                 if !ypath.exists() {
                     match File::create(&ypath) {
-                        Ok(file) => {
+                        Ok(_) => {
                             let data = "INFURA_KEY=\nETHERSCAN_KEY=\n";
                             fs::write(ypath, data).expect("Unable to write file");
                         },
@@ -296,7 +336,7 @@ impl ApplicationSettings {
                     };
                 } else {
                     let printable_path = ypath.clone();
-                    let mut content = match fs::read_to_string(ypath) {
+                    let content = match fs::read_to_string(ypath) {
                         Ok(content) => content,
                         Err(why) => panic!("couldn't read {}: {}", printable_path.display(), why)
                     };
@@ -316,23 +356,22 @@ impl ApplicationSettings {
             }
         } else {
             for setting in settings {
-                
                 let t: Vec<&str> = setting.split("\n").collect();
                 for i in t {
                     if i.len() <= 0 {
                         continue;
                     }
-                    if i.contains("ETH") {
+                    if i.contains("ETHERSCAN_KEY=") {
+                        self.etherscan_key = i.split("=").collect::<Vec<&str>>()[1].to_string();
+                    } else if i.contains("ETH") {
                         let symbol = i.replace("      ETH TOKEN:", "");
-                        for j in 0..self.tokens.eth_tokens.len() {
-                            if self.tokens.eth_tokens[j].symbol == symbol {
-                                self.starred.push(self.tokens.eth_tokens[j].clone());
+                        for (key, value) in self.tokens.eth_tokens.clone() {
+                            if self.tokens.eth_tokens[&key].symbol == symbol {
+                                self.starred.push(self.tokens.eth_tokens[&key].clone());
                             }
                         }
                     } else if i.contains("INFURA_KEY=") {
                         self.infura_key = i.split("=").collect::<Vec<&str>>()[1].to_string();
-                    } else if i.contains("ETHERSCAN_KEY=") {
-                        self.etherscan_key = i.split("=").collect::<Vec<&str>>()[1].to_string();
                     }
                 }
             }
@@ -695,6 +734,8 @@ impl ApplicationSettings {
                 Some(b) => String::from(b),
                 None    => String::from("Uninitialized")
             };
+
+            let ethw = self.eth_wallets[i].clone();
     
             let (sender, receiver) = MainContext::channel(PRIORITY_DEFAULT);
     
@@ -704,6 +745,7 @@ impl ApplicationSettings {
                     let sender  = sender.clone();
                     let address = address.clone();
                     let etherscan_key = etherscan_key.clone();
+                    let mut ethw = ethw.clone();
     
                     if run_before == false {
                         thread::sleep(Duration::from_secs(1));
@@ -718,7 +760,7 @@ impl ApplicationSettings {
                             Some(label)  => label,
                             None         => String::from("Uninitialized")
                         };
-    
+                        ethw.get_erc20_balances(etherscan_key.clone()).await;
                         sender.send(eth_price).expect("Could not send through channel");
                     }));
                 }
