@@ -3,6 +3,7 @@ use std::io::{Error, ErrorKind, Write, Read, Seek, SeekFrom};
 use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use std::collections::HashMap;
 use chrono;
 use cocoon::{Cocoon};
 use glib::{clone, Continue, MainContext, PRIORITY_DEFAULT};
@@ -23,7 +24,7 @@ pub struct ApplicationSettings {
     pub btc_wallets   : Vec<BitcoinWallet>,
     pub eth_wallets   : Vec<EthereumWallet>,
     pub tokens        : Tokens,
-    pub starred       : Vec<Token>,
+    pub starred       : HashMap<String, Token>,
     pub logged_in     : bool,
     pub infura_key    : String,
     pub etherscan_key : String
@@ -46,7 +47,7 @@ impl ApplicationSettings {
             };
         }
 
-        let mut starred = Vec::new();
+        let mut starred = HashMap::new();
         let mut i_key = String::new();
         let mut e_key = String::new();
 
@@ -57,43 +58,43 @@ impl ApplicationSettings {
             bitcoin_wallets.push(b_wallet);
             ethereum_wallets.push(e_wallet);
 
-            for (key, valye) in tokens.eth_tokens.clone() {
+            for (key, value) in tokens.eth_tokens.clone() {
                 if tokens.eth_tokens[&key].symbol == "BTC" {
-                    starred.push(tokens.eth_tokens[&key].clone());
+                    starred.insert(key.clone(), value.clone());
                 } else if tokens.eth_tokens[&key].symbol == "ETH" {
-                    starred.push(tokens.eth_tokens[&key].clone());
+                    starred.insert(key.clone(), value.clone());
                 } else if tokens.eth_tokens[&key].symbol == "MATIC" {
-                    starred.push(tokens.eth_tokens[&key].clone());
+                    starred.insert(key.clone(), value.clone());
                 } else if tokens.eth_tokens[&key].symbol == "WBTC" {
-                    starred.push(tokens.eth_tokens[&key].clone());
+                    starred.insert(key.clone(), value.clone());
                 } else if tokens.eth_tokens[&key].symbol == "UNI" {
-                    starred.push(tokens.eth_tokens[&key].clone());
+                    starred.insert(key.clone(), value.clone());
                 } else if tokens.eth_tokens[&key].symbol == "BNB" {
-                    starred.push(tokens.eth_tokens[&key].clone());
+                    starred.insert(key.clone(), value.clone());
                 } else if tokens.eth_tokens[&key].symbol == "SHIB" {
-                    starred.push(tokens.eth_tokens[&key].clone());
+                    starred.insert(key.clone(), value.clone());
                 } else if tokens.eth_tokens[&key].symbol == "TRON" {
-                    starred.push(tokens.eth_tokens[&key].clone());
+                    starred.insert(key.clone(), value.clone());
                 } else if tokens.eth_tokens[&key].symbol == "LINK" {
-                    starred.push(tokens.eth_tokens[&key].clone());
+                    starred.insert(key.clone(), value.clone());
                 } else if tokens.eth_tokens[&key].symbol == "QNT" {
-                    starred.push(tokens.eth_tokens[&key].clone());
+                    starred.insert(key.clone(), value.clone());
                 } else if tokens.eth_tokens[&key].symbol == "APE" {
-                    starred.push(tokens.eth_tokens[&key].clone());
+                    starred.insert(key.clone(), value.clone());
                 } else if tokens.eth_tokens[&key].symbol == "FTM" {
-                    starred.push(tokens.eth_tokens[&key].clone());
+                    starred.insert(key.clone(), value.clone());
                 } else if tokens.eth_tokens[&key].symbol == "GRT" {
-                    starred.push(tokens.eth_tokens[&key].clone());
+                    starred.insert(key.clone(), value.clone());
                 } else if tokens.eth_tokens[&key].symbol == "SAND" {
-                    starred.push(tokens.eth_tokens[&key].clone());
+                    starred.insert(key.clone(), value.clone());
                 } else if tokens.eth_tokens[&key].symbol == "MANA" {
-                    starred.push(tokens.eth_tokens[&key].clone());
+                    starred.insert(key.clone(), value.clone());
                 } else if tokens.eth_tokens[&key].symbol == "AXS" {
-                    starred.push(tokens.eth_tokens[&key].clone());
+                    starred.insert(key.clone(), value.clone());
                 } else if tokens.eth_tokens[&key].symbol == "CHZ" {
-                    starred.push(tokens.eth_tokens[&key].clone());
+                    starred.insert(key.clone(), value.clone());
                 } else if tokens.eth_tokens[&key].symbol == "CRV" {
-                    starred.push(tokens.eth_tokens[&key].clone());
+                    starred.insert(key.clone(), value.clone());
                 }
             }
 
@@ -273,43 +274,43 @@ impl ApplicationSettings {
         }
 
         if settings.len() <= 0 {
-            for (key, valye) in self.tokens.eth_tokens.clone() {
+            for (key, value) in self.tokens.eth_tokens.clone() {
                 if self.tokens.eth_tokens[&key].symbol == "BTC" {
-                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                    self.starred.insert(key.clone(), value.clone());
                 } else if self.tokens.eth_tokens[&key].symbol == "ETH" {
-                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                    self.starred.insert(key.clone(), value.clone());
                 } else if self.tokens.eth_tokens[&key].symbol == "MATIC" {
-                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                    self.starred.insert(key.clone(), value.clone());
                 } else if self.tokens.eth_tokens[&key].symbol == "WBTC" {
-                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                    self.starred.insert(key.clone(), value.clone());
                 } else if self.tokens.eth_tokens[&key].symbol == "UNI" {
-                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                    self.starred.insert(key.clone(), value.clone());
                 } else if self.tokens.eth_tokens[&key].symbol == "BNB" {
-                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                    self.starred.insert(key.clone(), value.clone());
                 } else if self.tokens.eth_tokens[&key].symbol == "SHIB" {
-                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                    self.starred.insert(key.clone(), value.clone());
                 } else if self.tokens.eth_tokens[&key].symbol == "TRON" {
-                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                    self.starred.insert(key.clone(), value.clone());
                 } else if self.tokens.eth_tokens[&key].symbol == "LINK" {
-                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                    self.starred.insert(key.clone(), value.clone());
                 } else if self.tokens.eth_tokens[&key].symbol == "QNT" {
-                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                    self.starred.insert(key.clone(), value.clone());
                 } else if self.tokens.eth_tokens[&key].symbol == "APE" {
-                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                    self.starred.insert(key.clone(), value.clone());
                 } else if self.tokens.eth_tokens[&key].symbol == "FTM" {
-                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                    self.starred.insert(key.clone(), value.clone());
                 } else if self.tokens.eth_tokens[&key].symbol == "GRT" {
-                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                    self.starred.insert(key.clone(), value.clone());
                 } else if self.tokens.eth_tokens[&key].symbol == "SAND" {
-                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                    self.starred.insert(key.clone(), value.clone());
                 } else if self.tokens.eth_tokens[&key].symbol == "MANA" {
-                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                    self.starred.insert(key.clone(), value.clone());
                 } else if self.tokens.eth_tokens[&key].symbol == "AXS" {
-                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                    self.starred.insert(key.clone(), value.clone());
                 } else if self.tokens.eth_tokens[&key].symbol == "CHZ" {
-                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                    self.starred.insert(key.clone(), value.clone());
                 } else if self.tokens.eth_tokens[&key].symbol == "CRV" {
-                    self.starred.push(self.tokens.eth_tokens[&key].clone());
+                    self.starred.insert(key.clone(), value.clone());
                 }
 
                 let mut i_key = String::new();
@@ -363,7 +364,7 @@ impl ApplicationSettings {
                         let symbol = i.replace("      ETH TOKEN:", "");
                         for (key, value) in self.tokens.eth_tokens.clone() {
                             if self.tokens.eth_tokens[&key].symbol == symbol {
-                                self.starred.push(self.tokens.eth_tokens[&key].clone());
+                                self.starred.insert(key.clone(), value.clone());
                             }
                         }
                     } else if i.contains("INFURA_KEY=") {
@@ -373,7 +374,6 @@ impl ApplicationSettings {
             }
         }
         
-        //move this into a method.
         if btc_wallets.len() > 0 {
             for btcw in &btc_wallets {
                 let attributes: Vec<&str>    = btcw.split("\n").collect();
@@ -576,8 +576,8 @@ impl ApplicationSettings {
             output += "<Entry>\n      Sector: Settings\n";
             if &self.starred.len() > &0 {
                 output += &format!("      Starred______\n");
-                for token in &self.starred {
-                    output += &format!("      ETH TOKEN:{}\n", token.symbol);
+                for (key, value) in &self.starred {
+                    output += &format!("      ETH TOKEN:{}\n", value.symbol);
                 }
             }
             if &self.infura_key.len() > &0 {

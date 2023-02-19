@@ -25,8 +25,8 @@ impl CurrencyPairs {
             decimals: 6
         };
 
-        for token in app_settings.starred {
-                pairs.push((token, Arc::new(Mutex::new(String::from("Uninitialized")))));
+        for (key, value) in app_settings.starred {
+                pairs.push((value, Arc::new(Mutex::new(String::from("Uninitialized")))));
         }
 
         CurrencyPairs {
