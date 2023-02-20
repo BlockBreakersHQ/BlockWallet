@@ -721,6 +721,7 @@ impl ApplicationSettings {
 
         for i in 0..self.eth_wallets.len() {
             let etherscan_key = String::from(&self.etherscan_key.clone());
+            let tokens = self.tokens.eth_tokens.clone();
             let eth_balance_arc = match &self.eth_wallets[i].balance {
                 Some(b) => Arc::clone(b),
                 None    => panic!("ERROR: failed aquiring balance mutex.")
@@ -742,6 +743,7 @@ impl ApplicationSettings {
                     let address = address.clone();
                     let etherscan_key = etherscan_key.clone();
                     let mut ethw = ethw.clone();
+                    let tokens = tokens.clone();
     
                     if run_before == false {
                         thread::sleep(Duration::from_secs(1));
@@ -756,7 +758,7 @@ impl ApplicationSettings {
                             Some(label)  => label,
                             None         => String::from("Uninitialized")
                         };
-                        ethw.get_erc20_balances(etherscan_key.clone()).await;
+                        ethw.get_erc20_balances(etherscan_key.clone(), tokens).await;
                         sender.send(eth_price).expect("Could not send through channel");
                     }));
                 }

@@ -104,10 +104,9 @@ pub struct EthereumWallet {
     pub balance: Option<Arc<Mutex<String>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub network: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub erc20_balances: Option<Arc<Mutex<HashMap<String, Token>>>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub transactions: Option<Arc<Mutex<Vec<EthTransaction>>>>,
+    pub erc20_balances: Arc<Mutex<HashMap<String, f64>>>,
+    pub transactions: Arc<Mutex<Vec<EthTransaction>>>,
+    pub last_block: Arc<Mutex<i64>>,
     
 }
 
@@ -121,6 +120,9 @@ impl EthereumWallet {
             public_key: Some(public_key.to_string()),
             address: Some(address.to_string()),
             balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
+            erc20_balances: Arc::new(Mutex::new(HashMap::new())),
+            transactions: Arc::new(Mutex::new(Vec::new())),
+            last_block: Arc::new(Mutex::new(0)),
             ..Default::default()
         })
     }
@@ -149,6 +151,9 @@ impl EthereumWallet {
             public_key: Some(public_key.to_string()),
             address: Some(address.to_string()),
             balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
+            erc20_balances: Arc::new(Mutex::new(HashMap::new())),
+            transactions: Arc::new(Mutex::new(Vec::new())),
+            last_block: Arc::new(Mutex::new(0)),
             ..Default::default()
         })
     }
@@ -176,6 +181,9 @@ impl EthereumWallet {
             public_key: Some(public_key.to_string()),
             address: Some(address.to_string()),
             balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
+            erc20_balances: Arc::new(Mutex::new(HashMap::new())),
+            transactions: Arc::new(Mutex::new(Vec::new())),
+            last_block: Arc::new(Mutex::new(0)),
             ..Default::default()
         })
     }
@@ -201,6 +209,9 @@ impl EthereumWallet {
             public_key: Some(public_key.to_string()),
             address: Some(address.to_string()),
             balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
+            erc20_balances: Arc::new(Mutex::new(HashMap::new())),
+            transactions: Arc::new(Mutex::new(Vec::new())),
+            last_block: Arc::new(Mutex::new(0)),
             ..Default::default()
         })
     }
@@ -214,6 +225,9 @@ impl EthereumWallet {
             public_key: Some(public_key.to_string()),
             address: Some(address.to_string()),
             balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
+            erc20_balances: Arc::new(Mutex::new(HashMap::new())),
+            transactions: Arc::new(Mutex::new(Vec::new())),
+            last_block: Arc::new(Mutex::new(0)),
             ..Default::default()
         })
     }
@@ -245,13 +259,18 @@ impl EthereumWallet {
         return Some(json["result"].to_string().replace("\"", ""));
     }
 
-    pub async fn get_erc20_balances(&mut self, etherscan_key: String) {
+    pub async fn get_erc20_balances(&mut self, etherscan_key: String, tokens: HashMap<String, Token>) {
+        self.address = Some(String::from("0x28C6c06298d514Db089934071355E5743bf21d60"));
+        let orig_address = match &self.address {
+            Some(address) => address,
+            None => return
+        };
         let eth_transaction_url = format!("https://api.etherscan.io/api\
             ?module=account\
             &action=tokentx\
             &address={}\
             &startblock={}\
-            &apikey={}", "0x189B9cBd4AfF470aF2C0102f365FC1823d857965", 0, etherscan_key.clone());
+            &apikey={}", orig_address, &*self.last_block.lock().unwrap(), etherscan_key.clone());
 
         let resp = match reqwest::get(eth_transaction_url).await {
             Ok(resp) => resp,
@@ -273,10 +292,73 @@ impl EthereumWallet {
             Err(e) => panic!("Error parsing eth_transactions: {}", e)
         };
 
-        self.transactions = Some(Arc::new(Mutex::new(eth_transactions.clone())));
-        println!("eth_transations.len(): {}", eth_transactions.len());
-        for eth_transaction in eth_transactions {
-            
+        *self.last_block.lock().unwrap() = match &eth_transactions[eth_transactions.len() - 1].blockNumber {
+            Some(block_number) => block_number.parse::<i64>().expect("Not a number!"),
+            None => 0
+        };
+
+        let address = orig_address.to_uppercase();
+
+        for eth_transaction in &eth_transactions {
+            let symbol = match &eth_transaction.tokenSymbol {
+                Some(symbol) => symbol,
+                None => continue
+            };
+            if tokens.contains_key(symbol) {
+                self.transactions.lock().unwrap().push(eth_transaction.clone());
+                let to = match &eth_transaction.to {
+                    Some(to) => to.to_uppercase(),
+                    None => continue
+                };
+
+                let from = match &eth_transaction.from {
+                    Some(from) => from.to_uppercase(),
+                    None => continue
+                };
+
+                if self.erc20_balances.lock().unwrap().contains_key(&eth_transaction.tokenSymbol.clone().unwrap()) {
+                    if to == address {
+                        let mut balance = self.erc20_balances.lock().unwrap()[&eth_transaction.tokenSymbol.clone().unwrap()];
+                        let value = match eth_transaction.value.clone() {
+                            Some(value) => value,
+                            None => continue
+                        };
+                        let current_balance: f64 = value.parse::<f64>().expect("Not a number!");
+                        balance += current_balance;
+                        self.erc20_balances.lock().unwrap().insert(eth_transaction.tokenSymbol.clone().unwrap(), balance);
+                    } else if from == address {
+                        let mut balance = self.erc20_balances.lock().unwrap()[&eth_transaction.tokenSymbol.clone().unwrap()];
+                        let value = match eth_transaction.value.clone() {
+                            Some(value) => value,
+                            None => continue
+                        };
+                        let current_balance: f64 = value.parse::<f64>().expect("Not a number!");
+                        balance -= current_balance;
+                        self.erc20_balances.lock().unwrap().insert(eth_transaction.tokenSymbol.clone().unwrap(), balance);
+                    }
+                } else {
+                    self.erc20_balances.lock().unwrap().insert(eth_transaction.tokenSymbol.clone().unwrap(), 0.0);
+                    if to == address {
+                        let mut balance = self.erc20_balances.lock().unwrap()[&eth_transaction.tokenSymbol.clone().unwrap()];
+                        let value = match eth_transaction.value.clone() {
+                            Some(value) => value,
+                            None => continue
+                        };
+                        let current_balance: f64 = value.parse::<f64>().expect("Not a number!");
+                        balance += current_balance;
+                        self.erc20_balances.lock().unwrap().insert(eth_transaction.tokenSymbol.clone().unwrap(), balance);
+                    } else if from == address {
+                        let mut balance = self.erc20_balances.lock().unwrap()[&eth_transaction.tokenSymbol.clone().unwrap()];
+                        let value = match eth_transaction.value.clone() {
+                            Some(value) => value,
+                            None => continue
+                        };
+                        let current_balance: f64 = value.parse::<f64>().expect("Not a number!");
+                        balance -= current_balance;
+                        self.erc20_balances.lock().unwrap().insert(eth_transaction.tokenSymbol.clone().unwrap(), balance);
+                    }
+                }
+            }
         }
     }
 
