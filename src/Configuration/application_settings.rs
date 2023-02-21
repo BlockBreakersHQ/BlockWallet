@@ -373,6 +373,9 @@ impl ApplicationSettings {
                 }
             }
         }
+
+        //self.infura_key = "4f115186b9564f49ae8b1f2a8850da32".to_string();
+        //self.etherscan_key = "JGGW8XBH1T4FXNXGXDG728CSH7PR8XABJC".to_string();
         
         if btc_wallets.len() > 0 {
             for btcw in &btc_wallets {
@@ -661,10 +664,7 @@ impl ApplicationSettings {
         let mut run_before = false;
 
         for i in 0..self.btc_wallets.len() {
-            let btc_balance_arc = match &self.btc_wallets[i].balance {
-                Some(b) => Arc::clone(b),
-                None    => panic!("ERROR: failed aquiring balance mutex.")
-            };
+            let btc_balance_arc = Arc::clone(&self.btc_wallets[i].balance);
     
             let address = match &self.btc_wallets[i].address {
                 Some(b) => String::from(b),
@@ -722,11 +722,7 @@ impl ApplicationSettings {
         for i in 0..self.eth_wallets.len() {
             let etherscan_key = String::from(&self.etherscan_key.clone());
             let tokens = self.tokens.eth_tokens.clone();
-            let eth_balance_arc = match &self.eth_wallets[i].balance {
-                Some(b) => Arc::clone(b),
-                None    => panic!("ERROR: failed aquiring balance mutex.")
-            };
-    
+            let eth_balance_arc = Arc::clone(&self.eth_wallets[i].balance); 
             let address = match &self.eth_wallets[i].address {
                 Some(b) => String::from(b),
                 None    => String::from("Uninitialized")

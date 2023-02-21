@@ -101,9 +101,8 @@ pub struct EthereumWallet {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub address: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub balance: Option<Arc<Mutex<String>>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     pub network: Option<String>,
+    pub balance: Arc<Mutex<String>>,
     pub erc20_balances: Arc<Mutex<HashMap<String, f64>>>,
     pub transactions: Arc<Mutex<Vec<EthTransaction>>>,
     pub last_block: Arc<Mutex<i64>>,
@@ -119,7 +118,7 @@ impl EthereumWallet {
             private_key: Some(private_key.to_string()),
             public_key: Some(public_key.to_string()),
             address: Some(address.to_string()),
-            balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
+            balance: Arc::new(Mutex::new(String::from("Uninitialized"))),
             erc20_balances: Arc::new(Mutex::new(HashMap::new())),
             transactions: Arc::new(Mutex::new(Vec::new())),
             last_block: Arc::new(Mutex::new(0)),
@@ -150,7 +149,7 @@ impl EthereumWallet {
             private_key: Some(private_key.to_string()),
             public_key: Some(public_key.to_string()),
             address: Some(address.to_string()),
-            balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
+            balance: Arc::new(Mutex::new(String::from("Uninitialized"))),
             erc20_balances: Arc::new(Mutex::new(HashMap::new())),
             transactions: Arc::new(Mutex::new(Vec::new())),
             last_block: Arc::new(Mutex::new(0)),
@@ -180,7 +179,7 @@ impl EthereumWallet {
             private_key: Some(private_key.to_string()),
             public_key: Some(public_key.to_string()),
             address: Some(address.to_string()),
-            balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
+            balance: Arc::new(Mutex::new(String::from("Uninitialized"))),
             erc20_balances: Arc::new(Mutex::new(HashMap::new())),
             transactions: Arc::new(Mutex::new(Vec::new())),
             last_block: Arc::new(Mutex::new(0)),
@@ -208,7 +207,7 @@ impl EthereumWallet {
             private_key: Some(private_key.to_string()),
             public_key: Some(public_key.to_string()),
             address: Some(address.to_string()),
-            balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
+            balance: Arc::new(Mutex::new(String::from("Uninitialized"))),
             erc20_balances: Arc::new(Mutex::new(HashMap::new())),
             transactions: Arc::new(Mutex::new(Vec::new())),
             last_block: Arc::new(Mutex::new(0)),
@@ -224,7 +223,7 @@ impl EthereumWallet {
             private_key: Some(private_key.to_string()),
             public_key: Some(public_key.to_string()),
             address: Some(address.to_string()),
-            balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
+            balance: Arc::new(Mutex::new(String::from("Uninitialized"))),
             erc20_balances: Arc::new(Mutex::new(HashMap::new())),
             transactions: Arc::new(Mutex::new(Vec::new())),
             last_block: Arc::new(Mutex::new(0)),
@@ -239,7 +238,7 @@ impl EthereumWallet {
             &action=balance\
             &address={}\
             &tag=latest\
-            &apikey=[{}]", address, etherscan_key);
+            &apikey={}", address, etherscan_key);
 
         let resp = match reqwest::get(etherscan_get_address_balance_url).await {
             Ok(resp) => resp,

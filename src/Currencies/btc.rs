@@ -106,8 +106,7 @@ pub struct BitcoinWallet {
     pub transaction_hex: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transaction_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub balance: Option<Arc<Mutex<String>>>,
+    pub balance: Arc<Mutex<String>>,
 }
 
 impl BitcoinWallet {
@@ -122,6 +121,7 @@ impl BitcoinWallet {
             network: Some(N::NAME.to_string()),
             format: Some(address.format().to_string()),
             compressed: private_key.is_compressed().into(),
+            balance: Arc::new(Mutex::new(String::from("Uninitialized"))),
             ..Default::default()
         })
     }
@@ -153,7 +153,7 @@ impl BitcoinWallet {
             format: Some(address.format().to_string()),
             network: Some(N::NAME.to_string()),
             compressed: Some(compressed),
-            balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
+            balance: Arc::new(Mutex::new(String::from("Uninitialized"))),
             ..Default::default()
         })
     }
@@ -184,7 +184,7 @@ impl BitcoinWallet {
             format: Some(address.format().to_string()),
             network: Some(N::NAME.to_string()),
             compressed: Some(compressed),
-            balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
+            balance: Arc::new(Mutex::new(String::from("Uninitialized"))),
             ..Default::default()
         })
     }
@@ -213,7 +213,7 @@ impl BitcoinWallet {
             format: Some(address.format().to_string()),
             network: Some(N::NAME.to_string()),
             compressed: Some(compressed),
-            balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
+            balance: Arc::new(Mutex::new(String::from("Uninitialized"))),
             ..Default::default()
         })
     }
@@ -229,7 +229,7 @@ impl BitcoinWallet {
             network: Some(N::NAME.to_string()),
             format: Some(address.format().to_string()),
             compressed: private_key.is_compressed().into(),
-            balance: Some(Arc::new(Mutex::new(String::from("Uninitialized")))),
+            balance: Arc::new(Mutex::new(String::from("Uninitialized"))),
             ..Default::default()
         })
     }
