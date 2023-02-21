@@ -373,9 +373,6 @@ impl ApplicationSettings {
                 }
             }
         }
-
-        //self.infura_key = "4f115186b9564f49ae8b1f2a8850da32".to_string();
-        //self.etherscan_key = "JGGW8XBH1T4FXNXGXDG728CSH7PR8XABJC".to_string();
         
         if btc_wallets.len() > 0 {
             for btcw in &btc_wallets {
