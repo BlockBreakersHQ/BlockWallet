@@ -32,7 +32,7 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
         .margin_bottom(12)
         .build();
     currencies_box.set_widget_name("currencies_box");
-    
+
     let no_assets_label = gtk::Label::builder()
         .label("No assets to display.")
         .margin_top(5)
@@ -41,7 +41,7 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
         .visible(false)
         .build();
     no_assets_label.set_widget_name("no_assets_label");
-    
+
     currencies_box.append(&no_assets_label);
     let curr_box = currencies_box.clone();
     let (sender, receiver) = MainContext::channel(PRIORITY_DEFAULT);
@@ -54,7 +54,7 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
                 thread::sleep(Duration::from_secs(60));
             } else {
                 has_run = true;
-                thread::sleep(Duration::from_secs(1));
+                thread::sleep(Duration::from_secs(5));
             }
             
             let app_settings = &app_settings.lock().unwrap().clone();
@@ -70,7 +70,6 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
                 };
             }
             
-            btc_balance = 15.3; ////// Remove this.
             if currency_boxes.contains_key("BTC") {
                 if btc_balance > 0.0 {
                     currency_boxes.insert(String::from("BTC"), (btc_balance, app_settings.tokens.eth_tokens["BTC"].clone()));
@@ -84,13 +83,21 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
             for i in 0..app_settings.eth_wallets.len() {
                 let ethw = app_settings.eth_wallets[i].clone();
                 let balance = &*ethw.balance.lock().unwrap();
+                let erc20_balances = &*ethw.erc20_balances.lock().unwrap();
+                for (key, value) in erc20_balances {
+                    if currency_boxes.contains_key(key) {
+                        let (balance, token) = &currency_boxes[key];
+                        currency_boxes.insert(key.clone(), (balance + value, token.clone()));
+                    } else {
+                        currency_boxes.insert(key.clone(), (value.clone(), app_settings.tokens.eth_tokens[key].clone()));
+                    }
+                }
                 eth_balance += match balance.parse::<f64>() {
                     Ok(b) => b,
                     Err(_) => 0.0
                 };
             }
 
-            eth_balance = 12.5; ////// Remove this.
             if currency_boxes.contains_key("ETH") {
                 if eth_balance > 0.0 {
                     currency_boxes.insert(String::from("ETH"), (eth_balance, app_settings.tokens.eth_tokens["ETH"].clone()));
@@ -99,6 +106,10 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
                 }
             } else if eth_balance > 0.0 {
                 currency_boxes.insert(String::from("ETH"), (eth_balance, app_settings.tokens.eth_tokens["ETH"].clone()));
+            }
+
+            for (key, value) in currency_boxes.clone() {
+                println!("key = {} value = {}", key, value.0);
             }
             
             match sender.send(currency_boxes.clone()) {
@@ -121,8 +132,10 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
                     None => return Continue(true)
                 };
 
+                let mut build_without_display = false;
+                let mut old_currecny_detail = next_child.clone();
                 while next_child != last_child {
-                    if next_child.widget_name() != "no_assets_label" && next_child.widget_name() != "currency_detail_view" {
+                    if next_child.widget_name() == "currencies" {
                         let current_child = next_child.clone();
                         next_child = match next_child.next_sibling() {
                             Some(c) => c,
@@ -131,8 +144,13 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
                         curr_box.remove(&current_child);
                         continue;
                     } else if next_child.widget_name() == "currency_detail_view" {
+                        println!("Currency detail view found.");
+                        old_currecny_detail = next_child.clone();
+                        let current_child = next_child.clone();
                         if next_child.get_visible() == true {
-                            return Continue(true);
+                            build_without_display = true;
+                        } else {
+                            curr_box.remove(&current_child);
                         }
                     }
                     next_child = match next_child.next_sibling() {
@@ -141,8 +159,18 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
                     };
                 }
 
-                if last_child.widget_name() != "no_assets_label" {
+                if last_child.widget_name() != "no_assets_label" && last_child.widget_name() != "currency_detail_view"{
                     curr_box.remove(&last_child);
+                }
+
+                let currencies = gtk::Box::builder()
+                    .orientation(Orientation::Vertical)
+                    .visible(true)
+                    .build();
+                currencies.set_widget_name("currencies");
+
+                if build_without_display == true {
+                    currencies.set_visible(false);
                 }
 
                 let currency_detail_view = gtk::Box::builder()
@@ -152,12 +180,6 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
                     .visible(false)
                     .build();
                 currency_detail_view.set_widget_name("currency_detail_view");
-                
-                let currencies = gtk::Box::builder()
-                    .orientation(Orientation::Vertical)
-                    .visible(true)
-                    .build();
-                currencies.set_widget_name("currencies");
 
                 if currency_boxes.len() > 0 {
                     curr_box.first_child().unwrap().set_visible(false);
@@ -180,10 +202,14 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
                         currencies.append(&currency_box);
                     }
                     curr_box.append(&currency_detail_view);
+                    if old_currecny_detail != last_child && build_without_display == false {
+                        curr_box.remove(&old_currecny_detail);
+                    }
                     curr_box.append(&currencies);
                 } else {
                     curr_box.first_child().unwrap().set_visible(true);
                 }
+
                 Continue(true)
             }
         ),
@@ -229,7 +255,7 @@ pub fn generate_currency_box(balance: f64, token: Token) -> gtk::Box {
         .build();
 
     let currency_price_label  = gtk::Label::builder()
-        .label(&balance.to_string())
+        .label(&format!("{:.5}", balance.to_string()))
         .margin_top(5)
         .margin_end(12)
         .halign(Align::End)

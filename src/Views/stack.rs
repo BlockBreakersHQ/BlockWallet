@@ -20,9 +20,9 @@ pub fn stack_view(window: &ApplicationWindow, app_settings_orig: ApplicationSett
     let header_bar = header_bar::header_bar_view(window.clone(), app_settings.clone());
     let stack = adw::ViewStack::new();
 
-    let home = home::home_view(currency_pairs.clone());
+    let home_box = home::home_view(currency_pairs.clone());
     let home_label: Option<&str> = Some("Home");
-    stack.add_titled(&home, home_label, "Home");
+    stack.add_titled(&home_box, home_label, "Home");
 
     let (wallet_box, app_settings) = wallets::wallet_view(app_settings);
     let wallet_label: Option<&str> = Some("Wallets");
@@ -46,7 +46,8 @@ pub fn stack_view(window: &ApplicationWindow, app_settings_orig: ApplicationSett
     container.prepend(&header_bar);    
     
     let stack_clone = stack.clone();
-    let home_clone = home.clone();
+    let home_clone = home_box.clone();
+    let asset_clone = asset_box.clone();
 
     stack.connect_visible_child_notify(move |_| {
         if &stack_clone.visible_child_name().unwrap() == "Home" {
@@ -54,6 +55,40 @@ pub fn stack_view(window: &ApplicationWindow, app_settings_orig: ApplicationSett
 
             //home_box.first_child = scrollable_container, scrollable_container.first_child = GtkViewport, GtkViewport.first_child = scrollable_box
             home_clone.first_child().unwrap().first_child().unwrap().first_child().unwrap().set_visible(true);
+        }
+        else if &stack_clone.visible_child_name().unwrap() == "Assets" {
+            // assets_scrollable_container -> GtkViewport -> assets_scrollable_box -> currencies_box
+            let assets_scrollable_container = match asset_clone.first_child() {
+                Some(child) => child,
+                None => return,
+            };
+            let gtk_viewport = match assets_scrollable_container.first_child() {
+                Some(child) => child,
+                None => return,
+            };
+            let assets_scrollable_box = match gtk_viewport.first_child() {
+                Some(child) => child,
+                None => return,
+            };
+            let currencies_box = match assets_scrollable_box.first_child() {
+                Some(child) => child,
+                None => return,
+            };
+            let no_assets_label = match currencies_box.first_child() {
+                Some(child) => child,
+                None => return,
+            };
+            let currency_detail = match no_assets_label.next_sibling() {
+                Some(child) => child,
+                None => return,
+            };
+            currency_detail.set_visible(false);
+
+            if currency_detail.next_sibling().unwrap().widget_name().contains("currency_detail") {
+
+                currency_detail.next_sibling().unwrap().set_visible(false);
+            }
+            currencies_box.last_child().unwrap().set_visible(true);
         }
     });
 

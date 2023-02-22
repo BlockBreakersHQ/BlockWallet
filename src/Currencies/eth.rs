@@ -259,7 +259,6 @@ impl EthereumWallet {
     }
 
     pub async fn get_erc20_balances(&mut self, etherscan_key: String, tokens: HashMap<String, Token>) {
-        self.address = Some(String::from("0x28C6c06298d514Db089934071355E5743bf21d60"));
         let orig_address = match &self.address {
             Some(address) => address,
             None => return
