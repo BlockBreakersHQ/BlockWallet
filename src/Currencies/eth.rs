@@ -298,7 +298,6 @@ impl EthereumWallet {
         } else {
             *self.last_block.lock().unwrap() = 0;
         }
-        
 
         let address = orig_address.to_uppercase();
 

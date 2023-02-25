@@ -30,7 +30,7 @@ pub fn login_view(window: ApplicationWindow, app_settings: ApplicationSettings) 
         .margin_start(12)
         .margin_end(12)
         .build();
-    button.add_css_class("login_button");
+    button.add_css_class("standard_button");
 
     let input = gtk::Entry::builder()
         .placeholder_text("password")

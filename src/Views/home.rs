@@ -38,6 +38,8 @@ pub fn home_view(currency_pairs: CurrencyPairs, app_settings: Arc<Mutex<Applicat
         let scroll_clone = scrollable_box.clone();
         let gesture = gtk::GestureClick::new();
         let e = element.0.clone();
+        let app_settings = app_settings.clone();
+        let app_settings = app_settings.lock().unwrap().clone();
         gesture.connect_released(move |gesture, _, _, _| {
             gesture.set_state(gtk::EventSequenceState::Claimed);
             scroll_clone.set_visible(false);
@@ -47,7 +49,7 @@ pub fn home_view(currency_pairs: CurrencyPairs, app_settings: Arc<Mutex<Applicat
                 None => {}
             };
 
-            currency_detail_clone.append(&currency_view(e.clone()));
+            currency_detail_clone.append(&currency_view(e.clone(), app_settings.clone()));
             currency_detail_clone.set_visible(true);
         });
         currency_box.add_controller(&gesture);

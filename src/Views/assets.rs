@@ -112,7 +112,7 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
                 println!("key = {} value = {}", key, value.0);
             }
             
-            match sender.send(currency_boxes.clone()) {
+            match sender.send((currency_boxes.clone(), app_settings.clone())) {
                 Ok(_) => {},
                 Err(_) => {}
             };
@@ -123,6 +123,10 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
         None,
         clone!(@weak curr_box => @default-return Continue(false),
             move |currency_boxes| {
+                let app_settings = currency_boxes.1;
+                let currency_boxes = currency_boxes.0;
+                
+                let asett = app_settings.clone();
                 let mut next_child = match curr_box.first_child() {
                     Some(c) => c,
                     None => return Continue(true)
@@ -189,12 +193,13 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
                         let gesture = gtk::GestureClick::new();
                         let token = value.1.clone();
                         let currencies_clone = currencies.clone();
+                        let app_settings = app_settings.clone();
                         gesture.connect_released(move |gesture, _, _, _| {
                             gesture.set_state(gtk::EventSequenceState::Claimed);
                             if !currency_detail_clone.first_child().is_none() {
                                 currency_detail_clone.remove(&currency_detail_clone.first_child().unwrap());
                             };
-                            currency_detail_clone.append(&currency_view(token.clone()));
+                            currency_detail_clone.append(&currency_view(token.clone(), app_settings.clone()));
                             currency_detail_clone.set_visible(true);
                             currencies_clone.set_visible(false);
                         });

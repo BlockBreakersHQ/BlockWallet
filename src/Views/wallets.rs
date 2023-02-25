@@ -35,7 +35,7 @@ pub fn wallet_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, 
         .margin_start(12)
         .margin_end(12)
         .build();
-    btc_button.add_css_class("wallet_btc_button");
+    btc_button.add_css_class("standard_button");
 
     let eth_button = Button::builder()
         .label("Ethereum")
@@ -44,7 +44,7 @@ pub fn wallet_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, 
         .margin_start(12)
         .margin_end(12)
         .build();
-    eth_button.add_css_class("wallet_eth_button");
+    eth_button.add_css_class("standard_button");
 
     let add_wallet_button = Button::builder()
         .label("Add Wallet")
@@ -53,7 +53,7 @@ pub fn wallet_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, 
         .margin_start(12)
         .margin_end(12)
         .build();
-    add_wallet_button.add_css_class("add_wallet_button");
+    add_wallet_button.add_css_class("standard_button");
 
     let wallet_box = Arc::new(Mutex::new(gtk::Box::builder()
         .orientation(Orientation::Vertical)
@@ -740,7 +740,7 @@ fn new_wallet_box(app_settings: Arc<Mutex<ApplicationSettings>>, btc_box: Arc<Mu
         .margin_start(12)
         .margin_end(12)
         .build();
-    create_wallet_button.add_css_class("create_wallet_button");
+    create_wallet_button.add_css_class("standard_button");
 
     let mnemonic_error = gtk::Label::builder()
         .label("An error occurred when parsing the mnemonic. Please check the mnemonic and try again.")
