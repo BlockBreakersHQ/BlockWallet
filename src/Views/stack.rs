@@ -20,7 +20,7 @@ pub fn stack_view(window: &ApplicationWindow, app_settings_orig: ApplicationSett
     let header_bar = header_bar::header_bar_view(window.clone(), app_settings.clone());
     let stack = adw::ViewStack::new();
 
-    let home_box = home::home_view(currency_pairs.clone());
+    let (home_box, app_settings) = home::home_view(currency_pairs.clone(), app_settings);
     let home_label: Option<&str> = Some("Home");
     stack.add_titled(&home_box, home_label, "Home");
 

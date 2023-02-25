@@ -290,10 +290,15 @@ impl EthereumWallet {
             Err(e) => panic!("Error parsing eth_transactions: {}", e)
         };
 
-        *self.last_block.lock().unwrap() = match &eth_transactions[eth_transactions.len() - 1].blockNumber {
-            Some(block_number) => block_number.parse::<i64>().expect("Not a number!"),
-            None => 0
-        };
+        if eth_transactions.len() > 0 {
+            *self.last_block.lock().unwrap() = match &eth_transactions[eth_transactions.len() - 1].blockNumber {
+                Some(block_number) => block_number.parse::<i64>().expect("Not a number!"),
+                None => 0
+            };
+        } else {
+            *self.last_block.lock().unwrap() = 0;
+        }
+        
 
         let address = orig_address.to_uppercase();
 

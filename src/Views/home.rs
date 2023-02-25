@@ -8,8 +8,9 @@ use std::sync::{Arc, Mutex};
 use crate::currencies::currency_pairs::*;
 use crate::currencies::tokens::Token;
 use crate::views::currency::currency_view;
+use crate::ApplicationSettings;
 
-pub fn home_view(currency_pairs: CurrencyPairs) -> gtk::Box {
+pub fn home_view(currency_pairs: CurrencyPairs, app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, Arc<Mutex<ApplicationSettings>>) {
     let home_box = gtk::Box::builder()
         .orientation(Orientation::Vertical)
         .margin_top(12)
@@ -61,7 +62,7 @@ pub fn home_view(currency_pairs: CurrencyPairs) -> gtk::Box {
     home_box.append(&scrollable_container);
     home_box.append(&currency_detail_box);
 
-    home_box
+    (home_box, app_settings)
 }
 
 pub fn generate_currency_box(element: (Token, Arc<Mutex<String>>)) -> gtk::Box {
