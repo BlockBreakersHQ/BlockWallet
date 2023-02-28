@@ -32,9 +32,9 @@ pub fn stack_view(window: &ApplicationWindow, app_settings_orig: ApplicationSett
     let asset_label: Option<&str> = Some("Assets");
     stack.add_titled(&asset_box, asset_label, "Assets");
 
-    //let (trade_box, app_settings) = transactions::transaction_view(app_settings);
-    //let trade_label: Option<&str> = Some("Coming soon!");
-    //stack.add_titled(&trade_box, trade_label, "Trade");
+    let trade_box = transactions::transaction_view(app_settings.lock().unwrap().clone()).0;
+    let trade_label: Option<&str> = Some("Coming soon!");
+    stack.add_titled(&trade_box, trade_label, "Trade");
 
     let stack_bar = adw::ViewSwitcherBar::new();
     stack_bar.set_widget_name("stack_bar");
@@ -54,7 +54,7 @@ pub fn stack_view(window: &ApplicationWindow, app_settings_orig: ApplicationSett
             home_clone.last_child().unwrap().set_visible(false);
 
             //home_box.first_child = scrollable_container, scrollable_container.first_child = GtkViewport, GtkViewport.first_child = scrollable_box
-            home_clone.first_child().unwrap().first_child().unwrap().first_child().unwrap().set_visible(true);
+            home_clone.first_child().unwrap().set_visible(true);
         }
         else if &stack_clone.visible_child_name().unwrap() == "Assets" {
             // assets_scrollable_container -> GtkViewport -> assets_scrollable_box -> currencies_box

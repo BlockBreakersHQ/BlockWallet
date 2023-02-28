@@ -19,23 +19,24 @@ pub fn home_view(currency_pairs: CurrencyPairs, app_settings: Arc<Mutex<Applicat
 
     let scrollable_box = gtk::Box::builder()
         .orientation(Orientation::Vertical)
-        .margin_top(12)
-        .margin_bottom(12)
         .vexpand(true)
         .build();
     scrollable_box.set_widget_name("home_scrollable_box");
     
     let currency_detail_box = gtk::Box::builder()
         .orientation(Orientation::Vertical)
-        .margin_top(12)
-        .margin_bottom(12)
         .visible(false)
+        .build();
+
+    let scrollable_container = gtk::ScrolledWindow::builder()
+        .child(&scrollable_box)
+        .name("scrollable_container")
         .build();
 
     for element in currency_pairs.pairs {
         let currency_box = generate_currency_box(element.clone());
         let currency_detail_clone = currency_detail_box.clone();
-        let scroll_clone = scrollable_box.clone();
+        let scroll_clone = scrollable_container.clone();
         let gesture = gtk::GestureClick::new();
         let e = element.0.clone();
         let app_settings = app_settings.clone();
@@ -55,11 +56,6 @@ pub fn home_view(currency_pairs: CurrencyPairs, app_settings: Arc<Mutex<Applicat
         currency_box.add_controller(&gesture);
         scrollable_box.append(&currency_box);
     }
-
-    let scrollable_container = gtk::ScrolledWindow::builder()
-        .child(&scrollable_box)
-        .name("scrollable_container")
-        .build();
     
     home_box.append(&scrollable_container);
     home_box.append(&currency_detail_box);

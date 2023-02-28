@@ -20,16 +20,12 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
 
     let scrollable_box = gtk::Box::builder()
         .orientation(Orientation::Vertical)
-        .margin_top(12)
-        .margin_bottom(12)
         .vexpand(true)
         .build();
     scrollable_box.set_widget_name("assets_scrollable_box");
 
     let currencies_box = gtk::Box::builder()
         .orientation(Orientation::Vertical)
-        .margin_top(12)
-        .margin_bottom(12)
         .build();
     currencies_box.set_widget_name("currencies_box");
 
@@ -41,6 +37,13 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
         .visible(false)
         .build();
     no_assets_label.set_widget_name("no_assets_label");
+
+    scrollable_box.append(&currencies_box);
+
+    let scrollable_container = gtk::ScrolledWindow::builder()
+        .child(&scrollable_box)
+        .name("assets_scrollable_container")
+        .build();
 
     currencies_box.append(&no_assets_label);
     let curr_box = currencies_box.clone();
@@ -106,10 +109,6 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
                 }
             } else if eth_balance > 0.0 {
                 currency_boxes.insert(String::from("ETH"), (eth_balance, app_settings.tokens.eth_tokens["ETH"].clone()));
-            }
-
-            for (key, value) in currency_boxes.clone() {
-                println!("key = {} value = {}", key, value.0);
             }
             
             match sender.send((currency_boxes.clone(), app_settings.clone())) {
@@ -179,8 +178,6 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
 
                 let currency_detail_view = gtk::Box::builder()
                     .orientation(Orientation::Vertical)
-                    .margin_top(12)
-                    .margin_bottom(12)
                     .visible(false)
                     .build();
                 currency_detail_view.set_widget_name("currency_detail_view");
@@ -220,12 +217,7 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
         ),
     );
 
-    scrollable_box.append(&currencies_box);
-
-    let scrollable_container = gtk::ScrolledWindow::builder()
-        .child(&scrollable_box)
-        .name("assets_scrollable_container")
-        .build();
+    
 
     asset_box.append(&scrollable_container);
     return (asset_box, app_settings_clone);
