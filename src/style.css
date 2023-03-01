@@ -56,3 +56,17 @@ wallet_expander_row {
     font-family: Helvetica;
     font-size: 12px;
 }
+
+positive_transaction_label {
+    color: green;
+    font-weight: bold;
+    font-family: Helvetica;
+    font-size: 12px;
+}
+
+negative_transaction_label {
+    color: red;
+    font-weight: bold;
+    font-family: Helvetica;
+    font-size: 12px;
+}

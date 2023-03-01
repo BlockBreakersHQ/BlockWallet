@@ -17,16 +17,10 @@ pub struct CurrencyPairs {
 impl CurrencyPairs {
     pub fn new(app_settings: ApplicationSettings) -> CurrencyPairs {
         let mut pairs: Vec<(Token, Arc<Mutex<String>>)> = Vec::new();
-        let default = Token {
-            name    : String::from("USD Coin"),
-            symbol  : String::from("USDC"),
-            address : String::from("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
-            logo    : Path::new("/Users/andy/Documents/Dev/BlockWallet/target/debug/Images/Icons/USDC.png").to_path_buf(),
-            decimals: 6
-        };
+        let default = app_settings.default_currency;
 
         for (key, value) in app_settings.starred {
-                pairs.push((value, Arc::new(Mutex::new(String::from("Uninitialized")))));
+            pairs.push((value, Arc::new(Mutex::new(String::from("Uninitialized")))));
         }
 
         CurrencyPairs {

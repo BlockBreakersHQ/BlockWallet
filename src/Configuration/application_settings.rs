@@ -18,16 +18,17 @@ use crate::configuration::block_error;
 
 #[derive(Clone, Debug)]
 pub struct ApplicationSettings {
-    pub config_path   : PathBuf,
-    pub error_path    : PathBuf,
-    pub user_hash     : String,
-    pub btc_wallets   : Vec<BitcoinWallet>,
-    pub eth_wallets   : Vec<EthereumWallet>,
-    pub tokens        : Tokens,
-    pub starred       : HashMap<String, Token>,
-    pub logged_in     : bool,
-    pub infura_key    : String,
-    pub etherscan_key : String
+    pub config_path         : PathBuf,
+    pub error_path          : PathBuf,
+    pub user_hash           : String,
+    pub btc_wallets         : Vec<BitcoinWallet>,
+    pub eth_wallets         : Vec<EthereumWallet>,
+    pub tokens              : Tokens,
+    pub default_currency    : Token,
+    pub starred             : HashMap<String, Token>,
+    pub logged_in           : bool,
+    pub infura_key          : String,
+    pub etherscan_key       : String
 }
 
 impl ApplicationSettings {
@@ -132,17 +133,26 @@ impl ApplicationSettings {
             }
         }
 
+        let default = Token {
+            name    : String::from("USD Coin"),
+            symbol  : String::from("USDC"),
+            address : String::from("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
+            logo    : Path::new("/Users/andy/Documents/Dev/BlockWallet/target/debug/Images/Icons/USDC.png").to_path_buf(),
+            decimals: 6
+        };
+
         ApplicationSettings {
-            config_path   : cpath,
-            error_path    : epath,
-            user_hash     : hash,
-            btc_wallets   : bitcoin_wallets,
-            eth_wallets   : ethereum_wallets,
-            tokens        : tokens,
-            starred       : starred,
-            logged_in     : false,
-            infura_key    : i_key,
-            etherscan_key : e_key
+            config_path         : cpath,
+            error_path          : epath,
+            user_hash           : hash,
+            btc_wallets         : bitcoin_wallets,
+            eth_wallets         : ethereum_wallets,
+            tokens              : tokens,
+            default_currency    : default,
+            starred             : starred,
+            logged_in           : false,
+            infura_key          : i_key,
+            etherscan_key       : e_key
         }
     }
 

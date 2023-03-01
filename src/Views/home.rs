@@ -20,8 +20,8 @@ pub fn home_view(currency_pairs: CurrencyPairs, app_settings: Arc<Mutex<Applicat
     let scrollable_box = gtk::Box::builder()
         .orientation(Orientation::Vertical)
         .vexpand(true)
+        .name("home_scrollable_box")
         .build();
-    scrollable_box.set_widget_name("home_scrollable_box");
     
     let currency_detail_box = gtk::Box::builder()
         .orientation(Orientation::Vertical)

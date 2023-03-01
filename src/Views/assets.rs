@@ -21,12 +21,10 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
     let scrollable_box = gtk::Box::builder()
         .orientation(Orientation::Vertical)
         .vexpand(true)
+        .name("assets_scrollable_box")
         .build();
-    scrollable_box.set_widget_name("assets_scrollable_box");
 
-    let currencies_box = gtk::Box::builder()
-        .orientation(Orientation::Vertical)
-        .build();
+    let currencies_box = gtk::Box::new(Orientation::Vertical, 0);
     currencies_box.set_widget_name("currencies_box");
 
     let no_assets_label = gtk::Label::builder()
@@ -35,8 +33,8 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
         .margin_start(5)
         .css_name("label-currency_name")
         .visible(false)
+        .name("no_assets_label")
         .build();
-    no_assets_label.set_widget_name("no_assets_label");
 
     scrollable_box.append(&currencies_box);
 
@@ -147,7 +145,6 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
                         curr_box.remove(&current_child);
                         continue;
                     } else if next_child.widget_name() == "currency_detail_view" {
-                        println!("Currency detail view found.");
                         old_currecny_detail = next_child.clone();
                         let current_child = next_child.clone();
                         if next_child.get_visible() == true {
@@ -166,10 +163,7 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
                     curr_box.remove(&last_child);
                 }
 
-                let currencies = gtk::Box::builder()
-                    .orientation(Orientation::Vertical)
-                    .visible(true)
-                    .build();
+                let currencies = gtk::Box::new(Orientation::Vertical, 0);
                 currencies.set_widget_name("currencies");
 
                 if build_without_display == true {
