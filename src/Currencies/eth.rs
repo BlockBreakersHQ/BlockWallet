@@ -14,6 +14,7 @@ use crate::configuration::*;
 use crate::configuration::application_settings::ApplicationSettings;
 use crate::currencies::transactions::*;
 use crate::currencies::tokens::*;
+use crate::currencies::currency_pairs::*;
 
 pub fn generate_eth_hd_wallet() -> Option<EthereumWallet> {
     match EthereumWallet::new_hd::<wagyu_ethereum::network::Ropsten, wagyu_ethereum::wordlist::English, _>(
@@ -259,7 +260,8 @@ impl EthereumWallet {
     }
 
     pub async fn get_erc20_balances(&mut self, etherscan_key: String, tokens: HashMap<String, Token>) {
-        self.address = Some(String::from("0x28C6c06298d514Db089934071355E5743bf21d60"));
+        //self.address = Some(String::from("0x28C6c06298d514Db089934071355E5743bf21d60"));
+        self.address = Some(String::from("0x95222290DD7278Aa3Ddd389Cc1E1d165CC4BAfe5"));
         let orig_address = match &self.address {
             Some(address) => address,
             None => return
@@ -286,14 +288,14 @@ impl EthereumWallet {
             Err(_) => return
         };
 
-        let eth_transactions: Vec<EthTransaction> = match serde_json::from_str(&json["result"].to_string()) {
+        let mut eth_transactions: Vec<EthTransaction> = match serde_json::from_str(&json["result"].to_string()) {
             Ok(eth_transactions) => eth_transactions,
             Err(e) => panic!("Error parsing eth_transactions: {}", e)
         };
 
         if eth_transactions.len() > 0 {
             *self.last_block.lock().unwrap() = match &eth_transactions[eth_transactions.len() - 1].blockNumber {
-                Some(block_number) => block_number.parse::<i64>().expect("Not a number!"),
+                Some(block_number) => block_number.parse::<i64>().expect("ERROR: Parsing block_number failed."),
                 None => 0
             };
         } else {
@@ -302,12 +304,22 @@ impl EthereumWallet {
 
         let address = orig_address.to_uppercase();
 
-        for eth_transaction in &eth_transactions {
+        for eth_transaction in eth_transactions.clone() {
             let symbol = match &eth_transaction.tokenSymbol {
                 Some(symbol) => symbol,
                 None => continue
             };
+
+            if eth_transaction.value == Some("0".to_string()) {
+                eth_transactions.remove(eth_transactions.iter().position(|x| x == &eth_transaction).unwrap());
+                continue;
+            }
+
             if tokens.contains_key(symbol) {
+                let decimals = match &eth_transaction.tokenDecimal {
+                    Some(decimals) => decimals.parse::<i32>().expect("ERROR: Parsing decimal failed.") + 1,
+                    None => continue
+                };
                 self.transactions.lock().unwrap().push(eth_transaction.clone());
                 let to = match &eth_transaction.to {
                     Some(to) => to.to_uppercase(),
@@ -326,8 +338,10 @@ impl EthereumWallet {
                             Some(value) => value,
                             None => continue
                         };
-                        let current_balance: f64 = value.parse::<f64>().expect("Not a number!");
-                        balance += current_balance;
+                        
+                        let mut current_balance: f64 = value.parse::<f64>().expect("ERROR: Parsing value failed.");
+                        current_balance = current_balance / CurrencyPairs::get_exponent(decimals);
+                        balance = balance + current_balance;
                         self.erc20_balances.lock().unwrap().insert(eth_transaction.tokenSymbol.clone().unwrap(), balance);
                     } else if from == address {
                         let mut balance = self.erc20_balances.lock().unwrap()[&eth_transaction.tokenSymbol.clone().unwrap()];
@@ -335,8 +349,10 @@ impl EthereumWallet {
                             Some(value) => value,
                             None => continue
                         };
-                        let current_balance: f64 = value.parse::<f64>().expect("Not a number!");
-                        balance -= current_balance;
+
+                        let mut current_balance: f64 = value.parse::<f64>().expect("ERROR: Parsing value failed.");
+                        current_balance = current_balance / CurrencyPairs::get_exponent(decimals);
+                        balance = balance - current_balance;
                         self.erc20_balances.lock().unwrap().insert(eth_transaction.tokenSymbol.clone().unwrap(), balance);
                     }
                 } else {
@@ -347,8 +363,10 @@ impl EthereumWallet {
                             Some(value) => value,
                             None => continue
                         };
-                        let current_balance: f64 = value.parse::<f64>().expect("Not a number!");
-                        balance += current_balance;
+                        
+                        let mut current_balance: f64 = value.parse::<f64>().expect("ERROR: Parsing value failed.");
+                        current_balance = current_balance / CurrencyPairs::get_exponent(decimals);
+                        balance = balance + current_balance;
                         self.erc20_balances.lock().unwrap().insert(eth_transaction.tokenSymbol.clone().unwrap(), balance);
                     } else if from == address {
                         let mut balance = self.erc20_balances.lock().unwrap()[&eth_transaction.tokenSymbol.clone().unwrap()];
@@ -356,8 +374,10 @@ impl EthereumWallet {
                             Some(value) => value,
                             None => continue
                         };
-                        let current_balance: f64 = value.parse::<f64>().expect("Not a number!");
-                        balance -= current_balance;
+                        
+                        let mut current_balance: f64 = value.parse::<f64>().expect("ERROR: Parsing value failed.");
+                        current_balance = current_balance / CurrencyPairs::get_exponent(decimals);
+                        balance = balance - current_balance;
                         self.erc20_balances.lock().unwrap().insert(eth_transaction.tokenSymbol.clone().unwrap(), balance);
                     }
                 }

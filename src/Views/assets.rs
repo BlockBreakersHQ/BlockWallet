@@ -246,7 +246,7 @@ pub fn generate_currency_box(balance: f64, token: Token) -> gtk::Box {
         .build();
 
     let currency_price_label  = gtk::Label::builder()
-        .label(&format!("{:.5}", balance.to_string()))
+        .label(&format!("{}", balance.to_string()))
         .margin_top(5)
         .margin_end(12)
         .halign(Align::End)

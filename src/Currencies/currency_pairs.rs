@@ -103,8 +103,9 @@ impl CurrencyPairs {
         });
     }
 
-    fn get_exponent(exponent: i32) -> f64 {
+    pub fn get_exponent(exponent: i32) -> f64 {
         let digits: f64 = match exponent {
+            19 => 1000000000000000000.0,
             18 => 100000000000000000.0,
             17 => 10000000000000000.0,
             16 => 1000000000000000.0,

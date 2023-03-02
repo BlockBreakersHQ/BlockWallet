@@ -113,7 +113,6 @@ pub fn get_transactions(token: Token, app_settings: ApplicationSettings) -> gtk:
     transactions_box.append(&no_transactions_label);
 
     for ethw in app_settings.eth_wallets {
-        
         let transactions = &*ethw.transactions.lock().unwrap();
         for transaction in transactions {
             let tokenSymbol = match &transaction.tokenSymbol {
@@ -129,19 +128,32 @@ pub fn get_transactions(token: Token, app_settings: ApplicationSettings) -> gtk:
                 addresses_box.set_hexpand(true);
 
                 let sender = match &transaction.from {
-                    Some(sender) => format!("{}...", &sender[..7]),
+                    Some(sender) => format!("{}...", &sender[..15]),
                     None => "".to_string()
                 };
                 let receiver = match &transaction.to {
-                    Some(receiver) => format!("{}...", &receiver[..7]),
+                    Some(receiver) => format!("{}...", &receiver[..15]),
                     None => "".to_string()
                 };
-                let amount = match &transaction.value {
-                    Some(amount) => amount,
-                    None => ""
+                let decimals = match &transaction.tokenDecimal {
+                    Some(decimals) => decimals.parse::<i32>().expect("ERROR: Parsing decimal failed.") + 1,
+                    None => 0
                 };
+                let amount = match &transaction.value {
+                    Some(amount) => {
+                        let transaction_amount = amount.parse::<f64>().expect("ERROR: Parsing transaction amount failed.");
+                        let transaction_value = transaction_amount / CurrencyPairs::get_exponent(decimals);
+                        transaction_value
+                    },
+                    None => 0.0
+                };
+
+                //if amount == 0.0 {
+                //    continue;
+                //}
+
                 let address = match ethw.address.clone() {
-                    Some(address) => address,
+                    Some(address) => address.to_lowercase(),
                     None => "".to_string()
                 };
 
@@ -161,7 +173,6 @@ pub fn get_transactions(token: Token, app_settings: ApplicationSettings) -> gtk:
                     .margin_start(5)
                     .margin_end(5)
                     .build();
-                
 
                 if receiver == address {
                     let amount_label = gtk::Label::builder()
@@ -195,6 +206,8 @@ pub fn get_transactions(token: Token, app_settings: ApplicationSettings) -> gtk:
                 transaction_box.append(&addresses_box);
                 transaction_box.append(&amount_box);
                 transactions_box.append(&transaction_box);
+                transaction_box.set_margin_start(5);
+                transaction_box.set_margin_end(5);
             }
         }
     }
