@@ -70,3 +70,8 @@ negative_transaction_label {
     font-family: Helvetica;
     font-size: 12px;
 }
+
+reciever_box {
+    /*border: 1px solid red; Working border example*/
+    background-color: rgb(30, 30, 30);
+}

@@ -682,7 +682,7 @@ fn add_eth_wallet(eth_box: &mut gtk::Box, ethw: &EthereumWallet) -> gtk::Box {
     return eth_box.clone();
 }
 
-fn btc_qr_box(btcw: &BitcoinWallet) -> gtk::Box {
+pub fn btc_qr_box(btcw: &BitcoinWallet) -> gtk::Box {
     let qr_box = gtk::Box::builder()
             .orientation(Orientation::Vertical)
             .visible(false)
@@ -696,7 +696,7 @@ fn btc_qr_box(btcw: &BitcoinWallet) -> gtk::Box {
     return qr_box;
 }
 
-fn eth_qr_box(ethw: &EthereumWallet) -> gtk::Box {
+pub fn eth_qr_box(ethw: &EthereumWallet) -> gtk::Box {
     let qr_box = gtk::Box::builder()
             .orientation(Orientation::Vertical)
             .visible(false)
