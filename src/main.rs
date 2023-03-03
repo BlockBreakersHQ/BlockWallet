@@ -5,6 +5,7 @@ use adw::{Application, ApplicationWindow};
 use std::path::{Path, PathBuf};
 use std::thread;
 use std::fs;
+use std::time::Duration;
 
 mod views;
 mod currencies;
@@ -69,6 +70,8 @@ pub fn build_ui(app: &Application) {
     };
 
     let runtime = tokio::runtime::Runtime::new().unwrap();
+    let runtime2 = tokio::runtime::Runtime::new().unwrap();
+
     if !Path::new(&icon_path).is_dir() {
         thread::spawn(move || {
             let _ = runtime.block_on(runtime.spawn(async move {
@@ -80,9 +83,10 @@ pub fn build_ui(app: &Application) {
                 };
             }));
         });
-    } else if !Path::new(&currency_path).exists() {
+    }
+    if !Path::new(&currency_path).exists() {
         thread::spawn(move || {
-            let _ = runtime.block_on(runtime.spawn(async move {
+            let _ = runtime2.block_on(runtime2.spawn(async move {
                 match initialization::download_token_details().await {
                     Ok(_) => (),
                     Err(e) => {
@@ -94,10 +98,19 @@ pub fn build_ui(app: &Application) {
     }
 
     let mut tokens = currencies::tokens::Tokens::new();
-    let json = fs::read_to_string(currency_path).expect("Unable to read file");
+    let mut json = String::new();
+
+    if !Path::new(&currency_path).exists() {
+        thread::sleep(Duration::from_secs(3));
+        json = fs::read_to_string(currency_path).expect("Unable to read file");
+    } else {
+        json = fs::read_to_string(currency_path).expect("Unable to read file");
+    }
+    
     tokens = match initialization::parse_token_details(&json, tokens.clone()) {
         Ok(c) => c,
         Err(e) => {
+            println!("Error: {}", e);
             ApplicationSettings::write_error_to_path(&ApplicationSettings::find_error_path().unwrap(), e.to_string());
             tokens
         }

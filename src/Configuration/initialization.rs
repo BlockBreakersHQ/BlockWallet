@@ -27,7 +27,7 @@ struct L3 {
     name         : String,
     decimals     : i32,
     address      : String,
-    logoURI      : String,
+    logoURI      : Option<String>,
 }
 
 pub async fn download_icons() -> Result<String, Box<dyn Error>> {
@@ -71,7 +71,11 @@ pub async fn download_icons() -> Result<String, Box<dyn Error>> {
     for (key, _value) in &currencies.address {
         let currency: &L3 = &currencies.address.get(key).unwrap();
         if !currency.symbol.contains("REALTOKEN") {
-            let icon = reqwest::get(currency.logoURI.clone()).await?;
+            let logoURI = match currency.logoURI.clone() {
+                Some(l) => l,
+                None => continue
+            };
+            let icon = reqwest::get(logoURI.clone()).await?;
             let icon_path = format!("Icons/{}.png", currency.symbol);
             let mut out = File::create(icon_path.clone()).expect("failed to create file");
 

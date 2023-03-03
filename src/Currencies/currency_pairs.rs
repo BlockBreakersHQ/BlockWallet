@@ -58,7 +58,12 @@ impl CurrencyPairs {
         };
 
         let token_amount = json["toTokenAmount"].to_string().replace("\"", "");
-        let token_float  = token_amount.parse::<i64>().unwrap();
+        
+        let token_float  = match token_amount.parse::<i64>() {
+            Ok(r)  => r,
+            Err(_) => return Ok(String::from("Uninitialized"))
+        };
+        
         let token_final  = token_float as f64 / CurrencyPairs::get_exponent(to_token.decimals);
         if to_token.symbol == "USDC" {
             return Ok(format!("${:.5}", token_final));
