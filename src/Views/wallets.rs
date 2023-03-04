@@ -119,23 +119,6 @@ fn populate_btc_currency_details(btc_wallets: &Vec<BitcoinWallet>) -> gtk::Box {
             .orientation(Orientation::Vertical)
             .visible(false)
             .build();
-            
-        let btc_mnemonic = match &btcw.mnemonic {
-            Some(mnemonic) => format!("Mnemonic: {}", mnemonic),
-            None => String::from("Uninitialized")
-        };
-        let btc_mnemonic_label = gtk::Label::builder()
-            .label(&btc_mnemonic)
-            .halign(gtk::Align::Start)
-            .max_width_chars(50)
-            .margin_start(12)
-            .margin_end(12)
-            .margin_top(12)
-            .css_name("btc_wallet_details")
-            .selectable(true)
-            .wrap(true)
-            .wrap_mode(pango::WrapMode::Char)
-            .build();
 
         let btc_address = match &btcw.address {
             Some(address) => format!("Address: {}", address),
@@ -230,7 +213,6 @@ fn populate_btc_currency_details(btc_wallets: &Vec<BitcoinWallet>) -> gtk::Box {
             .icon_name("btc")
             .build();
 
-        expander.add_row(&btc_mnemonic_label);
         expander.add_row(&btc_address_label);
         expander.add_row(&btc_private_key_label);
         expander.add_row(&btc_public_key_label);
@@ -407,23 +389,6 @@ fn add_btc_wallet(btc_box: &mut gtk::Box, btcw: &BitcoinWallet) -> gtk::Box {
         .orientation(Orientation::Vertical)
         .visible(false)
         .build();
-        
-    let btc_mnemonic = match &btcw.mnemonic {
-        Some(mnemonic) => format!("Mnemonic: {}", mnemonic),
-        None => String::from("Uninitialized")
-    };
-    let btc_mnemonic_label = gtk::Label::builder()
-        .label(&btc_mnemonic)
-        .halign(gtk::Align::Start)
-        .max_width_chars(50)
-        .margin_start(12)
-        .margin_end(12)
-        .margin_top(12)
-        .css_name("btc_wallet_details")
-        .selectable(true)
-        .wrap(true)
-        .wrap_mode(pango::WrapMode::Char)
-        .build();
 
     let btc_address = match &btcw.address {
         Some(address) => format!("Address: {}", address),
@@ -518,7 +483,6 @@ fn add_btc_wallet(btc_box: &mut gtk::Box, btcw: &BitcoinWallet) -> gtk::Box {
         .icon_name("btc")
         .build();
 
-    expander.add_row(&btc_mnemonic_label);
     expander.add_row(&btc_address_label);
     expander.add_row(&btc_private_key_label);
     expander.add_row(&btc_public_key_label);
@@ -770,16 +734,9 @@ fn new_wallet_box(app_settings: Arc<Mutex<ApplicationSettings>>, btc_box: Arc<Mu
         let mut path = String::from("m/44'/60'/0'/0'/");
         if token_selector.selected() == 0 {
             path += &app_settings.lock().unwrap().btc_wallets.len().to_string();
-            let mnemonic = match app_settings.lock().unwrap().btc_wallets[0].mnemonic.clone() {
-                Some(mnemonic) => mnemonic,
-                None           => {
-                    mnemonic_error.set_visible(true);
-                    return;
-                }
-            };
-            let mut btcw = match btc::generate_from_mnemonic(&mnemonic, &path) {
-                Some(btcw) => btcw,
-                None       => {
+            let mut btcw = match btc::BitcoinWallet::new() {
+                Ok(btcw) => btcw,
+                Err(_)       => {
                     wallet_generation_error.set_visible(true);
                     return;
                 }

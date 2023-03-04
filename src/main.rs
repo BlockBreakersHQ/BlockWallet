@@ -16,8 +16,10 @@ use crate::views::{login};
 use crate::configuration::initialization;
 use crate::configuration::application_settings::*;
 
-const APP_ID: &str = "org.BlockBreakers.Wallet";
+use crate::currencies::btc;
+use crate::currencies::btc::*;
 
+const APP_ID: &str = "org.BlockBreakers.Wallet";
 
 fn main() {
     let app = Application::builder().application_id(APP_ID).build();
@@ -96,6 +98,8 @@ pub fn build_ui(app: &Application) {
             }));
         });
     }
+
+    btc::BitcoinWallet::new();
 
     let mut tokens = currencies::tokens::Tokens::new();
     let mut json = String::new();

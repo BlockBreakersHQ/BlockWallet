@@ -9,6 +9,12 @@ use fast_qr::convert::{image::ImageBuilder, Builder, Shape};
 use fast_qr::qr::QRBuilder;
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
+use std::convert::TryFrom;
+
+/*use ethers::{
+    core::{types::TransactionRequest, utils::Anvil},
+    providers::{Http, Middleware, Provider},
+};*/
 
 use crate::configuration::*;
 use crate::configuration::application_settings::ApplicationSettings;
@@ -384,7 +390,25 @@ impl EthereumWallet {
             }
         }
     }
+    /*
+    pub async fn send_eth_transaction(&mut self, to: String, from: String, value: i64) -> Result<&mut Self, block_error::Error> {
+        let rpc_url = "http://localhost:8545";
 
+        let provider = Provider::try_from(rpc_url)?;
+        let accounts = provider.get_accounts().await?;
+        let from = accounts[0];
+        let to = accounts[1];
+
+        let tx = TransactionRequest::new().to(to).value(value).from(from);
+
+        let balance_before = provider.get_balance(from, None).await?;
+        let nonce1 = provider.get_transaction_count(from, None).await?;
+
+        let tx = provider.send_transaction(tx, None).await?.await?;
+        let nonce2 = provider.get_transaction_count(from, None).await?;
+        return Ok(self);
+    }
+    */
     pub fn set_wallet_name(&mut self, name: String) {
             self.wallet_name = Some(name);
     }

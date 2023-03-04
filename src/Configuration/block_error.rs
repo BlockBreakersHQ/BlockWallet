@@ -1,5 +1,4 @@
 use wagyu_model::*;
-use web3::Error as Web3Error;
 
 #[derive(Debug)]
 pub enum Error {
@@ -108,12 +107,6 @@ impl From<TransactionError> for Error {
     }
 }
 
-impl From<Web3Error> for Error {
-    fn from(error: Web3Error) -> Self {
-        Error::Crate("web3", format!("{:?}", error))
-    }
-}
-
 impl From<reqwest::Error> for Error {
     fn from(error: reqwest::Error) -> Self {
         Error::Crate("request", format!("{:?}", error))
@@ -129,5 +122,11 @@ impl From<cocoon::Error> for Error {
 impl From<rustc_hex::FromHexError> for Error {
     fn from(error: rustc_hex::FromHexError) -> Self {
         Error::Crate("cocoon", format!("{:?}", error))
+    }
+}
+
+impl From<bitcoin::util::key::Error> for Error {
+    fn from(error: bitcoin::util::key::Error) -> Self {
+        Error::Crate("bitcoin", format!("{:?}", error))
     }
 }
