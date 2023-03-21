@@ -21,6 +21,7 @@ struct L2 {
     address: HashMap<String, L3>,
 }
 
+#[allow(non_snake_case)]
 #[derive(Debug, Deserialize, Clone)]
 struct L3 {
     symbol       : String,

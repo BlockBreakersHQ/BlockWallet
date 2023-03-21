@@ -1,6 +1,5 @@
 use colored::*;
-use core::{fmt, fmt::Display, str::FromStr};
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use core::{fmt, fmt::Display};
 use serde::{Serialize};
 use serde_json::from_str;
 use fast_qr::convert::{image::ImageBuilder, Builder, Shape};

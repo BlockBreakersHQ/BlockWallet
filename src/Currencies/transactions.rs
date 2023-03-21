@@ -1,6 +1,7 @@
 use serde::{Serialize, Deserialize};
-use core::{fmt, fmt::Display, str::FromStr};
+use core::{fmt, fmt::Display};
 
+#[allow(non_snake_case)]
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct EthTransaction {
     pub blockNumber         : Option<String>,

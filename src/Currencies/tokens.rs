@@ -46,7 +46,7 @@ impl Tokens {
 impl Display for Tokens {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut output = String::new();
-        for (key, value) in &self.eth_tokens {
+        for (_key, value) in &self.eth_tokens {
             output.push_str(&format!("{}\n", value));
         }
         write!(f, "{}", output)

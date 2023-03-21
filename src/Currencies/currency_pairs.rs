@@ -2,8 +2,6 @@ use serde_json::Value;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use std::thread;
-use std::path::Path;
-
 use crate::configuration::*;
 use crate::currencies::tokens::*;
 use crate::ApplicationSettings;
@@ -19,7 +17,7 @@ impl CurrencyPairs {
         let mut pairs: Vec<(Token, Arc<Mutex<String>>)> = Vec::new();
         let default = app_settings.default_currency;
 
-        for (key, value) in app_settings.starred {
+        for (_key, value) in app_settings.starred {
             pairs.push((value, Arc::new(Mutex::new(String::from("Uninitialized")))));
         }
 

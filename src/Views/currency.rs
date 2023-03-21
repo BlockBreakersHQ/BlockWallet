@@ -7,7 +7,6 @@ use glib::{clone, Continue, MainContext, PRIORITY_DEFAULT};
 
 use crate::currencies::tokens::Token;
 use crate::currencies::currency_pairs::*;
-use crate::currencies::currency_pairs;
 use crate::currencies::eth::EthereumWallet;
 use crate::ApplicationSettings;
 use crate::views::{transactions, home};
@@ -31,7 +30,7 @@ pub fn currency_view(token: Token, app_settings: ApplicationSettings) -> gtk::Bo
             let _ = runtime.block_on(runtime.spawn(async move {
                 let price_text = match CurrencyPairs::get_currency_price(currency_token, default).await {
                     Ok(price) => price,
-                    Err(e) => String::from("unintialized")
+                    Err(_) => String::from("unintialized")
                 };
 
                 match sender.send(price_text) {
@@ -113,10 +112,12 @@ pub fn currency_view(token: Token, app_settings: ApplicationSettings) -> gtk::Bo
     return currency_box.clone();
 }
 
+/*
 pub fn get_balances_by_wallet(token: Token, app_settings: ApplicationSettings) -> gtk::Box {
     let wallet_balances_box = gtk::Box::new(Orientation::Vertical, 0);
     return wallet_balances_box;
 }
+*/
 
 pub fn get_transactions(token: Token, app_settings: ApplicationSettings) -> gtk::Box {
     let transactions_box = gtk::Box::new(Orientation::Vertical, 0);

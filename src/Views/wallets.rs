@@ -763,6 +763,13 @@ fn new_wallet_box(app_settings: Arc<Mutex<ApplicationSettings>>, btc_box: Arc<Mu
                     return;
                 }
             };
+            let mut ethw = match eth::generate_eth_basic_wallet() {
+                Some(ethw) => ethw,
+                None       => {
+                    wallet_generation_error.set_visible(true);
+                    return;
+                }
+            };
             ethw.wallet_name = Some(wallet_name.text().to_string());
             let ethwc = ethw.clone();
             app_settings.lock().unwrap().eth_wallets.push(ethw);

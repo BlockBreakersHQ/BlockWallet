@@ -16,8 +16,7 @@ use crate::views::{login};
 use crate::configuration::initialization;
 use crate::configuration::application_settings::*;
 
-use crate::currencies::btc;
-use crate::currencies::btc::*;
+use crate::currencies::eth::EthereumWallet;
 
 const APP_ID: &str = "org.BlockBreakers.Wallet";
 
@@ -98,8 +97,6 @@ pub fn build_ui(app: &Application) {
             }));
         });
     }
-
-    btc::BitcoinWallet::new();
 
     let mut tokens = currencies::tokens::Tokens::new();
     let mut json = String::new();

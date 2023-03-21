@@ -6,7 +6,6 @@ use std::time::Duration;
 use std::collections::HashMap;
 use chrono;
 use cocoon::{Cocoon};
-use colored::Colorize;
 use glib::{clone, Continue, MainContext, PRIORITY_DEFAULT};
 use std::sync::Arc;
 
@@ -388,9 +387,9 @@ impl ApplicationSettings {
             for btcw in &btc_wallets {
                 let attributes: Vec<&str>    = btcw.split("\n").collect();
                 let mut path                 = String::new();
-                let mut mnemonic             = String::new();
+                //let mut mnemonic             = String::new();
                 let mut private_key          = String::new();
-                let mut extended_private_key = String::new();
+                //let mut extended_private_key = String::new();
                 let mut wallet_name          = String::new();
 
                 for i in attributes {
@@ -440,7 +439,7 @@ impl ApplicationSettings {
                 let mut path                 = String::new();
                 let mut mnemonic             = String::new();
                 let mut private_key          = String::new();
-                let mut extended_private_key = String::new();
+                //let mut extended_private_key = String::new();
                 let mut wallet_name          = String::new();
                 
                 for i in attributes {
@@ -462,13 +461,13 @@ impl ApplicationSettings {
                         m.pop();
                         mnemonic = String::from(&m[5..m.len()]);
                     }
-                    if i.contains("Extended Private Key") {
+                    /*if i.contains("Extended Private Key") {
                         let element: Vec<&str> = i.split("Extended Private Key").collect();
                         let mut unmodified_extended_private_key = String::from(element[1]);
                         unmodified_extended_private_key.retain(|c| !c.is_whitespace());
                         extended_private_key = String::from(&unmodified_extended_private_key[4..unmodified_extended_private_key.len()]);
                     }
-                    else if i.contains("Private Key") {
+                    else*/ if i.contains("Private Key") {
                         let element: Vec<&str> = i.split("Private Key").collect();
                         let mut unmodified_private_key = String::from(element[1]);
                         unmodified_private_key.retain(|c| !c.is_whitespace());
@@ -511,7 +510,7 @@ impl ApplicationSettings {
                     }
                     let _ = &self.eth_wallets.push(e_wallet);
                 }
-                else if !extended_private_key.is_empty() {
+                /*else if !extended_private_key.is_empty() {
                     let wallet = eth::generate_from_extended_private_key(&extended_private_key, &path);
 
                     let mut e_wallet = match wallet {
@@ -524,7 +523,7 @@ impl ApplicationSettings {
                         e_wallet.set_wallet_name(String::from("Ethereum Wallet"));
                     }
                     let _ = &self.eth_wallets.push(e_wallet);
-                }
+                }*/
             }
         } else {
             let e_wallet = ApplicationSettings::generate_eth_wallet(String::new());
@@ -539,7 +538,7 @@ impl ApplicationSettings {
             output += "<Entry>\n      Sector: Settings\n";
             if &self.starred.len() > &0 {
                 output += &format!("      Starred______\n");
-                for (key, value) in &self.starred {
+                for (_key, value) in &self.starred {
                     output += &format!("      ETH TOKEN:{}\n", value.symbol);
                 }
             }

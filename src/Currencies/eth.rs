@@ -1,20 +1,20 @@
-use wagyu_ethereum::*;
-use wagyu_model::*;
 use colored::*;
-use core::{fmt, fmt::Display, str::FromStr};
-use rand::{rngs::StdRng, Rng, SeedableRng};
+use core::{fmt, fmt::Display};
 use serde::{Serialize};
 use serde_json::Value;
 use fast_qr::convert::{image::ImageBuilder, Builder, Shape};
 use fast_qr::qr::QRBuilder;
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
-use std::convert::TryFrom;
 
-/*use ethers::{
-    core::{types::TransactionRequest, utils::Anvil},
+use ethers::{
+    core::{types::TransactionRequest, utils::Anvil, k256::ecdsa::SigningKey},
     providers::{Http, Middleware, Provider},
-};*/
+    prelude::*,
+    signers::{coins_bip39::English, MnemonicBuilder},
+};
+
+use bip39::{Language, Mnemonic, MnemonicType};
 
 use crate::configuration::*;
 use crate::configuration::application_settings::ApplicationSettings;
@@ -22,11 +22,20 @@ use crate::currencies::transactions::*;
 use crate::currencies::tokens::*;
 use crate::currencies::currency_pairs::*;
 
+pub fn generate_eth_basic_wallet() -> Option<EthereumWallet> {
+    match EthereumWallet::new() {
+        Ok(eth_wallet) => return Some(eth_wallet),
+        Err(e) => {
+            let path = ApplicationSettings::find_error_path().unwrap();
+            ApplicationSettings::write_error_to_path(&path, format!("ERROR: {:?}", e));
+            return None
+        }
+    };
+}
+
 pub fn generate_eth_hd_wallet() -> Option<EthereumWallet> {
-    match EthereumWallet::new_hd::<wagyu_ethereum::network::Ropsten, wagyu_ethereum::wordlist::English, _>(
-        &mut StdRng::from_entropy(),
+    match EthereumWallet::new_hd(
         24,
-        None,
         "m/44'/60'/0'/0'/0",
     ) {
         Ok(eth_wallet) => return Some(eth_wallet),
@@ -43,11 +52,7 @@ pub fn generate_from_mnemonic(mnemonic: &str, mut path: &str) -> Option<Ethereum
         path = "m/44'/60'/0'/0'/0";
     }
 
-    match EthereumWallet::from_mnemonic::<wagyu_ethereum::network::Mainnet, wagyu_ethereum::wordlist::English>(
-        mnemonic,
-        None,
-        path
-    ) {
+    match EthereumWallet::from_mnemonic(mnemonic, path) {
         Ok(eth_wallet) => return Some(eth_wallet),
         Err(e) => {
             let path = ApplicationSettings::find_error_path().unwrap();
@@ -77,7 +82,7 @@ pub fn generate_from_extended_private_key(extended_private_key: &str, path: &str
         path_option = Some(String::from(path));
     }
 
-    match EthereumWallet::from_extended_private_key::<wagyu_ethereum::network::Mainnet>(extended_private_key, &path_option) {
+    match EthereumWallet::from_extended_private_key(extended_private_key, &path_option) {
         Ok(eth_wallet) => return Some(eth_wallet),
         Err(e) => {
             let path = ApplicationSettings::find_error_path().unwrap();
@@ -97,10 +102,10 @@ pub struct EthereumWallet {
     pub password: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mnemonic: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub extended_private_key: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub extended_public_key: Option<String>,
+    //#[serde(skip_serializing_if = "Option::is_none")]
+    //pub extended_private_key: Option<String>,
+    //#[serde(skip_serializing_if = "Option::is_none")]
+    //pub extended_public_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub private_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -117,123 +122,94 @@ pub struct EthereumWallet {
 }
 
 impl EthereumWallet {
-    pub fn new<R: Rng>(rng: &mut R) -> Result<Self, block_error::Error> {
-        let private_key = EthereumPrivateKey::new(rng)?;
-        let public_key = private_key.to_public_key();
-        let address = public_key.to_address(&EthereumFormat::Standard)?;
+    pub fn new() -> Result<Self, block_error::Error> {
         Ok(Self {
-            private_key: Some(private_key.to_string()),
-            public_key: Some(public_key.to_string()),
-            address: Some(address.to_string()),
-            balance: Arc::new(Mutex::new(String::from("Uninitialized"))),
-            erc20_balances: Arc::new(Mutex::new(HashMap::new())),
-            transactions: Arc::new(Mutex::new(Vec::new())),
-            last_block: Arc::new(Mutex::new(0)),
+            address: Some(String::from("0x95222290DD7278Aa3Ddd389Cc1E1d165CC4BAfe5")),
             ..Default::default()
         })
     }
 
-    pub fn new_hd<N: EthereumNetwork, W: EthereumWordlist, R: Rng>(
-        rng: &mut R,
-        word_count: u8,
-        password: Option<&str>,
-        path: &str,
-    ) -> Result<Self, block_error::Error> {
-        let mnemonic = EthereumMnemonic::<N, W>::new_with_count(rng, word_count)?;
-        let master_extended_private_key = mnemonic.to_extended_private_key(password)?;
-        let derivation_path = EthereumDerivationPath::from_str(path)?;
-        let extended_private_key = master_extended_private_key.derive(&derivation_path)?;
-        let extended_public_key = extended_private_key.to_extended_public_key();
-        let private_key = extended_private_key.to_private_key();
-        let public_key = extended_public_key.to_public_key();
-        let address = public_key.to_address(&EthereumFormat::Standard)?;
+    pub fn new_hd(word_count: u8, path: &str) -> Result<Self, block_error::Error> {
+        let words = match word_count {
+            12 => MnemonicType::Words12,
+            15 => MnemonicType::Words15,
+            18 => MnemonicType::Words18,
+            21 => MnemonicType::Words21,
+            24 => MnemonicType::Words24,
+            _ => return Err(block_error::Error::new(format!("Invalid word count provided: {:?}. Valid optiuons are 12, 15, 18, 21, 24", word_count)))
+        };
+
+        let mnemonic = String::from(Mnemonic::new(words, Language::English).phrase());
+
+        let wallet = MnemonicBuilder::<English>::default()
+            .phrase(&*mnemonic)
+            .word_count(24)
+            .derivation_path(path)?
+            .build()?;
+
+        let private_key = Some(format!("0x{:02X?}", wallet.signer().to_bytes()).replace(", ", "").replace("[", "").replace("]", ""));
+        let public_key = Some(format!("0x{:02X?}", wallet.signer().verifying_key().to_bytes()).replace(", ", "").replace("[", "").replace("]", ""));
+        let address = Some(format!("0x{:02X?}", wallet.address().as_bytes()).replace(", ", "").replace("[", "").replace("]", ""));
+
         Ok(Self {
+            mnemonic: Some(mnemonic),
+            private_key: private_key,
+            public_key: public_key,
+            address: address,
             path: Some(path.to_string()),
-            password: password.map(String::from),
-            mnemonic: Some(mnemonic.to_string()),
-            extended_private_key: Some(extended_private_key.to_string()),
-            extended_public_key: Some(extended_public_key.to_string()),
-            private_key: Some(private_key.to_string()),
-            public_key: Some(public_key.to_string()),
-            address: Some(address.to_string()),
-            balance: Arc::new(Mutex::new(String::from("Uninitialized"))),
-            erc20_balances: Arc::new(Mutex::new(HashMap::new())),
-            transactions: Arc::new(Mutex::new(Vec::new())),
-            last_block: Arc::new(Mutex::new(0)),
             ..Default::default()
         })
     }
 
-    pub fn from_mnemonic<N: EthereumNetwork, W: EthereumWordlist>(
-        mnemonic: &str,
-        password: Option<&str>,
-        path: &str,
-    ) -> Result<Self, block_error::Error> {
-        let mnemonic = EthereumMnemonic::<N, W>::from_phrase(&mnemonic)?;
-        let master_extended_private_key = mnemonic.to_extended_private_key(password)?;
-        let derivation_path = EthereumDerivationPath::from_str(path)?;
-        let extended_private_key = master_extended_private_key.derive(&derivation_path)?;
-        let extended_public_key = extended_private_key.to_extended_public_key();
-        let private_key = extended_private_key.to_private_key();
-        let public_key = extended_public_key.to_public_key();
-        let address = public_key.to_address(&EthereumFormat::Standard)?;
+    pub fn from_mnemonic(mnemonic: &str, path: &str) -> Result<Self, block_error::Error> {
+        let wallet = MnemonicBuilder::<English>::default()
+            .phrase(mnemonic)
+            .word_count(24)
+            .derivation_path(path)?
+            .build()?;
+
+        let private_key = Some(format!("0x{:02X?}", wallet.signer().to_bytes()).replace(", ", "").replace("[", "").replace("]", ""));
+        let public_key = Some(format!("0x{:02X?}", wallet.signer().verifying_key().to_bytes()).replace(", ", "").replace("[", "").replace("]", ""));
+        let address = Some(format!("0x{:02X?}", wallet.address().as_bytes()).replace(", ", "").replace("[", "").replace("]", ""));
+
         Ok(Self {
+            mnemonic: Some(mnemonic.to_string()),
+            private_key: private_key,
+            public_key: public_key,
+            address: address,
             path: Some(path.to_string()),
-            password: password.map(String::from),
-            mnemonic: Some(mnemonic.to_string()),
-            extended_private_key: Some(extended_private_key.to_string()),
-            extended_public_key: Some(extended_public_key.to_string()),
-            private_key: Some(private_key.to_string()),
-            public_key: Some(public_key.to_string()),
-            address: Some(address.to_string()),
-            balance: Arc::new(Mutex::new(String::from("Uninitialized"))),
-            erc20_balances: Arc::new(Mutex::new(HashMap::new())),
-            transactions: Arc::new(Mutex::new(Vec::new())),
-            last_block: Arc::new(Mutex::new(0)),
             ..Default::default()
         })
     }
 
-    pub fn from_extended_private_key<N: EthereumNetwork>(
-        extended_private_key: &str,
-        path: &Option<String>
-    ) -> Result<Self, block_error::Error> {
-        let mut extended_private_key = EthereumExtendedPrivateKey::<N>::from_str(extended_private_key)?;
-        if let Some(derivation_path) = path {
-            let derivation_path = EthereumDerivationPath::from_str(&derivation_path)?;
-            extended_private_key = extended_private_key.derive(&derivation_path)?;
-        }
-        let extended_public_key = extended_private_key.to_extended_public_key();
-        let private_key = extended_private_key.to_private_key();
-        let public_key = extended_public_key.to_public_key();
-        let address = public_key.to_address(&EthereumFormat::Standard)?;
+    pub fn from_extended_private_key(extended_private_key: &str, path: &Option<String>) -> Result<Self, block_error::Error> {
         Ok(Self {
-            path: path.clone(),
-            extended_private_key: Some(extended_private_key.to_string()),
-            extended_public_key: Some(extended_public_key.to_string()),
-            private_key: Some(private_key.to_string()),
-            public_key: Some(public_key.to_string()),
-            address: Some(address.to_string()),
-            balance: Arc::new(Mutex::new(String::from("Uninitialized"))),
-            erc20_balances: Arc::new(Mutex::new(HashMap::new())),
-            transactions: Arc::new(Mutex::new(Vec::new())),
-            last_block: Arc::new(Mutex::new(0)),
+            address: Some(String::from("0x95222290DD7278Aa3Ddd389Cc1E1d165CC4BAfe5")),
             ..Default::default()
         })
     }
 
     pub fn from_private_key(private_key: &str) -> Result<Self, block_error::Error> {
-        let private_key = EthereumPrivateKey::from_str(private_key)?;
-        let public_key = private_key.to_public_key();
-        let address = public_key.to_address(&EthereumFormat::Standard)?;
+        let mut private_key = private_key.to_string();
+
+        if private_key.starts_with("0x") || private_key.starts_with("0X") {
+            private_key = private_key.replace("0x", "");
+            private_key = private_key.replace("0X", "");
+        }
+
+        let wallet = match private_key.parse::<LocalWallet>() {
+            Ok(wallet) => wallet,
+            Err(_) => return Err(block_error::Error::new(format!("Invalid private key provided: {:?}", private_key)))
+        };
+
+        let private_key = Some(format!("0x{:02X?}", wallet.signer().to_bytes()).replace(", ", "").replace("[", "").replace("]", ""));
+        let public_key = Some(format!("0x{:02X?}", wallet.signer().verifying_key().to_bytes()).replace(", ", "").replace("[", "").replace("]", ""));
+        let address = Some(format!("0x{:02X?}", wallet.address().as_bytes()).replace(", ", "").replace("[", "").replace("]", ""));
+
         Ok(Self {
-            private_key: Some(private_key.to_string()),
-            public_key: Some(public_key.to_string()),
-            address: Some(address.to_string()),
-            balance: Arc::new(Mutex::new(String::from("Uninitialized"))),
-            erc20_balances: Arc::new(Mutex::new(HashMap::new())),
-            transactions: Arc::new(Mutex::new(Vec::new())),
-            last_block: Arc::new(Mutex::new(0)),
+            private_key: private_key,
+            public_key: public_key,
+            address: address,
             ..Default::default()
         })
     }
@@ -266,8 +242,6 @@ impl EthereumWallet {
     }
 
     pub async fn get_erc20_balances(&mut self, etherscan_key: String, tokens: HashMap<String, Token>) {
-        //self.address = Some(String::from("0x28C6c06298d514Db089934071355E5743bf21d60"));
-        self.address = Some(String::from("0x95222290DD7278Aa3Ddd389Cc1E1d165CC4BAfe5"));
         let orig_address = match &self.address {
             Some(address) => address,
             None => return
@@ -390,25 +364,7 @@ impl EthereumWallet {
             }
         }
     }
-    /*
-    pub async fn send_eth_transaction(&mut self, to: String, from: String, value: i64) -> Result<&mut Self, block_error::Error> {
-        let rpc_url = "http://localhost:8545";
-
-        let provider = Provider::try_from(rpc_url)?;
-        let accounts = provider.get_accounts().await?;
-        let from = accounts[0];
-        let to = accounts[1];
-
-        let tx = TransactionRequest::new().to(to).value(value).from(from);
-
-        let balance_before = provider.get_balance(from, None).await?;
-        let nonce1 = provider.get_transaction_count(from, None).await?;
-
-        let tx = provider.send_transaction(tx, None).await?.await?;
-        let nonce2 = provider.get_transaction_count(from, None).await?;
-        return Ok(self);
-    }
-    */
+    
     pub fn set_wallet_name(&mut self, name: String) {
             self.wallet_name = Some(name);
     }
@@ -457,7 +413,7 @@ impl Display for EthereumWallet {
             match &self.mnemonic {
                 Some(mnemonic) => format!("      {}             {}\n", "Mnemonic".cyan().bold(), mnemonic),
                 _ => "".to_owned(),
-            },
+            },/*
             match &self.extended_private_key {
                 Some(extended_private_key) => format!(
                     "      {} {}\n",
@@ -473,7 +429,7 @@ impl Display for EthereumWallet {
                     extended_public_key
                 ),
                 _ => "".to_owned(),
-            },
+            },*/
             match &self.private_key {
                 Some(private_key) => format!("      {}          {}\n", "Private Key".cyan().bold(), private_key),
                 _ => "".to_owned(),

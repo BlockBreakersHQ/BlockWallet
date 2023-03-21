@@ -123,7 +123,6 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
                 let app_settings = currency_boxes.1;
                 let currency_boxes = currency_boxes.0;
                 
-                let asett = app_settings.clone();
                 let mut next_child = match curr_box.first_child() {
                     Some(c) => c,
                     None => return Continue(true)
@@ -178,7 +177,7 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
 
                 if currency_boxes.len() > 0 {
                     curr_box.first_child().unwrap().set_visible(false);
-                    for (key, value) in currency_boxes {
+                    for (_key, value) in currency_boxes {
                         let currency_box = generate_currency_box(value.0, value.1.clone());
                         let currency_detail_clone = currency_detail_view.clone();
                         let gesture = gtk::GestureClick::new();
