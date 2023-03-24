@@ -249,6 +249,7 @@ impl EthereumWallet {
             Some(address) => address,
             None => return
         };
+
         let eth_transaction_url = format!("https://api.etherscan.io/api\
             ?module=account\
             &action=tokentx\

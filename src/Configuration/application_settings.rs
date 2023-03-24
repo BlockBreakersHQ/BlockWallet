@@ -219,6 +219,13 @@ impl ApplicationSettings {
         Ok(ipath)
     }
 
+    pub fn find_wallet_backup_path() -> io::Result<PathBuf> {
+        let mut bpath = env::current_exe()?;
+        bpath.pop();
+        bpath.push("WalletBackups");
+        Ok(bpath)
+    }
+
     pub fn read_config(&mut self) -> Result<String, block_error::Error> {
         if !Path::new(&self.config_path).exists() {
             self.logged_in = true;
@@ -331,7 +338,7 @@ impl ApplicationSettings {
                 };
                 ypath.pop();
                 ypath.push("Config.yml");
-    
+
                 if !ypath.exists() {
                     match File::create(&ypath) {
                         Ok(_) => {
@@ -378,6 +385,32 @@ impl ApplicationSettings {
                         }
                     } else if i.contains("INFURA_KEY=") {
                         self.infura_key = i.split("=").collect::<Vec<&str>>()[1].to_string();
+                    }
+                }
+                if &self.etherscan_key.len() <= &0 || &self.infura_key.len() <= &0 {
+                    let mut ypath = match env::current_exe() {
+                        Ok(path) => path,
+                        Err(why) => panic!("couldn't get executable directory: {}", why)
+                    };
+                    ypath.pop();
+                    ypath.push("Config.yml");
+
+                    if ypath.exists() {
+                        let printable_path = ypath.clone();
+                        let content = match fs::read_to_string(ypath) {
+                            Ok(content) => content,
+                            Err(why) => panic!("couldn't read {}: {}", printable_path.display(), why)
+                        };
+        
+                        let contents: Vec<&str> = content.split("\n").collect();
+            
+                        for i in 0..contents.len() {
+                            if contents[i].contains("INFURA_KEY=") && &self.infura_key.len() <= &0 {
+                                self.infura_key = contents[i].split("=").collect::<Vec<&str>>()[1].to_string();
+                            } else if contents[i].contains("ETHERSCAN_KEY=") && &self.etherscan_key.len() <= &0 {
+                                self.etherscan_key = contents[i].split("=").collect::<Vec<&str>>()[1].to_string();
+                            }
+                        }
                     }
                 }
             }
