@@ -65,7 +65,7 @@ pub fn currency_view(token: Token, app_settings: ApplicationSettings) -> gtk::Bo
     let receive_box = generate_eth_receive_box(&app_settings.eth_wallets);
 
     let send_button = Button::builder()
-        .label(&format!("Send {}", token.symbol))
+        .label(&format!("Send {}", &token.symbol))
         .margin_top(6)
         .margin_bottom(6)
         .margin_start(12)
@@ -74,7 +74,7 @@ pub fn currency_view(token: Token, app_settings: ApplicationSettings) -> gtk::Bo
     send_button.add_css_class("standard_button");
 
     let receive_button = Button::builder()
-        .label(&format!("Receive {}", token.symbol))
+        .label(&format!("Receive {}", &token.symbol))
         .margin_top(6)
         .margin_bottom(6)
         .margin_start(12)
@@ -98,7 +98,7 @@ pub fn currency_view(token: Token, app_settings: ApplicationSettings) -> gtk::Bo
     send_button.connect_clicked(move |_| {
         transaction_detail_box.set_visible(true);
         scrollable_container.set_visible(false);
-        transaction_detail_box.append(&transactions::transaction_view(app_settings.clone()).0);
+        transaction_detail_box.append(&transactions::transaction_view(app_settings.clone(), token.clone()).0);
     });
 
     receive_button.connect_clicked(move |_| {

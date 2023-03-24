@@ -4,7 +4,7 @@ use adw::prelude::*;
 use adw::{ApplicationWindow};
 use std::sync::{Arc, Mutex};
 
-use crate::views::{assets, home, wallets, header_bar, transactions};
+use crate::views::{assets, home, wallets, header_bar, transactions, trade};
 use crate::configuration::application_settings::*;
 use crate::currencies::currency_pairs::CurrencyPairs;
 
@@ -32,7 +32,7 @@ pub fn stack_view(window: &ApplicationWindow, app_settings_orig: ApplicationSett
     let asset_label: Option<&str> = Some("Assets");
     stack.add_titled(&asset_box, asset_label, "Assets");
 
-    let trade_box = transactions::transaction_view(app_settings.lock().unwrap().clone()).0;
+    let trade_box = trade::trade_view(app_settings.lock().unwrap().clone()).0;
     let trade_label: Option<&str> = Some("Coming soon!");
     stack.add_titled(&trade_box, trade_label, "Trade");
 

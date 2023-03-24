@@ -1,4 +1,6 @@
-use ethers::prelude::WalletError;
+use ethers::prelude::*;
+
+use crate::configuration::block_error::signer::SignerMiddlewareError;
 
 #[derive(Debug)]
 pub enum Error {
@@ -65,6 +67,24 @@ impl From<bitcoin::util::key::Error> for Error {
 
 impl From<WalletError> for Error {
     fn from(error: WalletError) -> Self {
+        Error::Crate("ethers", format!("{:?}", error))
+    }
+}
+
+impl From<ethers::providers::ProviderError> for Error {
+    fn from(error: ethers::providers::ProviderError) -> Self {
+        Error::Crate("ethers", format!("{:?}", error))
+    }
+}
+
+impl From<ethers::utils::ConversionError> for Error {
+    fn from(error: ethers::utils::ConversionError) -> Self {
+        Error::Crate("ethers", format!("{:?}", error))
+    }
+}
+
+impl From<SignerMiddlewareError<ethers::providers::Provider<Http>, Wallet<ethers::core::k256::ecdsa::SigningKey>>> for Error {
+    fn from(error: SignerMiddlewareError<ethers::providers::Provider<Http>, Wallet<ethers::core::k256::ecdsa::SigningKey>>) -> Self {
         Error::Crate("ethers", format!("{:?}", error))
     }
 }

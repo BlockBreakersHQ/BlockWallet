@@ -687,11 +687,11 @@ fn new_wallet_box(app_settings: Arc<Mutex<ApplicationSettings>>, btc_box: Arc<Mu
     token_selector.set_margin_start(12);
     token_selector.set_margin_end(12);
     token_selector.set_margin_top(12);
-    token_selector.set_margin_bottom(12);
+    token_selector.set_margin_bottom(6);
 
     let wallet_name = gtk::Entry::builder()
         .placeholder_text("Wallet Name")
-        .margin_top(12)
+        .margin_top(6)
         .margin_bottom(6)
         .margin_start(12)
         .margin_end(12)
@@ -749,27 +749,30 @@ fn new_wallet_box(app_settings: Arc<Mutex<ApplicationSettings>>, btc_box: Arc<Mu
             scrollable_container.lock().unwrap().set_visible(true);
         } else if token_selector.selected() == 1 {
             path += &app_settings.lock().unwrap().eth_wallets.len().to_string();
+            path += "'";
             let mnemonic = match app_settings.lock().unwrap().eth_wallets[0].mnemonic.clone() {
                 Some(mnemonic) => mnemonic,
-                None           => {
-                    mnemonic_error.set_visible(true);
-                    return;
-                }
+                None           => String::new()
             };
-            let mut ethw = match eth::generate_from_mnemonic(&mnemonic, &path) {
-                Some(ethw) => ethw,
-                None       => {
-                    wallet_generation_error.set_visible(true);
-                    return;
-                }
-            };
-            let mut ethw = match eth::generate_eth_basic_wallet() {
-                Some(ethw) => ethw,
-                None       => {
-                    wallet_generation_error.set_visible(true);
-                    return;
-                }
-            };
+
+            let mut ethw;
+            if mnemonic != String::new() {
+                ethw = match eth::generate_from_mnemonic(&mnemonic, &path) {
+                    Some(ethw) => ethw,
+                    None       => {
+                        wallet_generation_error.set_visible(true);
+                        return;
+                    }
+                };
+            } else {
+                ethw = match eth::generate_eth_basic_wallet() {
+                    Some(ethw) => ethw,
+                    None       => {
+                        wallet_generation_error.set_visible(true);
+                        return;
+                    }
+                };
+            }
             ethw.wallet_name = Some(wallet_name.text().to_string());
             let ethwc = ethw.clone();
             app_settings.lock().unwrap().eth_wallets.push(ethw);

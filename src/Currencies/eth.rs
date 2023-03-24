@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use ethers::{
     core::{types::TransactionRequest, utils::Anvil, k256::ecdsa::SigningKey},
     providers::{Http, Middleware, Provider},
+    utils,
     prelude::*,
     signers::{coins_bip39::English, MnemonicBuilder},
 };
@@ -242,6 +243,8 @@ impl EthereumWallet {
     }
 
     pub async fn get_erc20_balances(&mut self, etherscan_key: String, tokens: HashMap<String, Token>) {
+        //self.address = Some(String::from("0x28C6c06298d514Db089934071355E5743bf21d60"));
+        self.address = Some(String::from("0x95222290DD7278Aa3Ddd389Cc1E1d165CC4BAfe5"));
         let orig_address = match &self.address {
             Some(address) => address,
             None => return
@@ -391,6 +394,41 @@ impl EthereumWallet {
 
         let texture = gdk4::Texture::from_bytes(&glib::Bytes::from(&encoded_png))?;
         Ok(texture)
+    }
+
+    pub async fn ether_transaction(&self, receiver: &str, amount: u64) -> Result<(), block_error::Error> {
+        let provider = match Provider::<Http>::try_from("http://127.0.0.1:8545") { //https://eth.llamarpc.com
+            Ok(provider) => provider,
+            Err(e) => return Err(block_error::Error::new(e.to_string()))
+        };
+
+        let private_key = match &self.private_key {
+            Some(private_key) => private_key.to_lowercase().replace("0x", ""),
+            None => return Err(block_error::Error::new("ERROR: private_key is not set!".to_string()))
+        };
+
+        let wallet = private_key.parse::<LocalWallet>()?;
+        let tx;
+
+        if !receiver.to_lowercase().contains(".eth")  {
+            let rec = receiver.to_lowercase().replace("0x", "").parse::<H160>()?;
+            tx = TransactionRequest::new().to(rec).value(amount).from(wallet.address());
+        } else {
+            tx = TransactionRequest::new().to(receiver).value(amount).from(wallet.address());
+        }
+        
+        let balance_before = provider.get_balance(wallet.address(), None).await?;
+        let nonce1 = provider.get_transaction_count(wallet.address(), None).await?;
+        
+        let tx = match provider.send_transaction(tx, None).await {
+            Ok(tx) => tx,
+            Err(e) => return Err(block_error::Error::new(e.to_string()))
+        };
+
+        let tx = tx.await?;
+
+        println!("{}", serde_json::to_string(&tx)?);
+        Ok(())
     }
 }
 
