@@ -565,7 +565,27 @@ impl ApplicationSettings {
         Ok(file_content)
     }
 
-    pub fn write_config(&mut self) -> Result<bool, Error> {
+    pub fn write_config(&mut self) -> Result<bool, block_error::Error> {
+        let mut file = File::options()
+            .read(true)
+            .open(&self.config_path)?;
+
+        let mut contents = vec![];
+        file.read_to_end(&mut contents)?;
+        
+        if contents.len() <= 0 || !Path::new(&self.config_path).exists() {
+            let mut new_path = self.config_path.clone();
+            new_path.pop();
+            new_path.push(format!("Config-Old-{}.dic", chrono::offset::Local::now()));
+            fs::rename(&self.config_path, new_path);
+        }
+        
+        file.seek(SeekFrom::Start(0))?;
+        let hash = &self.user_hash;
+        let cocoon = Cocoon::new(hash.as_bytes());
+        let encrypted_file_content = cocoon.parse(&mut file)?;
+        let file_content = std::str::from_utf8(&encrypted_file_content)?.to_string();
+
         let mut output = String::new();
         if &self.starred.len() > &0 || &self.infura_key.len() > &0 || &self.etherscan_key.len() > &0 {
             output += "<Entry>\n      Sector: Settings\n";
@@ -600,6 +620,12 @@ impl ApplicationSettings {
             output += "<Entry>\n";
         }
 
+        if output.len() != file_content.len() {
+            println!("No changes detected for Config.dic.");
+        } else {
+            return Ok(true);
+        }
+
         let hash = &self.user_hash;
 
         let cocoon = Cocoon::new(hash.as_bytes());
@@ -610,7 +636,7 @@ impl ApplicationSettings {
             Err(e) => {
                 self.write_error(format!("ERROR: error encountered when opening file: {}", e));
                 eprintln!("ERROR: {}",e);
-                return Err(e);
+                return Err(block_error::Error::new(format!("{:?}", e)));
             }
         };
 
@@ -618,7 +644,7 @@ impl ApplicationSettings {
             Ok(_) => return Ok(true),
             Err(e) => {
                 self.write_error(format!("ERROR: error encountered when writing to file: {:?}", e));
-                return Err(std::io::Error::new(ErrorKind::InvalidData, format!("{:?}", e)));
+                return Err(block_error::Error::new(format!("{:?}", e)));
             }
         }
     }
