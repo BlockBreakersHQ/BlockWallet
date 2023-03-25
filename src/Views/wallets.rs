@@ -5,6 +5,7 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::io::ErrorKind;
 use cocoon::Cocoon;
+use chrono;
 
 use crate::configuration::application_settings::*;
 use crate::currencies::eth;
@@ -749,77 +750,52 @@ fn new_wallet_box(app_settings: Arc<Mutex<ApplicationSettings>>, btc_box: Arc<Mu
             btcw.wallet_name = Some(wallet_name.text().to_string());
             let btcwc = btcw.clone();
             app_settings.btc_wallets.push(btcw);
+
             add_btc_wallet(&mut btc_box.lock().unwrap(), &btcwc);
+            new_wallet_box.set_visible(false);
+            scrollable_container.lock().unwrap().set_visible(true);
+            
             let backup_path = match ApplicationSettings::find_wallet_backup_path() {
                 Ok(mut p) => {
-                    p.push(format!("/{}", btcwc.clone().wallet_name.unwrap()));
+                    p.push(format!("/{}-{}", btcwc.clone().wallet_name.unwrap(), chrono::offset::Local::now()));
                     p
                 },
                 Err(e) => {
                     app_settings.write_error(format!("ERROR: error encountered when finding wallet backup path: {}", e));
-                    Path::new(&format!("/tmp/{}", btcwc.clone().wallet_name.unwrap())).to_path_buf()
+                    Path::new(&format!("/tmp/{}-{}", btcwc.clone().wallet_name.unwrap(), chrono::offset::Local::now())).to_path_buf()
                 }
             };
-            if backup_path.exists() {
-                let mut output = "<Entry>\n      Sector: Bitcoin\n".to_string();
-                output += &format!("      Wallet______ 1");
-                output += &format!("{}\n", btcwc);
-                output += "<Entry>\n";
-                
-                let hash = &app_settings.user_hash;
-
-                let cocoon = Cocoon::new(hash.as_bytes());
-                let out_vec: Vec<u8> = output.as_bytes().to_vec();
-
-                let mut file = match File::options().create(true).write(true).open(backup_path.clone()) {
-                    Ok(f) => f,
-                    Err(e) => {
-                        app_settings.write_error(format!("ERROR: error encountered when opening file: {}", e));
-                        eprintln!("ERROR: {}",e);
-                        return;
-                    }
-                };
-
-                match cocoon.dump(out_vec, &mut file) {
-                    Ok(_) => (),
-                    Err(e) => {
-                        app_settings.write_error(format!("ERROR: error encountered when writing to file: {:?}", e));
-                        eprintln!("ERROR: {:?}",e);
-                        return;
-                    }
-                }
-            } else {
+            if !backup_path.exists() {
                 let mut file = File::create(backup_path.clone()).unwrap();
-                let mut output = "<Entry>\n      Sector: Bitcoin\n".to_string();
-                output += &format!("      Wallet______ 1");
-                output += &format!("{}\n", btcwc);
-                output += "<Entry>\n";
-                
-                let hash = &app_settings.user_hash;
+            } 
 
-                let cocoon = Cocoon::new(hash.as_bytes());
-                let out_vec: Vec<u8> = output.as_bytes().to_vec();
+            let mut output = "<Entry>\n      Sector: Bitcoin\n".to_string();
+            output += &format!("      Wallet______ 1");
+            output += &format!("{}\n", btcwc);
+            output += "<Entry>\n";
+            
+            let hash = &app_settings.user_hash;
 
-                let mut file = match File::options().create(true).write(true).open(backup_path.clone()) {
-                    Ok(f) => f,
-                    Err(e) => {
-                        app_settings.write_error(format!("ERROR: error encountered when opening file: {}", e));
-                        eprintln!("ERROR: {}",e);
-                        return;
-                    }
-                };
+            let cocoon = Cocoon::new(hash.as_bytes());
+            let out_vec: Vec<u8> = output.as_bytes().to_vec();
 
-                match cocoon.dump(out_vec, &mut file) {
-                    Ok(_) => (),
-                    Err(e) => {
-                        app_settings.write_error(format!("ERROR: error encountered when writing to file: {:?}", e));
-                        eprintln!("ERROR: {:?}",e);
-                        return;
-                    }
+            let mut file = match File::options().create(true).write(true).open(backup_path.clone()) {
+                Ok(f) => f,
+                Err(e) => {
+                    app_settings.write_error(format!("ERROR: error encountered when opening file: {}", e));
+                    eprintln!("ERROR: {}",e);
+                    return;
+                }
+            };
+
+            match cocoon.dump(out_vec, &mut file) {
+                Ok(_) => (),
+                Err(e) => {
+                    app_settings.write_error(format!("ERROR: error encountered when writing to file: {:?}", e));
+                    eprintln!("ERROR: {:?}",e);
+                    return;
                 }
             }
-            new_wallet_box.set_visible(false);
-            scrollable_container.lock().unwrap().set_visible(true);
         } else if token_selector.selected() == 1 {
             path += &app_settings.eth_wallets.len().to_string();
             path += "'";
@@ -849,77 +825,53 @@ fn new_wallet_box(app_settings: Arc<Mutex<ApplicationSettings>>, btc_box: Arc<Mu
             ethw.wallet_name = Some(wallet_name.text().to_string());
             let ethwc = ethw.clone();
             app_settings.eth_wallets.push(ethw.clone());
+
+            add_eth_wallet(&mut eth_box.lock().unwrap(), &ethwc);
+            new_wallet_box.set_visible(false);
+            scrollable_container.lock().unwrap().set_visible(true);
+
             let backup_path = match ApplicationSettings::find_wallet_backup_path() {
                 Ok(mut p) => {
-                    p.push(format!("/{}", ethw.clone().wallet_name.unwrap()));
+                    p.push(format!("/{}-{}", ethw.clone().wallet_name.unwrap(), chrono::offset::Local::now()));
                     p
                 },
                 Err(e) => {
                     app_settings.write_error(format!("ERROR: error encountered when finding wallet backup path: {}", e));
-                    Path::new(&format!("/tmp/{}", ethw.clone().wallet_name.unwrap())).to_path_buf()
+                    Path::new(&format!("/tmp/{}-{}", ethw.clone().wallet_name.unwrap(), chrono::offset::Local::now())).to_path_buf()
                 }
             };
-            if backup_path.exists() {
-                let mut output = "<Entry>\n      Sector: Ethereum\n".to_string();
-                output += &format!("      Wallet______ 1");
-                output += &format!("{}\n", ethw.clone());
-                output += "<Entry>\n";
-                
-                let hash = &app_settings.user_hash;
-
-                let cocoon = Cocoon::new(hash.as_bytes());
-                let out_vec: Vec<u8> = output.as_bytes().to_vec();
-
-                let mut file = match File::options().create(true).write(true).open(backup_path.clone()) {
-                    Ok(f) => f,
-                    Err(e) => {
-                        app_settings.write_error(format!("ERROR: error encountered when opening file: {}", e));
-                        eprintln!("ERROR: {}",e);
-                        return;
-                    }
-                };
-
-                match cocoon.dump(out_vec, &mut file) {
-                    Ok(_) => (),
-                    Err(e) => {
-                        app_settings.write_error(format!("ERROR: error encountered when writing to file: {:?}", e));
-                        eprintln!("ERROR: {:?}",e);
-                        return;
-                    }
-                }
-            } else {
+            
+            if !backup_path.exists() {
                 let mut file = File::create(backup_path.clone()).unwrap();
-                let mut output = "<Entry>\n      Sector: Ethereum\n".to_string();
-                output += &format!("      Wallet______ 1");
-                output += &format!("{}\n", ethw.clone());
-                output += "<Entry>\n";
-                
-                let hash = &app_settings.user_hash;
+            } 
 
-                let cocoon = Cocoon::new(hash.as_bytes());
-                let out_vec: Vec<u8> = output.as_bytes().to_vec();
+            let mut output = "<Entry>\n      Sector: Ethereum\n".to_string();
+            output += &format!("      Wallet______ 1");
+            output += &format!("{}\n", ethw.clone());
+            output += "<Entry>\n";
+            
+            let hash = &app_settings.user_hash;
 
-                let mut file = match File::options().create(true).write(true).open(backup_path.clone()) {
-                    Ok(f) => f,
-                    Err(e) => {
-                        app_settings.write_error(format!("ERROR: error encountered when opening file: {}", e));
-                        eprintln!("ERROR: {}",e);
-                        return;
-                    }
-                };
+            let cocoon = Cocoon::new(hash.as_bytes());
+            let out_vec: Vec<u8> = output.as_bytes().to_vec();
 
-                match cocoon.dump(out_vec, &mut file) {
-                    Ok(_) => (),
-                    Err(e) => {
-                        app_settings.write_error(format!("ERROR: error encountered when writing to file: {:?}", e));
-                        eprintln!("ERROR: {:?}",e);
-                        return;
-                    }
+            let mut file = match File::options().create(true).write(true).open(backup_path.clone()) {
+                Ok(f) => f,
+                Err(e) => {
+                    app_settings.write_error(format!("ERROR: error encountered when opening file: {}", e));
+                    eprintln!("ERROR: {}",e);
+                    return;
+                }
+            };
+
+            match cocoon.dump(out_vec, &mut file) {
+                Ok(_) => (),
+                Err(e) => {
+                    app_settings.write_error(format!("ERROR: error encountered when writing to file: {:?}", e));
+                    eprintln!("ERROR: {:?}",e);
+                    return;
                 }
             }
-            add_eth_wallet(&mut eth_box.lock().unwrap(), &ethwc);
-            new_wallet_box.set_visible(false);
-            scrollable_container.lock().unwrap().set_visible(true);
         }
     });
 
