@@ -8,9 +8,8 @@ use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 
 use ethers::{
-    core::{types::TransactionRequest, utils::Anvil, k256::ecdsa::SigningKey},
+    core::{types::TransactionRequest},
     providers::{Http, Middleware, Provider},
-    utils,
     prelude::*,
     signers::{coins_bip39::English, MnemonicBuilder},
 };
@@ -74,7 +73,7 @@ pub fn generate_from_private_key(private_key: &str) -> Option<EthereumWallet> {
     }
 }
 
-pub fn generate_from_extended_private_key(extended_private_key: &str, path: &str) -> Option<EthereumWallet> {
+/*pub fn generate_from_extended_private_key(extended_private_key: &str, path: &str) -> Option<EthereumWallet> {
     let path_option;
     if path.is_empty() {
         path_option = Some(String::from("m/44'/60'/0'/0'/0"));
@@ -91,7 +90,7 @@ pub fn generate_from_extended_private_key(extended_private_key: &str, path: &str
             return None
         }
     }
-}
+}*/
 
 #[derive(Serialize, Debug, Default, Clone)]
 pub struct EthereumWallet {
@@ -183,12 +182,12 @@ impl EthereumWallet {
         })
     }
 
-    pub fn from_extended_private_key(extended_private_key: &str, path: &Option<String>) -> Result<Self, block_error::Error> {
+    /*pub fn from_extended_private_key(extended_private_key: &str, path: &Option<String>) -> Result<Self, block_error::Error> {
         Ok(Self {
             address: Some(String::from("0x95222290DD7278Aa3Ddd389Cc1E1d165CC4BAfe5")),
             ..Default::default()
         })
-    }
+    }*/
 
     pub fn from_private_key(private_key: &str) -> Result<Self, block_error::Error> {
         let mut private_key = private_key.to_string();
@@ -417,9 +416,6 @@ impl EthereumWallet {
         } else {
             tx = TransactionRequest::new().to(receiver).value(amount).from(wallet.address());
         }
-        
-        let balance_before = provider.get_balance(wallet.address(), None).await?;
-        let nonce1 = provider.get_transaction_count(wallet.address(), None).await?;
         
         let tx = match provider.send_transaction(tx, None).await {
             Ok(tx) => tx,

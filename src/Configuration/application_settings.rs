@@ -1,5 +1,5 @@
 use std::{env, io, thread, fs};
-use std::io::{Error, ErrorKind, Write, Read, Seek, SeekFrom};
+use std::io::{Write, Read, Seek, SeekFrom};
 use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -50,9 +50,9 @@ impl ApplicationSettings {
             };
         }
 
-        let mut starred = HashMap::new();
-        let mut i_key = String::new();
-        let mut e_key = String::new();
+        let mut starred  = HashMap::new();
+        let mut i_key    = String::new();
+        let mut e_key    = String::new();
 
         if !std::path::Path::new(&cpath).exists() {
             let b_wallet = ApplicationSettings::generate_btc_wallet(String::new());
@@ -618,7 +618,9 @@ impl ApplicationSettings {
                 btc_wallet += &format!("{}\n", i);
             }
             btc_wallet += "<Entry>\n";
-            let _ = &self.backup_keys(btc_wallet.clone());
+            if backup_keys {
+                let _ = &self.backup_keys(btc_wallet.clone());
+            }
             output += &btc_wallet;
         }
         if &self.eth_wallets.len() > &0 {
@@ -628,7 +630,9 @@ impl ApplicationSettings {
                 eth_wallet += &format!("{}\n", i);
             }
             eth_wallet += "<Entry>\n";
-            let _ = &self.backup_keys(eth_wallet.clone());
+            if backup_keys {
+                let _ = &self.backup_keys(eth_wallet.clone());
+            }
             output += &eth_wallet;
         }
 

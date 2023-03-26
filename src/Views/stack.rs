@@ -4,7 +4,7 @@ use adw::prelude::*;
 use adw::{ApplicationWindow};
 use std::sync::{Arc, Mutex};
 
-use crate::views::{assets, home, wallets, header_bar, transactions, trade};
+use crate::views::{assets, home, wallets, header_bar, trade};
 use crate::configuration::application_settings::*;
 use crate::currencies::currency_pairs::CurrencyPairs;
 

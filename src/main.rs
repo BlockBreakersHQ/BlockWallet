@@ -16,8 +16,6 @@ use crate::views::{login};
 use crate::configuration::initialization;
 use crate::configuration::application_settings::*;
 
-use crate::currencies::eth::EthereumWallet;
-
 const APP_ID: &str = "org.BlockBreakers.Wallet";
 
 fn main() {

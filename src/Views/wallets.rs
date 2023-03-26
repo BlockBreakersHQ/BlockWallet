@@ -1,12 +1,6 @@
 use adw::prelude::*;
 use gtk::{Button, Orientation, Image};
 use std::sync::{Arc, Mutex};
-use std::fs::File;
-use std::path::{Path, PathBuf};
-use std::io::ErrorKind;
-use std::thread;
-use cocoon::Cocoon;
-use chrono;
 
 use crate::configuration::application_settings::*;
 use crate::currencies::eth;

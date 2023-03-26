@@ -87,7 +87,7 @@ pub fn settings_view(window: ApplicationWindow, app_settings: Arc<Mutex<Applicat
     });
 }
 
-pub fn network_settings_box(app_settings: Arc<Mutex<ApplicationSettings>>) -> gtk::Box {
+/*pub fn network_settings_box(app_settings: Arc<Mutex<ApplicationSettings>>) -> gtk::Box {
     let network_settings_box = gtk::Box::new(Orientation::Vertical, 0);
     let etherscan_api_key = gtk::Entry::builder()
         .placeholder_text("Etherscan Api Key")
@@ -135,4 +135,4 @@ pub fn network_settings_box(app_settings: Arc<Mutex<ApplicationSettings>>) -> gt
     });
     
     return network_settings_box;
-}
+}*/

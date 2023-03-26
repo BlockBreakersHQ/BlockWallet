@@ -137,11 +137,11 @@ pub fn get_transactions(token: Token, app_settings: ApplicationSettings) -> gtk:
     for ethw in app_settings.eth_wallets {
         let transactions = &*ethw.transactions.lock().unwrap();
         for transaction in transactions {
-            let tokenSymbol = match &transaction.tokenSymbol {
+            let token_symbol = match &transaction.tokenSymbol {
                 Some(symbol) => symbol,
                 None => ""
             };
-            if tokenSymbol == token.symbol {
+            if token_symbol == token.symbol {
                 transaction_counter += 1;
                 let transaction_box = gtk::Box::new(Orientation::Horizontal, 0);
                 transaction_box.set_margin_bottom(5);

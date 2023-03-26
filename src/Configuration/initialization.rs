@@ -9,6 +9,7 @@ use serde::Deserialize;
 use crate::ApplicationSettings;
 use crate::currencies::tokens::*;
 
+#[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 struct L1 {
     #[serde(flatten)]
@@ -93,11 +94,11 @@ pub async fn download_icons() -> Result<String, Box<dyn Error>> {
     for (key, _value) in &currencies.address {
         let currency: &L3 = &currencies.address.get(key).unwrap();
         if !currency.symbol.contains("REALTOKEN") && !currency.symbol.contains("/") {
-            let logoURI = match currency.logoURI.clone() {
+            let logo_uri = match currency.logoURI.clone() {
                 Some(l) => l,
                 None => continue
             };
-            let icon = reqwest::get(logoURI.clone()).await?;
+            let icon = reqwest::get(logo_uri.clone()).await?;
             let icon_path = format!("{}/{}.png", icons_path, currency.symbol);
             let mut out = File::create(icon_path.clone()).expect("failed to create file");
 

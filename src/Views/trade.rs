@@ -1,10 +1,9 @@
 use crate::ApplicationSettings;
 use gtk::prelude::*;
-use gtk::{Orientation, Label};
 
 pub fn trade_view(app_settings: ApplicationSettings) -> (gtk::Box, ApplicationSettings) {
     let transaction_box = gtk::Box::builder()
-        .orientation(Orientation::Vertical)
+        .orientation(gtk::Orientation::Vertical)
         .build();
 
     let trade_label  = gtk::Label::builder()
