@@ -20,6 +20,7 @@ use crate::configuration::block_error;
 pub struct ApplicationSettings {
     pub config_path         : PathBuf,
     pub error_path          : PathBuf,
+    pub backup_path         : PathBuf,
     pub user_hash           : String,
     pub btc_wallets         : Vec<BitcoinWallet>,
     pub eth_wallets         : Vec<EthereumWallet>,
@@ -35,6 +36,7 @@ impl ApplicationSettings {
     pub fn new(tokens: Tokens) -> Self {
         let cpath = ApplicationSettings::find_config_path().unwrap();
         let epath = ApplicationSettings::find_error_path().unwrap();
+        let bpath = ApplicationSettings::find_wallet_backup_path().unwrap();
 
         let hash = String::new();
 
@@ -144,6 +146,7 @@ impl ApplicationSettings {
         ApplicationSettings {
             config_path         : cpath,
             error_path          : epath,
+            backup_path         : bpath,
             user_hash           : hash,
             btc_wallets         : bitcoin_wallets,
             eth_wallets         : ethereum_wallets,
@@ -577,7 +580,7 @@ impl ApplicationSettings {
             let mut new_path = self.config_path.clone();
             new_path.pop();
             new_path.push(format!("Config-Old-{}.dic", chrono::offset::Local::now()));
-            fs::rename(&self.config_path, new_path);
+            let _ = fs::rename(&self.config_path, new_path);
         }
         
         file.seek(SeekFrom::Start(0))?;
@@ -585,6 +588,11 @@ impl ApplicationSettings {
         let cocoon = Cocoon::new(hash.as_bytes());
         let encrypted_file_content = cocoon.parse(&mut file)?;
         let file_content = std::str::from_utf8(&encrypted_file_content)?.to_string();
+
+        let mut backup_keys = false;
+        if !&self.backup_path.exists() {
+            backup_keys = true;
+        }
 
         let mut output = String::new();
         if &self.starred.len() > &0 || &self.infura_key.len() > &0 || &self.etherscan_key.len() > &0 {
@@ -604,24 +612,31 @@ impl ApplicationSettings {
             output += "<Entry>\n";
         }
         if &self.btc_wallets.len() > &0 {
-            output += "<Entry>\n      Sector: Bitcoin\n";
+            let mut btc_wallet = String::from("<Entry>\n      Sector: Bitcoin\n");
             for (item, i) in (&self.btc_wallets).iter().enumerate() {
-                output += &format!("      Wallet______ {}", item);
-                output += &format!("{}\n", i);
+                btc_wallet += &format!("      Wallet______ {}", item);
+                btc_wallet += &format!("{}\n", i);
             }
-            output += "<Entry>\n";
+            btc_wallet += "<Entry>\n";
+            let _ = &self.backup_keys(btc_wallet.clone());
+            output += &btc_wallet;
         }
         if &self.eth_wallets.len() > &0 {
-            output += "<Entry>\n      Sector: Ethereum\n";
+            let mut eth_wallet = String::from("<Entry>\n      Sector: Ethereum\n");
             for (item, i) in (&self.eth_wallets).iter().enumerate() {
-                output += &format!("      Wallet______ {}", item);
-                output += &format!("{}\n", i);
+                eth_wallet += &format!("      Wallet______ {}", item);
+                eth_wallet += &format!("{}\n", i);
             }
-            output += "<Entry>\n";
+            eth_wallet += "<Entry>\n";
+            let _ = &self.backup_keys(eth_wallet.clone());
+            output += &eth_wallet;
         }
 
         if output.len() != file_content.len() {
-            println!("No changes detected for Config.dic.");
+            let mut new_path = self.config_path.clone();
+            new_path.pop();
+            new_path.push(format!("Config-Old-{}.dic", chrono::offset::Local::now()));
+            let _ = fs::rename(&self.config_path, new_path);
         } else {
             return Ok(true);
         }
@@ -634,7 +649,7 @@ impl ApplicationSettings {
         let mut file = match File::options().create(true).write(true).open(&self.config_path) {
             Ok(f) => f,
             Err(e) => {
-                self.write_error(format!("ERROR: error encountered when opening file: {}", e));
+                let _ = self.write_error(format!("ERROR: error encountered when opening file: {}", e));
                 eprintln!("ERROR: {}",e);
                 return Err(block_error::Error::new(format!("{:?}", e)));
             }
@@ -647,6 +662,59 @@ impl ApplicationSettings {
                 return Err(block_error::Error::new(format!("{:?}", e)));
             }
         }
+    }
+
+    pub fn backup_keys(&self, output: String) -> Result<bool, block_error::Error> {
+        let app_settings = self.clone();
+        thread::spawn(move || {
+            let mut wallet_type = String::new();
+            if output.contains("Bitcoin") {
+                wallet_type = String::from("Bitcoin");
+            } else if output.contains("Ethereum") {
+                wallet_type = String::from("Ethereum");
+            } else {
+                wallet_type = String::from("Unknown");
+            }
+
+            let backup_path = match ApplicationSettings::find_wallet_backup_path() {
+                Ok(mut p) => {
+                    p.push(format!("/{}-{}", wallet_type, chrono::offset::Local::now()));
+                    p
+                },
+                Err(e) => {
+                    let _ = &app_settings.write_error(format!("ERROR: error encountered when finding wallet backup path: {}", e));
+                    Path::new(&format!("/tmp/{}-{}", wallet_type, chrono::offset::Local::now())).to_path_buf()
+                }
+            };
+
+            if !backup_path.exists() {
+                let _ = File::create(backup_path.clone()).unwrap();
+            }
+            
+            let hash = &app_settings.user_hash;
+
+            let cocoon = Cocoon::new(hash.as_bytes());
+            let out_vec: Vec<u8> = output.as_bytes().to_vec();
+
+            let mut file = match File::options().create(true).write(true).open(backup_path.clone()) {
+                Ok(f) => f,
+                Err(e) => {
+                    let _ = &app_settings.write_error(format!("ERROR: error encountered when opening file: {}", e));
+                    eprintln!("ERROR: {}",e);
+                    return Err(block_error::Error::new(format!("{:?}", e)));
+                }
+            };
+
+            match cocoon.dump(out_vec, &mut file) {
+                Ok(_) => Ok(true),
+                Err(e) => {
+                    let _ = &app_settings.write_error(format!("ERROR: error encountered when writing to file: {:?}", e));
+                    eprintln!("ERROR: {:?}",e);
+                    return Err(block_error::Error::new(format!("{:?}", e)));
+                }
+            }
+        });
+        Ok(true)
     }
 
     pub fn write_error(&self, err: String) {

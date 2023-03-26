@@ -86,3 +86,53 @@ pub fn settings_view(window: ApplicationWindow, app_settings: Arc<Mutex<Applicat
         }
     });
 }
+
+pub fn network_settings_box(app_settings: Arc<Mutex<ApplicationSettings>>) -> gtk::Box {
+    let network_settings_box = gtk::Box::new(Orientation::Vertical, 0);
+    let etherscan_api_key = gtk::Entry::builder()
+        .placeholder_text("Etherscan Api Key")
+        .margin_top(12)
+        .margin_bottom(6)
+        .margin_start(12)
+        .margin_end(12)
+        .build();
+    
+    let network = gtk::Entry::builder()
+        .placeholder_text("Network")
+        .margin_top(6)
+        .margin_bottom(6)
+        .margin_start(12)
+        .margin_end(12)
+        .build();
+    
+    let ethereum_node = gtk::Entry::builder()
+        .placeholder_text("Ethereum Node")
+        .margin_top(6)
+        .margin_bottom(6)
+        .margin_start(12)
+        .margin_end(12)
+        .build();
+
+    let btc_node = gtk::Entry::builder()
+        .placeholder_text("Bitcoin Node")
+        .margin_top(6)
+        .margin_bottom(6)
+        .margin_start(12)
+        .margin_end(12)
+        .build();
+
+    let save_button = Button::builder()
+        .label("Save Settings")
+        .margin_bottom(6)
+        .margin_start(12)
+        .margin_end(12)
+        .build();
+
+    save_button.connect_clicked(move |_| {
+        if app_settings.lock().unwrap().logged_in == true {
+            println!("Save button clicked!");
+        }
+    });
+    
+    return network_settings_box;
+}
