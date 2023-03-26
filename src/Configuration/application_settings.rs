@@ -4,10 +4,11 @@ use std::fs::{File, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use std::collections::HashMap;
+use std::sync::Arc;
 use chrono;
 use cocoon::{Cocoon};
 use glib::{clone, Continue, MainContext, PRIORITY_DEFAULT};
-use std::sync::Arc;
+use rand::Rng;
 
 use crate::currencies::eth;
 use crate::currencies::eth::EthereumWallet;
@@ -29,7 +30,9 @@ pub struct ApplicationSettings {
     pub starred             : HashMap<String, Token>,
     pub logged_in           : bool,
     pub infura_key          : String,
-    pub etherscan_key       : String
+    pub etherscan_key       : String,
+    pub eth_node            : String,
+    pub btc_node            : String,
 }
 
 impl ApplicationSettings {
@@ -155,7 +158,9 @@ impl ApplicationSettings {
             starred             : starred,
             logged_in           : false,
             infura_key          : i_key,
-            etherscan_key       : e_key
+            etherscan_key       : e_key,
+            eth_node            : String::from("https://eth.llamarpc.com"),
+            btc_node            : String::new()
         }
     }
 
@@ -332,8 +337,10 @@ impl ApplicationSettings {
                     self.starred.insert(key.clone(), value.clone());
                 }
 
-                let mut i_key = String::new();
-                let mut e_key = String::new();
+                let mut i_key  = String::new();
+                let mut e_key  = String::new();
+                let mut b_node = String::new();
+                let mut e_node = String::new();
 
                 let mut ypath = match env::current_exe() {
                     Ok(path) => path,
@@ -345,7 +352,7 @@ impl ApplicationSettings {
                 if !ypath.exists() {
                     match File::create(&ypath) {
                         Ok(_) => {
-                            let data = "INFURA_KEY=\nETHERSCAN_KEY=\n";
+                            let data = "INFURA_KEY=\nETHERSCAN_KEY=\nBITCOIN_NODE=\nETHEREUM_NODE=";
                             fs::write(ypath, data).expect("Unable to write file");
                         },
                         Err(why) => panic!("couldn't create {}: {}", &ypath.clone().display(), why)
@@ -364,6 +371,12 @@ impl ApplicationSettings {
                             i_key = contents[i].split("=").collect::<Vec<&str>>()[1].to_string();
                         } else if contents[i].contains("ETHERSCAN_KEY=") {
                             e_key = contents[i].split("=").collect::<Vec<&str>>()[1].to_string();
+                        }
+                        else if contents[i].contains("BITCOIN_NODE=") {
+                            b_node = contents[i].split("=").collect::<Vec<&str>>()[1].to_string();
+                        }
+                        else if contents[i].contains("ETHERSCAN_NODE=") {
+                            e_node = contents[i].split("=").collect::<Vec<&str>>()[1].to_string();
                         }
                     }
                 }
@@ -388,6 +401,10 @@ impl ApplicationSettings {
                         }
                     } else if i.contains("INFURA_KEY=") {
                         self.infura_key = i.split("=").collect::<Vec<&str>>()[1].to_string();
+                    } else if i.contains("BITCOIN_NODE=") {
+                        self.btc_node = i.split("=").collect::<Vec<&str>>()[1].to_string();
+                    } else if i.contains("ETHERSCAN_NODE=") {
+                        self.eth_node = i.split("=").collect::<Vec<&str>>()[1].to_string();
                     }
                 }
                 if &self.etherscan_key.len() <= &0 || &self.infura_key.len() <= &0 {
@@ -412,6 +429,12 @@ impl ApplicationSettings {
                                 self.infura_key = contents[i].split("=").collect::<Vec<&str>>()[1].to_string();
                             } else if contents[i].contains("ETHERSCAN_KEY=") && &self.etherscan_key.len() <= &0 {
                                 self.etherscan_key = contents[i].split("=").collect::<Vec<&str>>()[1].to_string();
+                            }
+                            else if contents[i].contains("BITCOIN_NODE=") {
+                                self.btc_node = contents[i].split("=").collect::<Vec<&str>>()[1].to_string();
+                            }
+                            else if contents[i].contains("ETHERSCAN_NODE=") {
+                                self.eth_node = contents[i].split("=").collect::<Vec<&str>>()[1].to_string();
                             }
                         }
                     }
@@ -609,6 +632,12 @@ impl ApplicationSettings {
             if &self.etherscan_key.len() > &0 {
                 output += &format!("      ETHERSCAN_KEY={}\n", self.etherscan_key);
             }
+            if &self.btc_node.len() > &0 {
+                output += &format!("      BITCOIN_NODE={}\n", self.btc_node);
+            }
+            if &self.eth_node.len() > &0 {
+                output += &format!("      ETHEREUM_NODE={}\n", self.eth_node);
+            }
             output += "<Entry>\n";
         }
         if &self.btc_wallets.len() > &0 {
@@ -682,17 +711,19 @@ impl ApplicationSettings {
 
             let backup_path = match ApplicationSettings::find_wallet_backup_path() {
                 Ok(mut p) => {
-                    p.push(format!("/{}-{}", wallet_type, chrono::offset::Local::now()));
+                    let file_name = format!("/{}-{}", wallet_type, rand::thread_rng().gen_range(0..u32::MAX).to_string());
+                    p.push(format!("{}{}", p.display(), file_name));
                     p
                 },
                 Err(e) => {
                     let _ = &app_settings.write_error(format!("ERROR: error encountered when finding wallet backup path: {}", e));
-                    Path::new(&format!("/tmp/{}-{}", wallet_type, chrono::offset::Local::now())).to_path_buf()
+                    Path::new(&format!("/tmp/{}-{}", wallet_type, rand::thread_rng().gen_range(0..u32::MAX).to_string())).to_path_buf()
                 }
             };
 
-            if !backup_path.exists() {
-                let _ = File::create(backup_path.clone()).unwrap();
+            let directory = backup_path.parent().unwrap();
+            if !directory.exists() {
+                let _ = fs::create_dir(directory.clone()).unwrap();
             }
             
             let hash = &app_settings.user_hash;
