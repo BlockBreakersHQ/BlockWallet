@@ -22,13 +22,14 @@ pub fn header_bar_view(window: ApplicationWindow, app_settings: Arc<Mutex<Applic
     };
     
     let header_bar = HeaderBar::new();
+    header_bar.set_show_end_title_buttons(false);
     let settings_button = Button::new();
     
     let settings_icon = Image::from_file(settings_icon_path);
     settings_icon.set_pixel_size(25);
     settings_button.set_child(Some(&settings_icon));
 
-    header_bar.pack_start(&settings_button);
+    header_bar.pack_end(&settings_button);
 
     settings_button.connect_clicked(move |_| {
         settings::settings_view(window.clone(), app_settings.clone());
