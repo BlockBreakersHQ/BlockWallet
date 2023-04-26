@@ -219,6 +219,16 @@ impl Token {
             decimals: digits
         }
     }
+
+    pub fn empty() -> Self {
+        Token {
+            name    : String::new(),
+            symbol  : String::new(),
+            address : String::new(),
+            logo    : PathBuf::new(),
+            decimals: 0
+        }
+    }
 }
 
 impl Display for Token {

@@ -839,7 +839,7 @@ impl ApplicationSettings {
                 ),
             );
         }
-
+        let apps = self.clone();
         for i in 0..self.eth_wallets.len() {
             let etherscan_key = String::from(&self.etherscan_key.clone());
             let tokens = self.tokens.eth_tokens.clone();
@@ -852,7 +852,7 @@ impl ApplicationSettings {
             let ethw = self.eth_wallets[i].clone();
     
             let (sender, receiver) = MainContext::channel(PRIORITY_DEFAULT);
-    
+            let apps = self.clone();
             thread::spawn(move || {
                 loop {
                     let runtime = tokio::runtime::Runtime::new().unwrap();
@@ -861,6 +861,8 @@ impl ApplicationSettings {
                     let etherscan_key = etherscan_key.clone();
                     let mut ethw = ethw.clone();
                     let tokens = tokens.clone();
+
+                    let apps = apps.clone();
     
                     if run_before == false {
                         thread::sleep(Duration::from_secs(1));

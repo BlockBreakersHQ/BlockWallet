@@ -5,6 +5,7 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use serde::Deserialize;
+use glib::{StaticType, Cast};
 
 use crate::ApplicationSettings;
 use crate::currencies::tokens::*;
@@ -158,7 +159,17 @@ pub fn parse_token_details(currency_json: &str, mut tokens: Tokens) -> Result<To
         }
     }
 
+    let token_list = gio::ListStore::new(glib::BoxedAnyObject::static_type());
+
     for (key, _value) in &usable_keys {
+        token_list.append(&glib::BoxedAnyObject::new(Token {
+            symbol:     usable_keys.get(key).unwrap().symbol.clone(),
+            name:       usable_keys.get(key).unwrap().name.clone(),
+            decimals:   usable_keys.get(key).unwrap().decimals,
+            address:    usable_keys.get(key).unwrap().address.clone(),
+            logo:       icon_path.clone()
+        }));
+
         icon_path.push(format!("{}.png", usable_keys.get(key).unwrap().symbol));
         tokens.eth_tokens.insert(usable_keys.get(key).unwrap().symbol.clone(),
             Token {
@@ -171,6 +182,6 @@ pub fn parse_token_details(currency_json: &str, mut tokens: Tokens) -> Result<To
         );
         icon_path.pop();
     }
-
+    
     Ok(tokens)
 }

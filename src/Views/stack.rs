@@ -32,7 +32,7 @@ pub fn stack_view(window: &ApplicationWindow, app_settings_orig: ApplicationSett
     let asset_label: Option<&str> = Some("Assets");
     stack.add_titled(&asset_box, asset_label, "Assets");
 
-    let trade_box = trade::trade_view(app_settings.lock().unwrap().clone()).0;
+    let (trade_box, app_settings) = trade::trade_view(app_settings.clone());
     let trade_label: Option<&str> = Some("Coming soon!");
     stack.add_titled(&trade_box, trade_label, "Trade");
 
@@ -84,10 +84,15 @@ pub fn stack_view(window: &ApplicationWindow, app_settings_orig: ApplicationSett
             };
             currency_detail.set_visible(false);
 
-            if currency_detail.next_sibling().unwrap().widget_name().contains("currency_detail") {
+            let next = match currency_detail.next_sibling() {
+                Some(child) => child,
+                None => currencies_box.last_child().unwrap()
+            };
 
-                currency_detail.next_sibling().unwrap().set_visible(false);
+            if next.widget_name().contains("currency_detail") {
+                next.set_visible(false);
             }
+
             currencies_box.last_child().unwrap().set_visible(true);
         }
     });

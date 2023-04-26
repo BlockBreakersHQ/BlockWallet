@@ -14,6 +14,7 @@ colored = "2.0.0"
 ethers = "1.0.2"
 fast_qr = { version = "0.7.0", features = ["image"] }
 gdk4 = { version = "0.5.5", features = ["v4_6"] }
+gio = "0.16.7"
 glib = "0.16.7"
 gtk = { version = "0.5.4", package = "gtk4" }
 hex = "0.4.3"

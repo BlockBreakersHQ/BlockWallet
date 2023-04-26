@@ -16,6 +16,8 @@ use crate::views::{login};
 use crate::configuration::initialization;
 use crate::configuration::application_settings::*;
 
+use crate::currencies::tokens::Token;
+
 const APP_ID: &str = "org.BlockBreakers.Wallet";
 
 fn main() {
@@ -50,7 +52,7 @@ fn load_css() {
     );
 }
 
-pub fn build_ui(app: &Application) {    
+pub fn build_ui(app: &Application) {
     let icon_path = match ApplicationSettings::find_images_path(){
         Ok(mut lp) => {
             lp.push("Icons");
