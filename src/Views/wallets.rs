@@ -17,8 +17,8 @@ pub fn wallet_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, 
 
     let scrollable_box = gtk::Box::builder()
         .orientation(Orientation::Vertical)
-        .margin_top(12)
-        .margin_bottom(12)
+        .margin_top(6)
+        .margin_bottom(6)
         .vexpand(true)
         .build();
     scrollable_box.set_widget_name("wallet_scrollable_box");
@@ -31,7 +31,7 @@ pub fn wallet_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, 
     let btc_button = Button::builder()
         .label("Bitcoin")
         .margin_top(6)
-        .margin_bottom(12)
+        .margin_bottom(6)
         .margin_start(12)
         .margin_end(12)
         .build();
@@ -40,7 +40,7 @@ pub fn wallet_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, 
     let eth_button = Button::builder()
         .label("Ethereum")
         .margin_top(6)
-        .margin_bottom(12)
+        .margin_bottom(6)
         .margin_start(12)
         .margin_end(12)
         .build();
@@ -49,7 +49,7 @@ pub fn wallet_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, 
     let add_wallet_button = Button::builder()
         .label("Add Wallet")
         .margin_top(6)
-        .margin_bottom(12)
+        .margin_bottom(6)
         .margin_start(12)
         .margin_end(12)
         .build();
@@ -57,8 +57,8 @@ pub fn wallet_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, 
 
     let wallet_box = Arc::new(Mutex::new(gtk::Box::builder()
         .orientation(Orientation::Vertical)
-        .margin_top(12)
-        .margin_bottom(12)
+        .margin_top(6)
+        .margin_bottom(6)
         .build()));
     
     scrollable_box.append(&btc_button);
@@ -163,7 +163,7 @@ fn populate_btc_currency_details(btc_wallets: &Vec<BitcoinWallet>) -> gtk::Box {
             .max_width_chars(50)
             .margin_start(12)
             .margin_end(12)
-            .margin_bottom(12)
+            .margin_bottom(6)
             .css_name("btc_wallet_details")
             .selectable(true)
             .wrap(true)
@@ -173,7 +173,7 @@ fn populate_btc_currency_details(btc_wallets: &Vec<BitcoinWallet>) -> gtk::Box {
         let qr_button = Button::builder()
             .label("Show QR Code")
             .margin_top(6)
-            .margin_bottom(12)
+            .margin_bottom(6)
             .margin_start(12)
             .margin_end(12)
             .build();
@@ -186,7 +186,7 @@ fn populate_btc_currency_details(btc_wallets: &Vec<BitcoinWallet>) -> gtk::Box {
         let wallet_button = Button::builder()
             .label(&wallet_name)
             .margin_top(6)
-            .margin_bottom(12)
+            .margin_bottom(6)
             .margin_start(12)
             .margin_end(12)
             .build();
@@ -251,7 +251,7 @@ fn populate_eth_currency_details(eth_wallets: &Vec<EthereumWallet>) -> gtk::Box 
             
         let eth_mnemonic = match &ethw.mnemonic {
             Some(mnemonic) => format!("Mnemonic: {}", mnemonic),
-            None => String::from("Uninitialized")
+            None => String::from("Mnemonic: Uninitialized")
         };
         let eth_mnemonic_label = gtk::Label::builder()
             .label(&eth_mnemonic)
@@ -309,7 +309,7 @@ fn populate_eth_currency_details(eth_wallets: &Vec<EthereumWallet>) -> gtk::Box 
             .max_width_chars(50)
             .margin_start(12)
             .margin_end(12)
-            .margin_bottom(12)
+            .margin_bottom(6)
             .css_name("eth_wallet_details")
             .selectable(true)
             .wrap(true)
@@ -319,7 +319,7 @@ fn populate_eth_currency_details(eth_wallets: &Vec<EthereumWallet>) -> gtk::Box 
         let qr_button = Button::builder()
             .label("Show QR Code")
             .margin_top(6)
-            .margin_bottom(12)
+            .margin_bottom(6)
             .margin_start(12)
             .margin_end(12)
             .build();
@@ -332,7 +332,7 @@ fn populate_eth_currency_details(eth_wallets: &Vec<EthereumWallet>) -> gtk::Box 
         let wallet_button = Button::builder()
             .label(&wallet_name)
             .margin_top(6)
-            .margin_bottom(12)
+            .margin_bottom(6)
             .margin_start(12)
             .margin_end(12)
             .build();
@@ -514,7 +514,7 @@ fn add_eth_wallet(eth_box: &mut gtk::Box, ethw: &EthereumWallet) -> gtk::Box {
         
     let eth_mnemonic = match &ethw.mnemonic {
         Some(mnemonic) => format!("Mnemonic: {}", mnemonic),
-        None => String::from("Uninitialized")
+        None => String::from("Mnemonic: Uninitialized")
     };
     let eth_mnemonic_label = gtk::Label::builder()
         .label(&eth_mnemonic)
@@ -700,7 +700,7 @@ fn new_wallet_box(app_settings: Arc<Mutex<ApplicationSettings>>, btc_box: Arc<Mu
     let create_wallet_button = Button::builder()
         .label("Create Wallet")
         .margin_top(6)
-        .margin_bottom(12)
+        .margin_bottom(6)
         .margin_start(12)
         .margin_end(12)
         .build();
@@ -708,7 +708,7 @@ fn new_wallet_box(app_settings: Arc<Mutex<ApplicationSettings>>, btc_box: Arc<Mu
 
     let mnemonic_error = gtk::Label::builder()
         .label("An error occurred when parsing the mnemonic. Please check the mnemonic and try again.")
-        .margin_top(5)
+        .margin_top(6)
         .margin_start(5)
         .visible(false)
         .css_name("label-error")
@@ -716,19 +716,68 @@ fn new_wallet_box(app_settings: Arc<Mutex<ApplicationSettings>>, btc_box: Arc<Mu
 
     let wallet_generation_error = gtk::Label::builder()
         .label("An error occurred when generating the wallet. Please try again.")
-        .margin_top(5)
+        .margin_top(6)
         .margin_start(5)
         .visible(false)
         .css_name("label-error")
         .build();
+
+    let import_token_selector = gtk::DropDown::from_strings(&tokens);
+    import_token_selector.set_margin_start(12);
+    import_token_selector.set_margin_end(12);
+    import_token_selector.set_margin_top(12);
+    import_token_selector.set_margin_bottom(6);
+
+    let import_wallet_name = gtk::Entry::builder()
+        .placeholder_text("Wallet Name")
+        .margin_top(6)
+        .margin_bottom(6)
+        .margin_start(12)
+        .margin_end(12)
+        .build();
+
+    let import_private_key = gtk::Entry::builder()
+        .placeholder_text("Private Key")
+        .margin_top(6)
+        .margin_bottom(6)
+        .margin_start(12)
+        .margin_end(12)
+        .build();
+    
+    let import_wallet_generation_error = gtk::Label::builder()
+        .label("An error occurred when generating the wallet. Please try again.")
+        .margin_top(6)
+        .margin_start(5)
+        .visible(false)
+        .css_name("label-error")
+        .build();
+
+    let import_wallet_button = Button::builder()
+        .label("Import Wallet")
+        .margin_top(6)
+        .margin_bottom(6)
+        .margin_start(12)
+        .margin_end(12)
+        .build();
+    create_wallet_button.add_css_class("standard_button");
 
     new_wallet_box.append(&token_selector);
     new_wallet_box.append(&wallet_name);
     new_wallet_box.append(&mnemonic_error);
     new_wallet_box.append(&wallet_generation_error);
     new_wallet_box.append(&create_wallet_button);
+    new_wallet_box.append(&import_token_selector);
+    new_wallet_box.append(&import_wallet_name);
+    new_wallet_box.append(&import_private_key);
+    new_wallet_box.append(&import_wallet_generation_error);
+    new_wallet_box.append(&import_wallet_button);
 
     let new_wallet_box_clone = new_wallet_box.clone();
+    let import_wallet_box = new_wallet_box.clone();
+    let import_app_settings = app_settings.clone();
+    let import_btc_box = btc_box.clone();
+    let import_eth_box = eth_box.clone();
+    let import_scrollable_container = scrollable_container.clone();
     
     create_wallet_button.connect_clicked(move |_button| {
         let mut path = String::from("m/44'/60'/0'/0'/");
@@ -784,6 +833,44 @@ fn new_wallet_box(app_settings: Arc<Mutex<ApplicationSettings>>, btc_box: Arc<Mu
             add_eth_wallet(&mut eth_box.lock().unwrap(), &ethwc);
             new_wallet_box.set_visible(false);
             scrollable_container.lock().unwrap().set_visible(true);
+            let _ = app_settings.backup_keys(format!("{}", ethw));
+        }
+    });
+
+    import_wallet_button.connect_clicked(move |_button| {
+        let mut path = String::from("m/44'/60'/0'/0'/0");
+        let app_settings = &mut *import_app_settings.lock().unwrap();
+        if import_token_selector.selected() == 0 {
+            let mut btcw = match btc::generate_from_private_key(&import_private_key.text().to_string()) {
+                Some(btcw) => btcw,
+                None       => {
+                    import_wallet_generation_error.set_visible(true);
+                    return;
+                }
+            };
+            btcw.wallet_name = Some(import_wallet_name.text().to_string());
+            let btcwc = btcw.clone();
+            app_settings.btc_wallets.push(btcw);
+
+            add_btc_wallet(&mut import_btc_box.lock().unwrap(), &btcwc);
+            import_wallet_box.set_visible(false);
+            import_scrollable_container.lock().unwrap().set_visible(true);
+            let _ = app_settings.backup_keys(format!("{}", btcwc));
+        } else if import_token_selector.selected() == 1 {
+            let mut ethw = match eth::generate_from_private_key(&import_private_key.text().to_string()) {
+                Some(ethw) => ethw,
+                None       => {
+                    import_wallet_generation_error.set_visible(true);
+                    return;
+                }
+            };
+            ethw.wallet_name = Some(import_wallet_name.text().to_string());
+            let ethwc = ethw.clone();
+            app_settings.eth_wallets.push(ethw.clone());
+
+            add_eth_wallet(&mut import_eth_box.lock().unwrap(), &ethwc);
+            import_wallet_box.set_visible(false);
+            import_scrollable_container.lock().unwrap().set_visible(true);
             let _ = app_settings.backup_keys(format!("{}", ethw));
         }
     });
