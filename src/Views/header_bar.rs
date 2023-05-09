@@ -22,7 +22,7 @@ pub fn header_bar_view(window: ApplicationWindow, app_settings: Arc<Mutex<Applic
     };
     
     let header_bar = HeaderBar::new();
-    header_bar.set_show_end_title_buttons(false);
+    //header_bar.set_show_end_title_buttons(false);
     let settings_button = Button::new();
     
     let settings_icon = Image::from_file(settings_icon_path);

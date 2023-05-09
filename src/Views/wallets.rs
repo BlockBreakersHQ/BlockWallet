@@ -686,8 +686,27 @@ fn new_wallet_box(app_settings: Arc<Mutex<ApplicationSettings>>, btc_box: Arc<Mu
     let token_selector = gtk::DropDown::from_strings(&tokens);
     token_selector.set_margin_start(12);
     token_selector.set_margin_end(12);
-    token_selector.set_margin_top(12);
+    token_selector.set_margin_top(6);
     token_selector.set_margin_bottom(6);
+
+    let mut mnemonics = Vec::new();
+    for ew in app_settings.lock().unwrap().eth_wallets.clone() {
+        let phrase = match ew.mnemonic {
+            Some(phrase) => format!("{}...", phrase[0..45].to_string()),
+            None => continue
+        };
+
+        if !mnemonics.contains(&phrase) {
+            mnemonics.push(phrase);
+        }
+    }
+
+    let mnemonic_selector = gtk::DropDown::from_strings(&mnemonics.iter().map(|s| s.as_str()).collect::<Vec<&str>>());
+    mnemonic_selector.set_margin_start(12);
+    mnemonic_selector.set_margin_end(12);
+    mnemonic_selector.set_margin_top(6);
+    mnemonic_selector.set_margin_bottom(6);
+    mnemonic_selector.set_visible(false);
 
     let wallet_name = gtk::Entry::builder()
         .placeholder_text("Wallet Name")
@@ -725,7 +744,7 @@ fn new_wallet_box(app_settings: Arc<Mutex<ApplicationSettings>>, btc_box: Arc<Mu
     let import_token_selector = gtk::DropDown::from_strings(&tokens);
     import_token_selector.set_margin_start(12);
     import_token_selector.set_margin_end(12);
-    import_token_selector.set_margin_top(12);
+    import_token_selector.set_margin_top(6);
     import_token_selector.set_margin_bottom(6);
 
     let import_wallet_name = gtk::Entry::builder()
@@ -762,6 +781,7 @@ fn new_wallet_box(app_settings: Arc<Mutex<ApplicationSettings>>, btc_box: Arc<Mu
     create_wallet_button.add_css_class("standard_button");
 
     new_wallet_box.append(&token_selector);
+    new_wallet_box.append(&mnemonic_selector);
     new_wallet_box.append(&wallet_name);
     new_wallet_box.append(&mnemonic_error);
     new_wallet_box.append(&wallet_generation_error);
@@ -778,6 +798,24 @@ fn new_wallet_box(app_settings: Arc<Mutex<ApplicationSettings>>, btc_box: Arc<Mu
     let import_btc_box = btc_box.clone();
     let import_eth_box = eth_box.clone();
     let import_scrollable_container = scrollable_container.clone();
+    let import_private_key_clone = import_private_key.clone();
+    let mnemonic_selector_clone = mnemonic_selector.clone();
+
+    token_selector.connect_selected_notify(move |dropdown| {
+        if dropdown.selected() == 1 {
+            mnemonic_selector.set_visible(true);
+        } else {
+            mnemonic_selector.set_visible(false);
+        }
+    });
+
+    import_token_selector.connect_selected_notify(move |dropdown| {
+        if dropdown.selected() == 1 {
+            import_private_key_clone.set_placeholder_text(Some("Private Key / Mnemonic"));
+        } else {
+            import_private_key_clone.set_placeholder_text(Some("Private Key"));
+        }
+    });
     
     create_wallet_button.connect_clicked(move |_button| {
         let mut path = String::from("m/44'/60'/0'/0'/");
@@ -803,7 +841,7 @@ fn new_wallet_box(app_settings: Arc<Mutex<ApplicationSettings>>, btc_box: Arc<Mu
         } else if token_selector.selected() == 1 {
             path += &app_settings.eth_wallets.len().to_string();
             path += "'";
-            let mnemonic = match app_settings.eth_wallets[0].mnemonic.clone() {
+            let mnemonic = match app_settings.eth_wallets[mnemonic_selector_clone.selected() as usize].mnemonic.clone() {
                 Some(mnemonic) => mnemonic,
                 None           => String::new()
             };
@@ -857,13 +895,24 @@ fn new_wallet_box(app_settings: Arc<Mutex<ApplicationSettings>>, btc_box: Arc<Mu
             import_scrollable_container.lock().unwrap().set_visible(true);
             let _ = app_settings.backup_keys(format!("{}", btcwc));
         } else if import_token_selector.selected() == 1 {
-            let mut ethw = match eth::generate_from_private_key(&import_private_key.text().to_string()) {
-                Some(ethw) => ethw,
-                None       => {
-                    import_wallet_generation_error.set_visible(true);
-                    return;
-                }
-            };
+            let mut ethw;
+            if import_private_key.text().to_string().contains(" ") {
+                ethw = match eth::generate_from_mnemonic(&import_private_key.text().to_string(), &path) {
+                    Some(ethw) => ethw,
+                    None       => {
+                        import_wallet_generation_error.set_visible(true);
+                        return;
+                    }
+                };
+            } else {
+                ethw = match eth::generate_from_private_key(&import_private_key.text().to_string()) {
+                    Some(ethw) => ethw,
+                    None       => {
+                        import_wallet_generation_error.set_visible(true);
+                        return;
+                    }
+                };
+            }
             ethw.wallet_name = Some(import_wallet_name.text().to_string());
             let ethwc = ethw.clone();
             app_settings.eth_wallets.push(ethw.clone());
