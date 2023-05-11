@@ -518,15 +518,11 @@ impl ApplicationSettings {
                             m += " ";
                         }
                         m.pop();
-                        mnemonic = String::from(&m[5..m.len()]);
+                        if m.len() > 2 {
+                            mnemonic = String::from(&m[5..m.len()]);
+                        }
                     }
-                    /*if i.contains("Extended Private Key") {
-                        let element: Vec<&str> = i.split("Extended Private Key").collect();
-                        let mut unmodified_extended_private_key = String::from(element[1]);
-                        unmodified_extended_private_key.retain(|c| !c.is_whitespace());
-                        extended_private_key = String::from(&unmodified_extended_private_key[4..unmodified_extended_private_key.len()]);
-                    }
-                    else*/ if i.contains("Private Key") {
+                    if i.contains("Private Key") {
                         let element: Vec<&str> = i.split("Private Key").collect();
                         let mut unmodified_private_key = String::from(element[1]);
                         unmodified_private_key.retain(|c| !c.is_whitespace());
@@ -569,20 +565,6 @@ impl ApplicationSettings {
                     }
                     let _ = &self.eth_wallets.push(e_wallet);
                 }
-                /*else if !extended_private_key.is_empty() {
-                    let wallet = eth::generate_from_extended_private_key(&extended_private_key, &path);
-
-                    let mut e_wallet = match wallet {
-                        Some(w) => w,
-                        None => panic!("ERROR: generating Ethereum hd wallet from extended private key failed.")
-                    };
-                    if wallet_name.len() > 0 {
-                        e_wallet.set_wallet_name(wallet_name);
-                    } else {
-                        e_wallet.set_wallet_name(String::from("Ethereum Wallet"));
-                    }
-                    let _ = &self.eth_wallets.push(e_wallet);
-                }*/
             }
         } else {
             let e_wallet = ApplicationSettings::generate_eth_wallet(String::new());

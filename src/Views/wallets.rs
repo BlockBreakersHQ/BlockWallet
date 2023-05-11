@@ -799,7 +799,8 @@ fn new_wallet_box(app_settings: Arc<Mutex<ApplicationSettings>>, btc_box: Arc<Mu
     let import_eth_box = eth_box.clone();
     let import_scrollable_container = scrollable_container.clone();
     let import_private_key_clone = import_private_key.clone();
-    let mnemonic_selector_clone = mnemonic_selector.clone();
+    let mnemonic_selector_new = mnemonic_selector.clone();
+    let mnemonic_selector_import = mnemonic_selector.clone();
 
     token_selector.connect_selected_notify(move |dropdown| {
         if dropdown.selected() == 1 {
@@ -841,7 +842,7 @@ fn new_wallet_box(app_settings: Arc<Mutex<ApplicationSettings>>, btc_box: Arc<Mu
         } else if token_selector.selected() == 1 {
             path += &app_settings.eth_wallets.len().to_string();
             path += "'";
-            let mnemonic = match app_settings.eth_wallets[mnemonic_selector_clone.selected() as usize].mnemonic.clone() {
+            let mnemonic = match app_settings.eth_wallets[mnemonic_selector_new.selected() as usize].mnemonic.clone() {
                 Some(mnemonic) => mnemonic,
                 None           => String::new()
             };
@@ -904,6 +905,8 @@ fn new_wallet_box(app_settings: Arc<Mutex<ApplicationSettings>>, btc_box: Arc<Mu
                         return;
                     }
                 };
+                let mnemonics = mnemonic_selector_import.model().unwrap().downcast::<gtk::StringList>().unwrap();
+                mnemonics.append(&format!("{}...", &import_private_key.text().to_string()[0..45].to_string()));
             } else {
                 ethw = match eth::generate_from_private_key(&import_private_key.text().to_string()) {
                     Some(ethw) => ethw,
