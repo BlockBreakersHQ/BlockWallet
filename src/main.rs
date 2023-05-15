@@ -12,7 +12,7 @@ mod currencies;
 mod configuration;
 mod tests;
 
-use crate::views::{login};
+use crate::views::{login, new_wallet_generation};
 use crate::configuration::initialization;
 use crate::configuration::application_settings::*;
 
@@ -124,7 +124,19 @@ pub fn build_ui(app: &Application) {
         .default_height(720)
         .build();
 
+    let mut ypath = match std::env::current_exe() {
+        Ok(path) => path,
+        Err(why) => panic!("couldn't get executable directory: {}", why)
+    };
+    ypath.pop();
+    ypath.push("Config.yml");
+
     let window_clone = window.clone();
     let app_settings = ApplicationSettings::new(tokens);
-    login::login_view(window_clone, app_settings);
+
+    if !ypath.exists() {
+        login::login_view(window_clone, app_settings);
+    } else {
+        new_wallet_generation::generate_wallet_view(window_clone, app_settings);
+    }
 }

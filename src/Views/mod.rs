@@ -8,3 +8,4 @@ pub mod home;
 pub mod header_bar;
 pub mod currency;
 pub mod transactions;
+pub mod new_wallet_generation;

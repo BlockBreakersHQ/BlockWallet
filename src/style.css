@@ -26,6 +26,13 @@ label-error {
     font-size: 12px;
 }
 
+label-standard {
+    color: white;
+    font-weight: bold;
+    font-family: Helvetica;
+    font-size: 12px;
+}
+
 label-currency_name {
     color: white;
     font-weight: bold;
