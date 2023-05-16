@@ -81,7 +81,6 @@ pub fn generate_wallet_view(window: ApplicationWindow, app_settings: Application
         .margin_bottom(6)
         .margin_start(12)
         .margin_end(12)
-        .visibility(false)
         .build();
 
     let import_wallet_button = Button::builder()
@@ -162,7 +161,7 @@ pub fn generate_wallet_view(window: ApplicationWindow, app_settings: Application
                 let _ = fs::rename(&app_settings_import.lock().unwrap().config_path, new_path);
             }
             match fs::copy(path_input.text(), app_settings_import.lock().unwrap().config_path.clone()) {
-                Ok(_) => println!("Copied config.dic to executable directory."),
+                Ok(_) => println!("INFO: Copied config.dic to executable directory."),
                 Err(e) => println!("ERROR: Could not copy config.dic to executable directory. Error: {:?}", e)
             };
             path_input.set_text("");

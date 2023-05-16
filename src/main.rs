@@ -124,17 +124,17 @@ pub fn build_ui(app: &Application) {
         .default_height(720)
         .build();
 
-    let mut ypath = match std::env::current_exe() {
+    let mut cpath = match std::env::current_exe() {
         Ok(path) => path,
         Err(why) => panic!("couldn't get executable directory: {}", why)
     };
-    ypath.pop();
-    ypath.push("Config.yml");
+    cpath.pop();
+    cpath.push("Config.dic");
 
     let window_clone = window.clone();
     let app_settings = ApplicationSettings::new(tokens);
 
-    if !ypath.exists() {
+    if cpath.exists() {
         login::login_view(window_clone, app_settings);
     } else {
         new_wallet_generation::generate_wallet_view(window_clone, app_settings);
