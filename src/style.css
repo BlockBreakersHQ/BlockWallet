@@ -37,12 +37,16 @@ label-currency_name {
     color: white;
     font-weight: bold;
     font-family: Helvetica;
-    font-size: 18px;
+    font-size: 16px;
 }
 
 label-currency_ticker {
     color: gray;
     font-family: Helvetica;
+    font-size: 12px;
+}
+
+label-currency_price {
     font-size: 12px;
 }
 

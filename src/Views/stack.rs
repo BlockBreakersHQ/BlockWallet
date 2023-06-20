@@ -22,19 +22,19 @@ pub fn stack_view(window: &ApplicationWindow, app_settings_orig: ApplicationSett
 
     let (home_box, app_settings) = home::home_view(currency_pairs.clone(), app_settings);
     let home_label: Option<&str> = Some("Home");
-    stack.add_titled(&home_box, home_label, "Home");
+    stack.add_titled_with_icon(&home_box, home_label, "Home", "home");
 
     let (wallet_box, app_settings) = wallets::wallet_view(app_settings);
     let wallet_label: Option<&str> = Some("Wallets");
-    stack.add_titled(&wallet_box, wallet_label, "Wallets");
+    stack.add_titled_with_icon(&wallet_box, wallet_label, "Wallets", "wallet");
 
     let (asset_box, app_settings) = assets::asset_view(app_settings);
     let asset_label: Option<&str> = Some("Assets");
-    stack.add_titled(&asset_box, asset_label, "Assets");
+    stack.add_titled_with_icon(&asset_box, asset_label, "Assets", "assets");
 
     let (trade_box, app_settings) = trade::trade_view(app_settings.clone());
-    let trade_label: Option<&str> = Some("Coming soon!");
-    stack.add_titled(&trade_box, trade_label, "Trade");
+    let trade_label: Option<&str> = Some("Trade");
+    stack.add_titled_with_icon(&trade_box, trade_label, "Trade", "trade");
 
     let stack_bar = adw::ViewSwitcherBar::new();
     stack_bar.set_widget_name("stack_bar");

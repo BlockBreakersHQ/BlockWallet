@@ -210,7 +210,7 @@ fn populate_btc_currency_details(btc_wallets: &Vec<BitcoinWallet>) -> gtk::Box {
             .margin_end(12)
             .height_request(40)
             .css_name("wallet_expander_row")
-            .icon_name("btc")
+            .icon_name("BTC")
             .build();
 
         expander.add_row(&btc_address_label);

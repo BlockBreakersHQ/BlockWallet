@@ -1,6 +1,7 @@
 use gtk::prelude::*;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Duration;
 
 use crate::ApplicationSettings;
 use crate::currencies::trade::*;
@@ -12,7 +13,11 @@ pub fn trade_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
         .orientation(gtk::Orientation::Vertical)
         .build();
 
-    let token_list = token_search_builder(app_settings.lock().unwrap().tokens.clone());
+    let mut token_list = Vec::<&str>::new();
+    let tokens = app_settings.lock().unwrap().tokens.eth_tokens.clone();
+    for (key, value) in &tokens {
+        token_list.push(key);
+    }
     
     let app_settings_clone = app_settings.clone();
 
@@ -22,34 +27,16 @@ pub fn trade_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
         .margin_start(5)
         .build();
 
-    let token_list_clone = app_settings.lock().unwrap().tokens.clone();
     
-    thread::spawn(move || {
-        let runtime = tokio::runtime::Runtime::new().unwrap();
-        let _ = runtime.block_on(runtime.spawn(async move {
-            let mut eth_token = Token::empty();
-            let mut usdc_token = Token::empty();
-            for token in token_list_clone.eth_tokens {
-                if token.1.symbol == "ETH" {
-                    eth_token = token.1;
-                } else if token.1.symbol == "USDC" {
-                    usdc_token = token.1;
-                }
-            }
-            let trade = Trade::new(app_settings_clone.lock().unwrap().clone());
-            trade.get_quote(usdc_token, eth_token, 1950.9).await;
-        }));
-    });
 
-    let from_token = gtk::Entry::builder()
-        .placeholder_text("Select Token")
-        .margin_top(6)
-        .margin_bottom(6)
-        .margin_start(12)
-        .margin_end(12)
-        .hexpand(true)
-        .halign(gtk::Align::Start)
-        .build();
+    let from_token = gtk::DropDown::from_strings(&token_list.as_slice());
+    from_token.set_margin_top(6);
+    from_token.set_margin_bottom(6);
+    from_token.set_margin_start(12);
+    from_token.set_margin_end(12);
+    from_token.set_hexpand(true);
+    from_token.set_enable_search(true);
+    from_token.set_halign(gtk::Align::Start);
 
     let from_amount = gtk::Entry::builder()
         .placeholder_text("0.0")
@@ -59,15 +46,15 @@ pub fn trade_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
         .margin_end(12)
         .build();
 
-    let to_token = gtk::Entry::builder()
-        .placeholder_text("Select Token")
-        .margin_top(6)
-        .margin_bottom(6)
-        .margin_start(12)
-        .margin_end(12)
-        .hexpand(true)
-        .halign(gtk::Align::Start)
-        .build();
+    let to_token = gtk::DropDown::from_strings(&token_list.as_slice());
+    to_token.set_margin_top(6);
+    to_token.set_margin_bottom(6);
+    to_token.set_margin_start(12);
+    to_token.set_margin_end(12);
+    to_token.set_hexpand(true);
+    to_token.set_enable_search(true);
+    to_token.set_halign(gtk::Align::Start);
+    //to_token.set_expression(Some(token_list));
 
     let to_amount = gtk::Entry::builder()
         .placeholder_text("0.0")
@@ -91,8 +78,8 @@ pub fn trade_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
     to_box.append(&to_token);
     to_box.append(&to_amount);
 
-    let token_filter_model = gtk::FilterListModel::new(Some(&token_list), None::<&gtk::Filter>);
-    let token_list = gtk::ListBox::new();
+    //let token_filter_model = gtk::FilterListModel::new(Some(&token_list), None::<&gtk::Filter>);
+    //let token_list = gtk::ListBox::new();
     //token_list.append(&token_filter_model);
 
     let swap_button = gtk::Button::builder()
@@ -107,19 +94,41 @@ pub fn trade_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
     trade_box.append(&from_box);
     trade_box.append(&to_box);
     trade_box.append(&swap_button);
-    trade_box.append(&token_list);
+
+    let token_list_clone = app_settings.lock().unwrap().tokens.clone();
+
+    let trade = Trade::new(app_settings.lock().unwrap().clone());
+    
+    let mut from_trade = Arc::new(Mutex::new(trade.clone()));
+    let from_app_sett = app_settings.clone();
+
+    let mut to_trade = Arc::new(Mutex::new(trade.clone()));
+    let to_app_sett = app_settings.clone();
+    
+    from_token.connect_selected_notify(move |dropdown| {
+        let ticker = String::from(gtk::StringObject::from(dropdown.selected_item().unwrap().downcast::<gtk::StringObject>().unwrap()).string().as_str());
+        let from_ticker = from_app_sett.lock().unwrap().tokens.eth_tokens[&ticker].clone();
+        from_trade.lock().unwrap().from_token = from_ticker;
+    });
+
+    to_token.connect_selected_notify(move |dropdown| {
+        let ticker = String::from(gtk::StringObject::from(dropdown.selected_item().unwrap().downcast::<gtk::StringObject>().unwrap()).string().as_str());
+        let to_ticker = to_app_sett.lock().unwrap().tokens.eth_tokens[&ticker].clone();
+        to_trade.lock().unwrap().to_token = to_ticker;
+    });
+
+    thread::spawn(move || {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let _ = runtime.block_on(runtime.spawn(async move {
+            loop {
+                //let mut trade = Trade::new(app_settings_clone.lock().unwrap().clone());
+                //trade.from_amount = 1700.0;
+                //let trade = trade.get_quote().await;
+                //thread::sleep(Duration::from_secs(5));
+                //println!("to amount: {:?}", trade.clone().to_amount);
+            }
+        }));
+    });
+
     return (trade_box, app_settings)
 }
-
-pub fn token_search_builder(tokens: Tokens) -> gio::ListStore {
-    let token_list = gio::ListStore::new(glib::BoxedAnyObject::static_type());
-    for (key, value) in tokens.eth_tokens.clone() {
-        token_list.append(&glib::BoxedAnyObject::new(value.clone()));
-    }
-
-    for token in &token_list {
-        //println!("token: {:?}", token.unwrap().downcast::<glib::BoxedAnyObject>().unwrap().borrow::<Token>().address);
-    }
-
-    token_list
-}   

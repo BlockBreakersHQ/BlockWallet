@@ -177,6 +177,10 @@ pub fn asset_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, A
 
                 if currency_boxes.len() > 0 {
                     curr_box.first_child().unwrap().set_visible(false);
+                    match curr_box.first_child() {
+                        Some(c) => c.set_visible(false),
+                        None => {}
+                    }
                     for (_key, value) in currency_boxes {
                         let currency_box = generate_currency_box(value.0, value.1.clone());
                         let currency_detail_clone = currency_detail_view.clone();
