@@ -3,13 +3,13 @@ use block_wallet::ApplicationSettings;
 #[test]
 fn generate_btc_wallet_sets_name() {
     let wallet = ApplicationSettings::generate_btc_wallet(String::from("test_name")).unwrap();
-    assert_eq!(wallet.wallet_name.unwrap(), "test_name");
+    assert_eq!(wallet.wallet_name.clone().unwrap(), "test_name");
 }
 
 #[test]
 fn generate_eth_wallet_sets_name() {
     let wallet = ApplicationSettings::generate_eth_wallet(String::from("test_name")).unwrap();
-    assert_eq!(wallet.wallet_name.unwrap(), "test_name");
+    assert_eq!(wallet.wallet_name.clone().unwrap(), "test_name");
 }
 
 #[test]

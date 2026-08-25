@@ -1,6 +1,8 @@
 pub mod block_error;
 pub mod application_settings;
 pub mod clipboard;
+pub mod endpoint;
+pub mod http;
 pub mod initialization;
 pub mod logging;
 pub mod onboarding;

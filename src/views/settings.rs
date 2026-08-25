@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use crate::configuration::application_settings::*;
+use crate::configuration::endpoint;
 use crate::configuration::wallet_store::CustomTokenRecord;
 use crate::currencies::eth_chain;
 use crate::currencies::sol_chain;
@@ -218,11 +219,11 @@ fn network_settings(page: &adw::PreferencesPage, app_settings: Arc<Mutex<Applica
     btc_node.set_text(&app_settings.lock().unwrap().btc_node);
     let btc_hint = adw::ActionRow::builder()
         .title("Accepted formats")
-        .subtitle("Esplora https://… or Electrum ssl://host:port. Leave empty for the default.")
+        .subtitle("Esplora https://… or Electrum ssl://host:port. Plaintext http:// and tcp:// only to localhost. Leave empty for the default.")
         .build();
     btc_hint.add_prefix(&gtk::Image::from_icon_name("network-wired-symbolic"));
     let btc_incorrect_format = ui::error_label(
-        "Bitcoin node should be an https Esplora URL or an ssl://host:port Electrum server.",
+        "Bitcoin node should be an https Esplora URL or an ssl://host:port Electrum server. Plaintext http:// or tcp:// is only accepted for a node on this device.",
     );
     btc_group.add(&btc_network);
     btc_group.add(&btc_node);
@@ -250,7 +251,7 @@ fn network_settings(page: &adw::PreferencesPage, app_settings: Arc<Mutex<Applica
     let infura_key = adw::PasswordEntryRow::builder().title("Infura API key").build();
     let etherscan_api_key = adw::PasswordEntryRow::builder().title("Etherscan API key").build();
     let eth_incorrect_format =
-        ui::error_label("Ethereum RPC should be http:// or https://, or empty for the network default.");
+        ui::error_label("Ethereum RPC must be https://, or empty for the network default. Plaintext http:// is only accepted for a node on this device.");
     eth_group.add(&eth_network);
     eth_group.add(&ethereum_node);
     eth_group.add(&eth_hint);
@@ -275,7 +276,7 @@ fn network_settings(page: &adw::PreferencesPage, app_settings: Arc<Mutex<Applica
     let solana_node = adw::EntryRow::builder().title("RPC URL").build();
     solana_node.set_text(&app_settings.lock().unwrap().sol_node);
     let sol_incorrect_format =
-        ui::error_label("Solana RPC should be http:// or https://, or empty for the network default.");
+        ui::error_label("Solana RPC must be https://, or empty for the network default. Plaintext http:// is only accepted for a node on this device.");
     sol_group.add(&sol_network);
     sol_group.add(&solana_node);
     sol_group.add(&sol_incorrect_format);
@@ -297,7 +298,7 @@ fn network_settings(page: &adw::PreferencesPage, app_settings: Arc<Mutex<Applica
     let litecoin_node = adw::EntryRow::builder().title("Esplora URL").build();
     litecoin_node.set_text(&app_settings.lock().unwrap().ltc_node);
     let ltc_incorrect_format =
-        ui::error_label("Litecoin node should be an https Esplora URL, or empty for the network default.");
+        ui::error_label("Litecoin node must be an https Esplora URL, or empty for the network default. Plaintext http:// is only accepted for a node on this device.");
     ltc_group.add(&ltc_network);
     ltc_group.add(&litecoin_node);
     ltc_group.add(&ltc_incorrect_format);
@@ -433,10 +434,7 @@ fn network_settings(page: &adw::PreferencesPage, app_settings: Arc<Mutex<Applica
             app_settings.lock().unwrap().etherscan_key = etherscan_api_key.text().to_string();
         }
         let eth_text = ethereum_node.text().to_string();
-        if eth_text.is_empty()
-            || eth_text.starts_with("http://")
-            || eth_text.starts_with("https://")
-        {
+        if endpoint::validate(&eth_text, false).is_ok() {
             app_settings.lock().unwrap().eth_node = eth_text;
         } else {
             eth_incorrect_format.set_visible(true);
@@ -470,32 +468,21 @@ fn network_settings(page: &adw::PreferencesPage, app_settings: Arc<Mutex<Applica
             app_settings.lock().unwrap().apply_ltc_network(selected_ltc);
         }
         let btc_text = btc_node.text().to_string();
-        if btc_text.is_empty()
-            || btc_text.starts_with("http://")
-            || btc_text.starts_with("https://")
-            || btc_text.starts_with("ssl://")
-            || btc_text.starts_with("tcp://")
-        {
+        if endpoint::validate(&btc_text, true).is_ok() {
             app_settings.lock().unwrap().btc_node = btc_text;
         } else {
             btc_incorrect_format.set_visible(true);
             all_valid = false;
         }
         let sol_text = solana_node.text().to_string();
-        if sol_text.is_empty()
-            || sol_text.starts_with("http://")
-            || sol_text.starts_with("https://")
-        {
+        if endpoint::validate(&sol_text, false).is_ok() {
             app_settings.lock().unwrap().sol_node = sol_text;
         } else {
             sol_incorrect_format.set_visible(true);
             all_valid = false;
         }
         let ltc_text = litecoin_node.text().to_string();
-        if ltc_text.is_empty()
-            || ltc_text.starts_with("http://")
-            || ltc_text.starts_with("https://")
-        {
+        if endpoint::validate(&ltc_text, false).is_ok() {
             app_settings.lock().unwrap().ltc_node = ltc_text;
         } else {
             ltc_incorrect_format.set_visible(true);

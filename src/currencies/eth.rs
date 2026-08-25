@@ -332,6 +332,19 @@ impl EthereumWallet {
         crate::configuration::secrets::wipe_optional_string(&mut self.public_key);
     }
 
+}
+
+/// Every clone of a wallet carries its own copy of the mnemonic and private key in freshly
+/// allocated `String`s. `lock_store` only reaches the copy the app holds, so without this any
+/// other clone — the snapshot a send screen is built from, a temporary passed by value — would
+/// hand its plaintext back to the allocator intact, and from there potentially to swap.
+impl Drop for EthereumWallet {
+    fn drop(&mut self) {
+        self.wipe_secrets();
+    }
+}
+
+impl EthereumWallet {
     pub fn generate_qr_address(&self) -> Result<gdk4::Texture, block_error::Error> {
         let address = match &self.address {
             Some(addr) => addr,
@@ -403,14 +416,14 @@ fn wallet_from_signer(signer: PrivateKeySigner, mnemonic: Option<String>, path: 
     let public_key = signing_key_to_public_hex(signer.credential());
     let address = Some(format!("{}", signer.address()));
 
-    EthereumWallet {
-        mnemonic,
-        private_key,
-        public_key,
-        address,
-        path,
-        ..Default::default()
-    }
+    // Field by field: the zeroizing `Drop` on this type rules out struct-update syntax.
+    let mut wallet = EthereumWallet::default();
+    wallet.mnemonic = mnemonic;
+    wallet.private_key = private_key;
+    wallet.public_key = public_key;
+    wallet.address = address;
+    wallet.path = path;
+    wallet
 }
 
 fn signing_key_to_public_hex(key: &SigningKey) -> Option<String> {
@@ -457,7 +470,7 @@ mod tests {
             "",
         )
         .unwrap();
-        let address = wallet.address.unwrap();
+        let address = wallet.address.clone().unwrap();
         assert!(address.starts_with("0x"));
         assert_eq!(address.len(), 42);
         assert!(wallet.private_key.is_some());

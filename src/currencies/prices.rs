@@ -46,7 +46,7 @@ pub fn fetch_prices(symbols: &[&str], fiat: &str) -> Result<HashMap<String, f64>
         "https://api.coingecko.com/api/v3/simple/price?ids={}&vs_currencies={fiat}",
         ids.join(",")
     );
-    let text = reqwest::blocking::get(url)?.text()?;
+    let text = crate::configuration::http::get_text(&url)?;
     let json: Value = serde_json::from_str(&text)?;
     let mut out = HashMap::new();
     if let Some(map) = json.as_object() {

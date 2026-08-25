@@ -1,3 +1,4 @@
+pub mod amount;
 pub mod btc;
 pub mod btc_chain;
 pub mod eth;
@@ -7,6 +8,7 @@ pub mod ltc_chain;
 pub mod sol;
 pub mod sol_chain;
 pub mod currency_pairs;
+pub mod fees;
 pub mod prices;
 pub mod tokens;
 pub mod transactions;

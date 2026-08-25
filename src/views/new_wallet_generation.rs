@@ -587,7 +587,7 @@ fn password_page() -> (gtk::Box, adw::PasswordEntryRow, adw::PasswordEntryRow, B
     let page = page_box();
     page.append(&step_header(
         "Set a password",
-        "This encrypts the wallet on this device. You will need it each time you unlock the app.",
+        "This encrypts the wallet on this device. You will need it each time you unlock the app. At least 12 characters: a passphrase of a few words is easier to remember and far harder to guess.",
     ));
     let group = adw::PreferencesGroup::new();
     let password_input = adw::PasswordEntryRow::builder().title("Password").build();

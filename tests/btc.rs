@@ -11,7 +11,7 @@ fn generate_from_known_mnemonic_is_bip84() {
     )
     .unwrap();
     assert!(wallet.mnemonic.is_some());
-    let address = wallet.address.unwrap();
+    let address = wallet.address.clone().unwrap();
     assert!(
         address.starts_with("bc1q"),
         "BIP84 address should be native segwit: {address}"
@@ -33,7 +33,7 @@ fn mnemonic_restore_matches_generated_wallet() {
     let generated = BitcoinWallet::new().unwrap();
     let restored = generate_from_mnemonic(generated.mnemonic.as_ref().unwrap(), "").unwrap();
     assert_eq!(restored.address, generated.address);
-    assert!(restored.address.unwrap().starts_with("bc1q"));
+    assert!(restored.address.clone().unwrap().starts_with("bc1q"));
 }
 
 #[test]

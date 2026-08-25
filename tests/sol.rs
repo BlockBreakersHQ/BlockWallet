@@ -10,7 +10,7 @@ fn generate_from_known_mnemonic() {
         "",
     )
     .unwrap();
-    let address = wallet.address.unwrap();
+    let address = wallet.address.clone().unwrap();
     assert!(!address.starts_with("0x"));
     assert!(address.len() >= 32 && address.len() <= 44);
     assert!(wallet.private_key.is_some());

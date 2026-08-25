@@ -9,6 +9,7 @@ use alloy::signers::local::PrivateKeySigner;
 use serde::{Deserialize, Serialize};
 
 use crate::configuration::block_error;
+use crate::currencies::fees::clamp_gas_price;
 use crate::currencies::tokens::Token;
 
 const TRANSFER_TOPIC: B256 = B256::new([
@@ -97,6 +98,14 @@ impl EthSyncState {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct PreparedSend {
+    /// The account this plan was built against, and whose nonce `nonce` holds.
+    ///
+    /// `sign_and_broadcast` refuses a key that resolves to anything else. Without this the
+    /// UI's re-read of the account dropdown at confirm time could pair a plan with a
+    /// different account's key: if the two happened to share a next-nonce — routine for
+    /// freshly derived accounts, which both sit at 0 — the transaction would be perfectly
+    /// valid and would debit an account the user never reviewed.
+    pub from: String,
     pub to: String,
     pub token_symbol: String,
     pub token_address: Option<String>,
@@ -381,13 +390,7 @@ pub fn validate_address(address: &str) -> Result<Address, block_error::Error> {
 }
 
 pub fn parse_token_amount(input: &str, decimals: u8) -> Result<U256, block_error::Error> {
-    let s = input.trim().replace(',', "");
-    if s.is_empty() {
-        return Err(block_error::Error::new("amount is required".into()));
-    }
-    if s.starts_with('-') {
-        return Err(block_error::Error::new("amount must be greater than 0".into()));
-    }
+    let s = crate::currencies::amount::normalize_decimal_input(input)?;
     let (whole, frac) = match s.split_once('.') {
         Some((whole, frac)) => (whole, frac),
         None => (s.as_str(), ""),
@@ -433,13 +436,32 @@ pub fn format_units_trimmed(amount: U256, decimals: u8) -> String {
     }
 }
 
+/// Below this the fee-versus-amount rule is switched off: a dust-sized send legitimately
+/// costs more in gas than it moves. 0.001 ETH, in wei.
+const FEE_RATIO_FLOOR_WEI: u128 = 1_000_000_000_000_000;
+
+/// The wei-denominated counterpart to [`crate::currencies::fees::check_fee_is_sane`]. Kept
+/// here rather than in that module because it needs `U256`: a fee above ~18.4 ETH does not
+/// fit in a `u64`, and saturating into one would let exactly the largest fees through.
+fn check_native_fee_is_sane(fee_wei: U256, amount: U256) -> Result<(), block_error::Error> {
+    if fee_wei > amount && fee_wei > U256::from(FEE_RATIO_FLOOR_WEI) {
+        return Err(block_error::Error::new(format!(
+            "network fee ({fee_wei} wei) is larger than the amount being sent ({amount} wei); \
+             check the fee tier and the node this wallet is pointed at"
+        )));
+    }
+    Ok(())
+}
+
 pub fn fee_from_tier(tiers: &FeeTiers, label: &str) -> (u128, u128) {
     let max_fee = match label.to_ascii_lowercase().as_str() {
         "low" => tiers.low,
         "high" => tiers.high,
         _ => tiers.medium,
     };
-    (max_fee, tiers.priority)
+    // Both bounded: the estimate is whatever the node said, and `max_fee_per_gas` multiplied
+    // by the gas limit is the ceiling on what this transaction can cost.
+    (clamp_gas_price(max_fee), clamp_gas_price(tiers.priority))
 }
 
 fn block_on<T>(fut: impl std::future::Future<Output = T>) -> Result<T, block_error::Error> {
@@ -637,7 +659,7 @@ fn native_history_etherscan(
     let url = format!(
         "https://api.etherscan.io/v2/api?chainid={chain_id}&module=account&action=txlist&address={account:?}&page=1&offset=20&sort=desc&apikey={api_key}"
     );
-    let text = reqwest::blocking::get(url)?.text()?;
+    let text = crate::configuration::http::get_text(&url)?;
     let json: serde_json::Value = serde_json::from_str(&text)?;
     let Some(rows) = json.get("result").and_then(|value| value.as_array()) else {
         return Ok(Vec::new());
@@ -804,8 +826,16 @@ async fn prepare_send_async(
         return Err(block_error::Error::new(format!("not enough {fee_symbol} to send")));
     }
 
+    // A native send is directly comparable: both sides are wei. For a token send the amount
+    // is in token units and the fee is in the gas token, so there is nothing meaningful to
+    // compare — the gas-price ceiling in `fee_from_tier` is the guard that applies there.
+    if native {
+        check_native_fee_is_sane(fee_wei, amount)?;
+    }
+
     let decimals = if native { 18 } else { token.decimals.max(0) as u8 };
     Ok(PreparedSend {
+        from: format!("{from:?}"),
         to: format!("{to:?}"),
         token_symbol: token.symbol,
         token_address: if native {
@@ -849,7 +879,16 @@ async fn sign_and_broadcast_async(
     rpc: String,
 ) -> Result<String, block_error::Error> {
     let from = signer.address();
+    let expected_from = validate_address(&plan.from)?;
+    if from != expected_from {
+        return Err(block_error::Error::new(
+            "this key does not belong to the account the transaction was reviewed for".to_string(),
+        ));
+    }
     let to = validate_address(&plan.to)?;
+    if plan.token_address.is_none() {
+        check_native_fee_is_sane(plan.fee_wei, plan.amount)?;
+    }
     let provider = signed_provider(&rpc, signer)?;
     let mut tx = TransactionRequest::default()
         .with_from(from)
@@ -1037,6 +1076,7 @@ mod tests {
     #[test]
     fn prepared_send_summary_includes_symbol_and_fee() {
         let native = PreparedSend {
+            from: "0x9858EfFD232B4033E47d90003D41EC34EcaEda94".into(),
             to: "0x9858Eff28F61CF0aDe1AC00482789d2EF5e6d47E".into(),
             token_symbol: "ETH".into(),
             token_address: None,

@@ -5,6 +5,7 @@ use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
+use zeroize::Zeroize;
 
 use crate::configuration::block_error;
 
@@ -13,9 +14,34 @@ const FILE_VERSION: u32 = 1;
 const SALT_LEN: usize = 16;
 const NONCE_LEN: usize = 12;
 const KEY_LEN: usize = 32;
-const M_KIB: u32 = 19_456;
-const T_COST: u32 = 2;
+/// 64 MiB / t=3. Above OWASP's 19 MiB floor: this is a phone wallet that can be seized with
+/// the store on it, so the KDF is the only thing standing between a stolen file and the
+/// keys. A Librem 5 has 3 GB, so 64 MiB per unlock is affordable, and it multiplies an
+/// attacker's cost per guess by roughly three over the previous parameters.
+const M_KIB: u32 = 65_536;
+const T_COST: u32 = 3;
 const P_COST: u32 = 1;
+
+/// Bounds on KDF parameters read back from a store file.
+///
+/// These come off disk, and the app can be pointed at a `.dic` someone else produced. An
+/// unbounded `m_kib` is a request to allocate that many kibibytes — trivially gigabytes,
+/// which on this hardware is an out-of-memory kill rather than an error message. The floor
+/// matters too: a file claiming m=8/t=1 would make its own contents cheap to brute-force,
+/// so a store weaker than the original defaults is refused rather than opened.
+const MIN_ACCEPTED_M_KIB: u32 = 19_456;
+const MAX_ACCEPTED_M_KIB: u32 = 1_048_576; // 1 GiB
+const MIN_ACCEPTED_T: u32 = 2;
+const MAX_ACCEPTED_T: u32 = 16;
+const MAX_ACCEPTED_P: u32 = 4;
+
+/// Shortest password `create` will accept.
+///
+/// Argon2id makes each guess expensive, not impossible. A four-digit PIN is ~10^4 guesses;
+/// at even 100 ms per guess that is under twenty minutes on the phone itself, and far less
+/// on a GPU rig holding a copy of the file. Twelve characters is the point where the KDF's
+/// cost per guess actually starts to matter.
+pub const MIN_PASSWORD_LEN: usize = 12;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct KdfParams {
@@ -191,6 +217,44 @@ impl PayloadV1 {
     }
 }
 
+/// Reject KDF parameters outside the accepted envelope.
+///
+/// Called before `derive_key` on the unlock path, where the values are attacker-influenced.
+pub fn check_kdf_params(m_kib: u32, t: u32, p: u32) -> Result<(), block_error::Error> {
+    if !(MIN_ACCEPTED_M_KIB..=MAX_ACCEPTED_M_KIB).contains(&m_kib) {
+        return Err(block_error::Error::new(format!(
+            "wallet store asks for an unsupported memory cost ({m_kib} KiB)"
+        )));
+    }
+    if !(MIN_ACCEPTED_T..=MAX_ACCEPTED_T).contains(&t) {
+        return Err(block_error::Error::new(format!(
+            "wallet store asks for an unsupported time cost ({t})"
+        )));
+    }
+    if p == 0 || p > MAX_ACCEPTED_P {
+        return Err(block_error::Error::new(format!(
+            "wallet store asks for an unsupported parallelism ({p})"
+        )));
+    }
+    Ok(())
+}
+
+/// Minimum-strength check for a new password. Applied at `create` only: an existing store
+/// must stay openable with whatever password it was made with.
+pub fn check_password_strength(password: &str) -> Result<(), block_error::Error> {
+    if password.is_empty() {
+        return Err(block_error::Error::new("password must not be empty".to_string()));
+    }
+    // Counted in characters, not bytes, so a passphrase in a non-Latin script is not held to
+    // a longer standard than the same length of ASCII.
+    if password.chars().count() < MIN_PASSWORD_LEN {
+        return Err(block_error::Error::new(format!(
+            "password must be at least {MIN_PASSWORD_LEN} characters"
+        )));
+    }
+    Ok(())
+}
+
 fn derive_key(password: &str, salt: &[u8], m_kib: u32, t: u32, p: u32) -> Result<Vec<u8>, block_error::Error> {
     let params = Params::new(m_kib, t, p, Some(KEY_LEN)).map_err(|e| {
         block_error::Error::new(format!("argon2 params: {e}"))
@@ -227,9 +291,38 @@ fn decrypt(key: &[u8], nonce: &[u8], ciphertext: &[u8]) -> Result<Vec<u8>, block
         .map_err(|_| block_error::Error::new("decryption failed".to_string()))
 }
 
+/// Tighten a path to owner-only access on Unix. A no-op elsewhere.
+///
+/// `fs::write` creates at 0666 & ~umask, which is 0644 on a typical system: the encrypted
+/// store would be readable by every local account, handing anyone a copy to brute-force
+/// offline at their leisure. The encryption is what protects the contents, but there is no
+/// reason to publish the ciphertext.
+#[cfg(unix)]
+fn restrict_permissions(path: &Path, mode: u32) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(mode))
+}
+
+#[cfg(not(unix))]
+fn restrict_permissions(_path: &Path, _mode: u32) -> std::io::Result<()> {
+    Ok(())
+}
+
+/// Owner-only file. Used for the store itself.
+pub const FILE_MODE_PRIVATE: u32 = 0o600;
+/// Owner-only directory.
+pub const DIR_MODE_PRIVATE: u32 = 0o700;
+
 fn write_file(path: &Path, session: &StoreSession, payload: &PayloadV1) -> Result<(), block_error::Error> {
-    let plaintext = serde_json::to_vec(payload)?;
-    let (nonce, ciphertext) = encrypt(&session.key, &plaintext)?;
+    // The serialized payload holds the mnemonic and every private key in the clear. It is
+    // wiped before the buffer is freed rather than left in the heap for whatever allocates
+    // next — the app's own claim is that locking removes keys from memory, and a plaintext
+    // copy surviving in freed memory (or reaching swap) would make that false.
+    let mut plaintext = serde_json::to_vec(payload)?;
+    let encrypted = encrypt(&session.key, &plaintext);
+    plaintext.zeroize();
+    let (nonce, ciphertext) = encrypted?;
+
     let file = StoreFile {
         version: FILE_VERSION,
         kdf: KdfParams {
@@ -245,16 +338,28 @@ fn write_file(path: &Path, session: &StoreSession, payload: &PayloadV1) -> Resul
     let json = serde_json::to_vec_pretty(&file)?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
+        let _ = restrict_permissions(parent, DIR_MODE_PRIVATE);
     }
-    fs::write(path, json)?;
+
+    // Write to a sibling temp file and rename over the target. `fs::write` truncates first,
+    // so losing power or being killed mid-write left a half-written store — which for a
+    // wallet whose only backup may be the recovery phrase is indistinguishable from losing
+    // the funds. Rename within a directory is atomic on both Unix and Windows, so the file
+    // at `path` is always either the old store or the complete new one.
+    let temp = path.with_extension("tmp");
+    fs::write(&temp, &json)?;
+    let _ = restrict_permissions(&temp, FILE_MODE_PRIVATE);
+    if let Err(why) = fs::rename(&temp, path) {
+        let _ = fs::remove_file(&temp);
+        return Err(why.into());
+    }
+    let _ = restrict_permissions(path, FILE_MODE_PRIVATE);
     Ok(())
 }
 
 impl StoreSession {
     pub fn create(path: &Path, password: &str, payload: &PayloadV1) -> Result<Self, block_error::Error> {
-        if password.is_empty() {
-            return Err(block_error::Error::new("password must not be empty".to_string()));
-        }
+        check_password_strength(password)?;
         let mut salt = vec![0u8; SALT_LEN];
         rand::thread_rng().fill_bytes(&mut salt);
         let key = derive_key(password, &salt, M_KIB, T_COST, P_COST)?;
@@ -290,11 +395,18 @@ impl StoreSession {
             .map_err(|_| block_error::Error::new("invalid nonce".to_string()))?;
         let ciphertext = hex::decode(&file.ciphertext)
             .map_err(|_| block_error::Error::new("invalid ciphertext".to_string()))?;
+        // Bounded before use: these three numbers come straight off disk and drive an
+        // allocation, so an absurd memory cost here is an out-of-memory kill rather than a
+        // failed unlock.
+        check_kdf_params(file.kdf.m_kib, file.kdf.t, file.kdf.p)?;
         let key = derive_key(password, &salt, file.kdf.m_kib, file.kdf.t, file.kdf.p)?;
-        let plaintext = decrypt(&key, &nonce, &ciphertext)?;
-        let payload: PayloadV1 = serde_json::from_slice(&plaintext).map_err(|_| {
-            block_error::Error::new("invalid wallet payload".to_string())
-        })?;
+        let mut plaintext = decrypt(&key, &nonce, &ciphertext)?;
+        let parsed = serde_json::from_slice::<PayloadV1>(&plaintext)
+            .map_err(|_| block_error::Error::new("invalid wallet payload".to_string()));
+        // Same reasoning as `write_file`: the decrypted JSON holds every secret in the
+        // clear, so the buffer is wiped rather than handed back to the allocator intact.
+        plaintext.zeroize();
+        let payload = parsed?;
         if payload.schema != SCHEMA_VERSION {
             return Err(block_error::Error::new(format!(
                 "unsupported payload schema {}",
@@ -335,6 +447,10 @@ impl Drop for StoreSession {
 mod tests {
     use super::*;
     use rand::RngCore;
+
+    /// Long enough to satisfy `check_password_strength`; the tests care about the crypto
+    /// round-trip, not the policy.
+    const TEST_PASSWORD: &str = "correct horse battery staple";
 
     fn temp_path() -> PathBuf {
         let mut path = std::env::temp_dir();
@@ -395,7 +511,7 @@ mod tests {
     #[test]
     fn session_debug_omits_key_bytes() {
         let path = temp_path();
-        let session = StoreSession::create(&path, "pw", &PayloadV1::new()).unwrap();
+        let session = StoreSession::create(&path, TEST_PASSWORD, &PayloadV1::new()).unwrap();
         let rendered = format!("{session:?}");
         assert!(rendered.contains("StoreSession"));
         assert!(!rendered.contains(&hex::encode(&session.key)));
@@ -437,13 +553,84 @@ mod tests {
     }
 
     #[test]
+    fn short_password_rejected() {
+        let path = temp_path();
+        // A PIN is the case this exists for.
+        assert!(StoreSession::create(&path, "1234", &PayloadV1::new()).is_err());
+        assert!(StoreSession::create(&path, "hunter2", &PayloadV1::new()).is_err());
+        assert!(check_password_strength("just-long-enough").is_ok());
+    }
+
+    #[test]
+    fn password_length_counts_characters_not_bytes() {
+        // 12 characters, 36 bytes in UTF-8. Must be accepted.
+        assert!(check_password_strength("パスワードパスワードパス").is_ok());
+        // 11 characters must not be.
+        assert!(check_password_strength("パスワードパスワードパ").is_err());
+    }
+
+    #[test]
+    fn kdf_params_from_a_hostile_file_are_refused() {
+        // An allocation request measured in gigabytes, from a file the user was handed.
+        assert!(check_kdf_params(4_000_000, 2, 1).is_err());
+        // Weaker than the shipped defaults, which would make the file cheap to attack.
+        assert!(check_kdf_params(8, 1, 1).is_err());
+        assert!(check_kdf_params(19_456, 1, 1).is_err());
+        assert!(check_kdf_params(65_536, 3, 0).is_err());
+        // What this app actually writes.
+        assert!(check_kdf_params(M_KIB, T_COST, P_COST).is_ok());
+        // What older stores were written with, which must still open.
+        assert!(check_kdf_params(19_456, 2, 1).is_ok());
+    }
+
+    #[test]
+    fn a_store_declaring_absurd_kdf_params_fails_before_allocating() {
+        let path = temp_path();
+        StoreSession::create(&path, TEST_PASSWORD, &PayloadV1::new()).unwrap();
+        let mut file: StoreFile = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        file.kdf.m_kib = u32::MAX;
+        fs::write(&path, serde_json::to_vec(&file).unwrap()).unwrap();
+        let err = StoreSession::unlock(&path, TEST_PASSWORD).unwrap_err();
+        let _ = fs::remove_file(&path);
+        match err {
+            block_error::Error::New(message) => assert!(message.contains("memory cost")),
+            _ => panic!("expected a bounded-parameter error, got {err:?}"),
+        }
+    }
+
+    #[test]
+    fn a_failed_write_leaves_the_previous_store_intact() {
+        // The rename is what makes this true; the assertion here is that a completed save
+        // leaves exactly one file and no stray temp alongside it.
+        let path = temp_path();
+        let payload = sample_payload();
+        let session = StoreSession::create(&path, TEST_PASSWORD, &payload).unwrap();
+        session.save(&payload).unwrap();
+        assert!(path.exists());
+        assert!(!path.with_extension("tmp").exists());
+        assert!(StoreSession::unlock(&path, TEST_PASSWORD).is_ok());
+        let _ = fs::remove_file(&path);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_store_is_not_readable_by_other_local_accounts() {
+        use std::os::unix::fs::PermissionsExt;
+        let path = temp_path();
+        StoreSession::create(&path, TEST_PASSWORD, &PayloadV1::new()).unwrap();
+        let mode = fs::metadata(&path).unwrap().permissions().mode() & 0o777;
+        let _ = fs::remove_file(&path);
+        assert_eq!(mode, FILE_MODE_PRIVATE);
+    }
+
+    #[test]
     fn save_rewrites_ciphertext_with_same_key() {
         let path = temp_path();
         let mut payload = sample_payload();
-        let session = StoreSession::create(&path, "pw", &payload).unwrap();
+        let session = StoreSession::create(&path, TEST_PASSWORD, &payload).unwrap();
         payload.settings.eth_node = "https://updated.invalid".to_string();
         session.save(&payload).unwrap();
-        let (loaded, _) = StoreSession::unlock(&path, "pw").unwrap();
+        let (loaded, _) = StoreSession::unlock(&path, TEST_PASSWORD).unwrap();
         assert_eq!(loaded.settings.eth_node, "https://updated.invalid");
         let _ = fs::remove_file(&path);
     }

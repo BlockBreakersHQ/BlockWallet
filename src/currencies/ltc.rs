@@ -130,6 +130,19 @@ impl LitecoinWallet {
         crate::configuration::secrets::wipe_optional_string(&mut self.public_key);
     }
 
+}
+
+/// Every clone of a wallet carries its own copy of the mnemonic and private key in freshly
+/// allocated `String`s. `lock_store` only reaches the copy the app holds, so without this any
+/// other clone — the snapshot a send screen is built from, a temporary passed by value — would
+/// hand its plaintext back to the allocator intact, and from there potentially to swap.
+impl Drop for LitecoinWallet {
+    fn drop(&mut self) {
+        self.wipe_secrets();
+    }
+}
+
+impl LitecoinWallet {
     pub fn generate_qr_address(&self) -> Result<gdk4::Texture, block_error::Error> {
         let address = match &self.address {
             Some(addr) => addr,
@@ -170,15 +183,15 @@ fn wallet_from_secret(secret: [u8; 32], network: LtcNetwork) -> Result<LitecoinW
     let address = ltc_chain::encode_address(&pubkey_hash.to_byte_array(), network)?;
     let wif = ltc_chain::encode_wif(&secret, network);
 
-    Ok(LitecoinWallet {
-        private_key: Some(wif),
-        public_key: Some(hex::encode(public_key.to_bytes())),
-        address: Some(address),
-        network: Some(ltc_chain::network_name(network).to_string()),
-        balance: Arc::new(Mutex::new(String::from("Uninitialized"))),
-        history: Arc::new(Mutex::new(Vec::new())),
-        ..Default::default()
-    })
+    // Field by field: the zeroizing `Drop` on this type rules out struct-update syntax.
+    let mut wallet = LitecoinWallet::default();
+    wallet.private_key = Some(wif);
+    wallet.public_key = Some(hex::encode(public_key.to_bytes()));
+    wallet.address = Some(address);
+    wallet.network = Some(ltc_chain::network_name(network).to_string());
+    wallet.balance = Arc::new(Mutex::new(String::from("Uninitialized")));
+    wallet.history = Arc::new(Mutex::new(Vec::new()));
+    Ok(wallet)
 }
 
 /// Double-SHA256, used by the hand-rolled WIF base58check encoding in `ltc_chain.rs`.
@@ -224,7 +237,7 @@ mod tests {
     #[test]
     fn generate_from_known_mnemonic_is_bech32_ltc() {
         let wallet = generate_from_mnemonic(ABANDON, "").unwrap();
-        let address = wallet.address.unwrap();
+        let address = wallet.address.clone().unwrap();
         assert!(address.starts_with("ltc1q"), "{address}");
         assert_eq!(wallet.path.as_deref(), Some(DEFAULT_LTC_MAINNET_PATH));
         assert!(wallet.private_key.as_deref().unwrap().starts_with('T') || wallet.private_key.as_deref().unwrap().starts_with('6'));
@@ -233,7 +246,7 @@ mod tests {
     #[test]
     fn testnet_mnemonic_derives_tltc_address() {
         let wallet = LitecoinWallet::from_mnemonic_on(ABANDON, "", LtcNetwork::Testnet).unwrap();
-        let address = wallet.address.unwrap();
+        let address = wallet.address.clone().unwrap();
         assert!(address.starts_with("tltc1q"), "{address}");
         assert_eq!(wallet.path.as_deref(), Some(DEFAULT_LTC_TESTNET_PATH));
     }

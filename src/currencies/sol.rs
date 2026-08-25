@@ -144,6 +144,19 @@ impl SolanaWallet {
         crate::configuration::secrets::wipe_optional_string(&mut self.public_key);
     }
 
+}
+
+/// Every clone of a wallet carries its own copy of the mnemonic and private key in freshly
+/// allocated `String`s. `lock_store` only reaches the copy the app holds, so without this any
+/// other clone — the snapshot a send screen is built from, a temporary passed by value — would
+/// hand its plaintext back to the allocator intact, and from there potentially to swap.
+impl Drop for SolanaWallet {
+    fn drop(&mut self) {
+        self.wipe_secrets();
+    }
+}
+
+impl SolanaWallet {
     pub fn generate_qr_address(&self) -> Result<gdk4::Texture, block_error::Error> {
         let address = match &self.address {
             Some(addr) => addr,
@@ -176,14 +189,14 @@ fn wallet_from_secret(secret: [u8; 32], mnemonic: Option<String>, path: Option<S
     let signing_key = SigningKey::from_bytes(&secret);
     let address = bs58::encode(signing_key.verifying_key().to_bytes()).into_string();
 
-    SolanaWallet {
-        mnemonic,
-        private_key: Some(bs58::encode(secret).into_string()),
-        public_key: Some(address.clone()),
-        address: Some(address),
-        path,
-        ..Default::default()
-    }
+    // Field by field: the zeroizing `Drop` on this type rules out struct-update syntax.
+    let mut wallet = SolanaWallet::default();
+    wallet.mnemonic = mnemonic;
+    wallet.private_key = Some(bs58::encode(secret).into_string());
+    wallet.public_key = Some(address.clone());
+    wallet.address = Some(address);
+    wallet.path = path;
+    wallet
 }
 
 pub(crate) fn signing_key_from_base58(private_key: &str) -> Result<SigningKey, block_error::Error> {
@@ -243,7 +256,7 @@ mod tests {
             "",
         )
         .unwrap();
-        let address = wallet.address.unwrap();
+        let address = wallet.address.clone().unwrap();
         // Base58 Solana addresses are 32-44 chars; never 0x-prefixed hex.
         assert!(address.len() >= 32 && address.len() <= 44);
         assert!(!address.starts_with("0x"));

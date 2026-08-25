@@ -11,6 +11,12 @@ pub fn wipe_vec(bytes: &mut Vec<u8>) {
     bytes.zeroize();
 }
 
+/// Clear a `String` in place. For secrets held as a plain `String` rather than an `Option`,
+/// such as the API keys.
+pub fn wipe_string(value: &mut String) {
+    value.zeroize();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

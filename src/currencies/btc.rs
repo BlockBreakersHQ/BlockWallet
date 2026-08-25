@@ -143,17 +143,19 @@ impl BitcoinWallet {
             .create_wallet_no_persist()
             .map_err(|e| block_error::Error::new(format!("BDK wallet from WIF failed: {:?}", e)))?;
 
-        Ok(Self {
-            private_key: Some(private_key.to_wif()),
-            public_key: Some(public_key.to_string()),
-            address: Some(address.to_string()),
-            network: Some(format!("{}", network)),
-            compressed: Some(private_key.compressed),
-            path: Some(String::from("wpkh(WIF)")),
-            balance: Arc::new(Mutex::new(String::from("Uninitialized"))),
-            history: Arc::new(Mutex::new(Vec::new())),
-            ..Default::default()
-        })
+        // Built field by field rather than with `..Default::default()`: this type has a
+        // zeroizing `Drop`, and struct-update syntax would have to move out of a temporary
+        // that cannot be dropped piecewise.
+        let mut wallet = Self::default();
+        wallet.private_key = Some(private_key.to_wif());
+        wallet.public_key = Some(public_key.to_string());
+        wallet.address = Some(address.to_string());
+        wallet.network = Some(format!("{}", network));
+        wallet.compressed = Some(private_key.compressed);
+        wallet.path = Some(String::from("wpkh(WIF)"));
+        wallet.balance = Arc::new(Mutex::new(String::from("Uninitialized")));
+        wallet.history = Arc::new(Mutex::new(Vec::new()));
+        Ok(wallet)
     }
 
     pub fn sync_from_seed(
@@ -177,6 +179,19 @@ impl BitcoinWallet {
         crate::configuration::secrets::wipe_optional_string(&mut self.transaction_hex);
     }
 
+}
+
+/// Every clone of a wallet carries its own copy of the mnemonic and private key in freshly
+/// allocated `String`s. `lock_store` only reaches the copy the app holds, so without this any
+/// other clone — the snapshot a send screen is built from, a temporary passed by value — would
+/// hand its plaintext back to the allocator intact, and from there potentially to swap.
+impl Drop for BitcoinWallet {
+    fn drop(&mut self) {
+        self.wipe_secrets();
+    }
+}
+
+impl BitcoinWallet {
     pub fn generate_qr_address(&self) -> Result<gdk4::Texture, block_error::Error> {
         let address = match &self.address {
             Some(addr) => addr,
@@ -241,19 +256,18 @@ fn wallet_from_bip84_xprv(
     let private_key = PrivateKey::new(derived.private_key, network);
     let public_key = private_key.public_key(&secp);
 
-    Ok(BitcoinWallet {
-        mnemonic,
-        password: if passphrase.is_empty() { None } else { Some(passphrase.to_string()) },
-        private_key: Some(private_key.to_wif()),
-        public_key: Some(public_key.to_string()),
-        address: Some(address.to_string()),
-        network: Some(format!("{}", network)),
-        compressed: Some(true),
-        path: Some(String::from(bip84_account_path(network))),
-        balance: Arc::new(Mutex::new(String::from("Uninitialized"))),
-        history: Arc::new(Mutex::new(Vec::new())),
-        ..Default::default()
-    })
+    let mut wallet = BitcoinWallet::default();
+    wallet.mnemonic = mnemonic;
+    wallet.password = if passphrase.is_empty() { None } else { Some(passphrase.to_string()) };
+    wallet.private_key = Some(private_key.to_wif());
+    wallet.public_key = Some(public_key.to_string());
+    wallet.address = Some(address.to_string());
+    wallet.network = Some(format!("{}", network));
+    wallet.compressed = Some(true);
+    wallet.path = Some(String::from(bip84_account_path(network)));
+    wallet.balance = Arc::new(Mutex::new(String::from("Uninitialized")));
+    wallet.history = Arc::new(Mutex::new(Vec::new()));
+    Ok(wallet)
 }
 
 fn network_from_kind(kind: NetworkKind) -> Network {
@@ -307,7 +321,7 @@ mod tests {
     #[test]
     fn new_wallet_is_bip84_native_segwit() {
         let wallet = BitcoinWallet::new().expect("BDK wallet");
-        let address = wallet.address.expect("address");
+        let address = wallet.address.clone().expect("address");
         assert!(address.starts_with("bc1q"), "{address}");
         assert_eq!(wallet.path.as_deref(), Some("m/84'/0'/0'"));
         assert!(wallet.mnemonic.is_some());
@@ -321,7 +335,7 @@ mod tests {
             Network::Testnet,
         )
         .unwrap();
-        let address = wallet.address.unwrap();
+        let address = wallet.address.clone().unwrap();
         assert!(address.starts_with("tb1q"), "{address}");
         assert_eq!(wallet.path.as_deref(), Some("m/84'/1'/0'"));
     }
@@ -343,7 +357,7 @@ mod tests {
         )
         .unwrap();
         assert!(wallet.mnemonic.is_some());
-        let address = wallet.address.unwrap();
+        let address = wallet.address.clone().unwrap();
         assert!(address.starts_with("bc1q"), "BIP84 address should be native segwit: {address}");
         assert_eq!(wallet.path.as_deref(), Some("m/84'/0'/0'"));
     }

@@ -2,6 +2,7 @@ use adw::prelude::*;
 use glib::{clone, ControlFlow};
 use gtk::{Button, Orientation};
 use pango::WrapMode;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -34,6 +35,11 @@ struct SendChrome {
     summary: gtk::Label,
     confirm: Button,
     cancel: Button,
+    /// The "I understand this spends real value" tick. Owned by the caller so it can be
+    /// re-armed for every send rather than staying ticked for the life of the screen.
+    ack: gtk::CheckButton,
+    /// Whether this screen is on a real-value network, i.e. whether `ack` gates Confirm.
+    spends_real_value: bool,
     /// Testnet vs real-value strip above the summary, filled in when a plan is ready.
     network_note: gtk::Label,
     status: gtk::Label,
@@ -88,8 +94,10 @@ fn send_chrome(chain: &str, spends_real_value: bool, ack_text: &str) -> SendChro
         confirm.set_sensitive(false);
     }
     let confirm_gate = confirm.clone();
+    // `!spends_real_value ||` matters: on a testnet screen the tick is hidden and never
+    // gates anything, so re-arming it between sends must not leave Confirm dead.
     ack.connect_toggled(move |cb| {
-        confirm_gate.set_sensitive(cb.is_active());
+        confirm_gate.set_sensitive(!spends_real_value || cb.is_active());
     });
 
     confirm_box.append(&network_note);
@@ -118,8 +126,94 @@ fn send_chrome(chain: &str, spends_real_value: bool, ack_text: &str) -> SendChro
         summary,
         confirm,
         cancel,
+        ack,
+        spends_real_value,
         network_note,
         status,
+    }
+}
+
+/// Owns the review card's lifecycle.
+///
+/// Two rules it exists to enforce, both of which were previously unenforced:
+///
+/// 1. A summary the user has read must never outlive the inputs it was built from. Every
+///    field on the form is watched, so editing the recipient after tapping Review tears the
+///    card down instead of leaving Confirm wired to the old plan.
+/// 2. Consent is per-send, not per-screen. `arm` unticks the acknowledgement each time a
+///    plan is prepared, so a second send has to tick it again.
+/// Widgets are held weakly on purpose. The Confirm button owns a click handler that captures
+/// this gate, so a strong reference back to that same button would be a cycle: the handler
+/// keeps the button alive, the button owns the handler, and neither is ever freed. Since
+/// every send screen is rebuilt from scratch on each navigation, that would leak a whole page
+/// of widgets per visit. The page itself keeps these alive for as long as they matter.
+#[derive(Clone)]
+struct ReviewGate {
+    confirm_box: glib::WeakRef<gtk::Box>,
+    ack: glib::WeakRef<gtk::CheckButton>,
+    confirm: glib::WeakRef<Button>,
+    spends_real_value: bool,
+    /// Type-erased `*prepared.lock() = None`, so one gate serves all four chains despite
+    /// each having its own `PreparedSend`.
+    discard_plan: Rc<dyn Fn()>,
+}
+
+impl ReviewGate {
+    fn new<T: 'static>(
+        confirm_box: &gtk::Box,
+        ack: &gtk::CheckButton,
+        confirm: &Button,
+        spends_real_value: bool,
+        prepared: &Arc<Mutex<Option<T>>>,
+    ) -> Self {
+        let slot = prepared.clone();
+        Self {
+            confirm_box: confirm_box.downgrade(),
+            ack: ack.downgrade(),
+            confirm: confirm.downgrade(),
+            spends_real_value,
+            discard_plan: Rc::new(move || *slot.lock().unwrap() = None),
+        }
+    }
+
+    /// Reset the gate to its just-built state. `set_active(false)` only emits `toggled` when
+    /// the value actually changes, so sensitivity is set explicitly rather than relying on
+    /// the handler firing.
+    fn rearm_ack(&self) {
+        if let Some(ack) = self.ack.upgrade() {
+            ack.set_active(false);
+        }
+        if let Some(confirm) = self.confirm.upgrade() {
+            confirm.set_sensitive(!self.spends_real_value);
+        }
+    }
+
+    /// A fresh plan is ready: show the card with consent withdrawn.
+    fn arm(&self) {
+        self.rearm_ack();
+        if let Some(confirm_box) = self.confirm_box.upgrade() {
+            confirm_box.set_visible(true);
+        }
+    }
+
+    /// Something the plan was derived from changed, so the plan no longer describes what the
+    /// user can see. Drop it and hide the card.
+    fn invalidate(&self) {
+        (self.discard_plan)();
+        self.rearm_ack();
+        if let Some(confirm_box) = self.confirm_box.upgrade() {
+            confirm_box.set_visible(false);
+        }
+    }
+
+    fn watch_entry(&self, row: &adw::EntryRow) {
+        let gate = self.clone();
+        row.connect_changed(move |_| gate.invalidate());
+    }
+
+    fn watch_combo(&self, row: &adw::ComboRow) {
+        let gate = self.clone();
+        row.connect_selected_notify(move |_| gate.invalidate());
     }
 }
 
@@ -150,6 +244,8 @@ fn btc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
         summary,
         confirm,
         cancel,
+        ack,
+        spends_real_value,
         network_note,
         status,
     } = chrome;
@@ -185,6 +281,12 @@ fn btc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
     let app_settings = Arc::new(Mutex::new(app_settings));
     let prepared = Arc::new(Mutex::new(None::<btc_chain::PreparedSend>));
 
+    let gate = ReviewGate::new(&confirm_box, &ack, &confirm, spends_real_value, &prepared);
+    gate.watch_entry(&receive_address);
+    gate.watch_entry(&amount);
+    gate.watch_combo(&fee_row);
+    gate.watch_combo(&from_row);
+
     review.connect_clicked(clone!(
         #[strong] app_settings,
         #[strong] prepared,
@@ -192,7 +294,7 @@ fn btc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
         #[weak] amount,
         #[weak] fee,
         #[weak] error,
-        #[weak] confirm_box,
+        #[strong] gate,
         #[weak] summary,
         #[weak] from_wallet,
         move |_| {
@@ -260,10 +362,10 @@ fn btc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
                 receiver,
                 clone!(
                     #[weak] error,
-                    #[weak] confirm_box,
                     #[weak] summary,
                     #[weak] network_note,
                     #[strong] prepared,
+                    #[strong] gate,
                     #[upgrade_or]
                     ControlFlow::Break,
                     move |result| {
@@ -280,12 +382,12 @@ fn btc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
                                 );
                                 summary.set_label(&plan.summary());
                                 *prepared.lock().unwrap() = Some(plan);
-                                confirm_box.set_visible(true);
+                                gate.arm();
                             }
                             Err(_) => {
                                 error.set_label("Could not build that transaction. Check the amount, address and balance, and whether the Bitcoin node is reachable. Receiving still works offline.");
                                 error.set_visible(true);
-                                confirm_box.set_visible(false);
+                                gate.invalidate();
                             }
                         }
                         ControlFlow::Break
@@ -296,12 +398,8 @@ fn btc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
     ));
 
     cancel.connect_clicked(clone!(
-        #[weak] confirm_box,
-        #[strong] prepared,
-        move |_| {
-            *prepared.lock().unwrap() = None;
-            confirm_box.set_visible(false);
-        }
+        #[strong] gate,
+        move |_| gate.invalidate()
     ));
 
     confirm.connect_clicked(clone!(
@@ -309,7 +407,7 @@ fn btc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
         #[strong] prepared,
         #[weak] error,
         #[weak] status,
-        #[weak] confirm_box,
+        #[strong] gate,
         #[weak] from_wallet,
         move |_| {
             let plan = match prepared.lock().unwrap().clone() {
@@ -334,7 +432,9 @@ fn btc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
             error.set_visible(false);
             status.set_label("Broadcasting…");
             status.set_visible(true);
-            confirm_box.set_visible(false);
+            // Clears the plan as well as hiding the card, so a second tap on Confirm while
+            // the first broadcast is still in flight cannot send the same transaction twice.
+            gate.invalidate();
 
             let (sender, receiver) = crate::configuration::ui_channel::unbounded();
             thread::spawn(move || {
@@ -343,9 +443,7 @@ fn btc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
                     &passphrase,
                     &network_name,
                     &node,
-                    &plan.to,
-                    plan.amount_sats,
-                    plan.fee_rate_sat_vb,
+                    &plan,
                 );
                 let _ = sender.send_blocking(result);
             });
@@ -390,6 +488,8 @@ fn ltc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
         summary,
         confirm,
         cancel,
+        ack,
+        spends_real_value,
         network_note,
         status,
     } = send_chrome("ltc", ltc_mainnet, "I understand this spends real litecoin.");
@@ -422,14 +522,20 @@ fn ltc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
     let app_settings = Arc::new(Mutex::new(app_settings));
     let prepared = Arc::new(Mutex::new(None::<ltc_chain::PreparedSend>));
 
+    let gate = ReviewGate::new(&confirm_box, &ack, &confirm, spends_real_value, &prepared);
+    gate.watch_entry(&receive_address);
+    gate.watch_entry(&amount);
+    gate.watch_combo(&fee_row);
+    gate.watch_combo(&from_row);
+
     review.connect_clicked(clone!(
         #[strong] app_settings,
         #[strong] prepared,
+        #[strong] gate,
         #[weak] receive_address,
         #[weak] amount,
         #[weak] fee,
         #[weak] error,
-        #[weak] confirm_box,
         #[weak] summary,
         #[weak] from_wallet,
         move |_| {
@@ -479,10 +585,10 @@ fn ltc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
                 receiver,
                 clone!(
                     #[weak] error,
-                    #[weak] confirm_box,
                     #[weak] summary,
                     #[weak] network_note,
                     #[strong] prepared,
+                    #[strong] gate,
                     #[upgrade_or]
                     ControlFlow::Break,
                     move |result| {
@@ -499,12 +605,12 @@ fn ltc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
                                 );
                                 summary.set_label(&plan.summary());
                                 *prepared.lock().unwrap() = Some(plan);
-                                confirm_box.set_visible(true);
+                                gate.arm();
                             }
                             Err(_) => {
                                 error.set_label("Could not build that transaction. Check the amount, address and balance, and whether the Litecoin node is reachable. Receiving still works offline.");
                                 error.set_visible(true);
-                                confirm_box.set_visible(false);
+                                gate.invalidate();
                             }
                         }
                         ControlFlow::Break
@@ -515,12 +621,8 @@ fn ltc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
     ));
 
     cancel.connect_clicked(clone!(
-        #[weak] confirm_box,
-        #[strong] prepared,
-        move |_| {
-            *prepared.lock().unwrap() = None;
-            confirm_box.set_visible(false);
-        }
+        #[strong] gate,
+        move |_| gate.invalidate()
     ));
 
     confirm.connect_clicked(clone!(
@@ -528,7 +630,7 @@ fn ltc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
         #[strong] prepared,
         #[weak] error,
         #[weak] status,
-        #[weak] confirm_box,
+        #[strong] gate,
         #[weak] from_wallet,
         move |_| {
             let plan = match prepared.lock().unwrap().clone() {
@@ -552,7 +654,7 @@ fn ltc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
             error.set_visible(false);
             status.set_label("Broadcasting…");
             status.set_visible(true);
-            confirm_box.set_visible(false);
+            gate.invalidate();
 
             let (sender, receiver) = crate::configuration::ui_channel::unbounded();
             thread::spawn(move || {
@@ -602,6 +704,8 @@ fn eth_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
         summary,
         confirm,
         cancel,
+        ack,
+        spends_real_value,
         network_note,
         status,
     } = send_chrome("eth", eth_real_value, "I understand this spends real value.");
@@ -637,20 +741,26 @@ fn eth_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
     let prepared = Arc::new(Mutex::new(None::<eth_chain::PreparedSend>));
     let token = Arc::new(token);
 
+    let gate = ReviewGate::new(&confirm_box, &ack, &confirm, spends_real_value, &prepared);
+    gate.watch_entry(&receive_address);
+    gate.watch_entry(&amount);
+    gate.watch_combo(&fee_row);
+    gate.watch_combo(&from_row);
+
     review.connect_clicked(clone!(
         #[strong] app_settings,
         #[strong] prepared,
         #[strong] token,
+        #[strong] gate,
         #[weak] receive_address,
         #[weak] amount,
         #[weak] fee,
         #[weak] error,
-        #[weak] confirm_box,
         #[weak] summary,
         #[weak] from_wallet,
         move |_| {
             error.set_visible(false);
-            confirm_box.set_visible(false);
+            gate.invalidate();
             let settings = app_settings.lock().unwrap();
             let index = from_wallet.selected() as usize;
             let Some(wallet) = settings.eth_wallets.get(index) else {
@@ -706,10 +816,10 @@ fn eth_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
                 receiver,
                 clone!(
                     #[weak] error,
-                    #[weak] confirm_box,
                     #[weak] summary,
                     #[weak] network_note,
                     #[strong] prepared,
+                    #[strong] gate,
                     #[upgrade_or]
                     ControlFlow::Break,
                     move |result| {
@@ -726,12 +836,12 @@ fn eth_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
                                 );
                                 summary.set_label(&plan.summary());
                                 *prepared.lock().unwrap() = Some(plan);
-                                confirm_box.set_visible(true);
+                                gate.arm();
                             }
                             Err(_) => {
                                 error.set_label("Could not build that transaction. Check the amount, address and balance, and whether the Ethereum node is reachable. Receiving still works offline.");
                                 error.set_visible(true);
-                                confirm_box.set_visible(false);
+                                gate.invalidate();
                             }
                         }
                         ControlFlow::Break
@@ -742,12 +852,8 @@ fn eth_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
     ));
 
     cancel.connect_clicked(clone!(
-        #[weak] confirm_box,
-        #[strong] prepared,
-        move |_| {
-            *prepared.lock().unwrap() = None;
-            confirm_box.set_visible(false);
-        }
+        #[strong] gate,
+        move |_| gate.invalidate()
     ));
 
     confirm.connect_clicked(clone!(
@@ -755,7 +861,7 @@ fn eth_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
         #[strong] prepared,
         #[weak] error,
         #[weak] status,
-        #[weak] confirm_box,
+        #[strong] gate,
         #[weak] from_wallet,
         move |_| {
             let plan = match prepared.lock().unwrap().clone() {
@@ -780,7 +886,7 @@ fn eth_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
             error.set_visible(false);
             status.set_label("Broadcasting…");
             status.set_visible(true);
-            confirm_box.set_visible(false);
+            gate.invalidate();
 
             let (sender, receiver) = crate::configuration::ui_channel::unbounded();
             thread::spawn(move || {
@@ -834,6 +940,8 @@ fn sol_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
         summary,
         confirm,
         cancel,
+        ack,
+        spends_real_value,
         network_note,
         status,
     } = send_chrome("sol", sol_mainnet, "I understand this spends real SOL or tokens.");
@@ -874,19 +982,24 @@ fn sol_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
     let prepared = Arc::new(Mutex::new(None::<sol_chain::PreparedSend>));
     let token = Arc::new(token);
 
+    let gate = ReviewGate::new(&confirm_box, &ack, &confirm, spends_real_value, &prepared);
+    gate.watch_entry(&receive_address);
+    gate.watch_entry(&amount);
+    gate.watch_combo(&from_row);
+
     review.connect_clicked(clone!(
         #[strong] app_settings,
         #[strong] prepared,
         #[strong] token,
+        #[strong] gate,
         #[weak] receive_address,
         #[weak] amount,
         #[weak] error,
-        #[weak] confirm_box,
         #[weak] summary,
         #[weak] from_wallet,
         move |_| {
             error.set_visible(false);
-            confirm_box.set_visible(false);
+            gate.invalidate();
             let settings = app_settings.lock().unwrap();
             let index = from_wallet.selected() as usize;
             let Some(wallet) = settings.sol_wallets.get(index) else {
@@ -926,10 +1039,10 @@ fn sol_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
                 receiver,
                 clone!(
                     #[weak] error,
-                    #[weak] confirm_box,
                     #[weak] summary,
                     #[weak] network_note,
                     #[strong] prepared,
+                    #[strong] gate,
                     #[upgrade_or]
                     ControlFlow::Break,
                     move |result| {
@@ -946,12 +1059,12 @@ fn sol_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
                                 );
                                 summary.set_label(&plan.summary());
                                 *prepared.lock().unwrap() = Some(plan);
-                                confirm_box.set_visible(true);
+                                gate.arm();
                             }
                             Err(_) => {
                                 error.set_label("Could not build that transaction. Check the amount, address and balance, and whether the Solana node is reachable. Receiving still works offline.");
                                 error.set_visible(true);
-                                confirm_box.set_visible(false);
+                                gate.invalidate();
                             }
                         }
                         ControlFlow::Break
@@ -962,12 +1075,8 @@ fn sol_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
     ));
 
     cancel.connect_clicked(clone!(
-        #[weak] confirm_box,
-        #[strong] prepared,
-        move |_| {
-            *prepared.lock().unwrap() = None;
-            confirm_box.set_visible(false);
-        }
+        #[strong] gate,
+        move |_| gate.invalidate()
     ));
 
     confirm.connect_clicked(clone!(
@@ -975,7 +1084,7 @@ fn sol_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
         #[strong] prepared,
         #[weak] error,
         #[weak] status,
-        #[weak] confirm_box,
+        #[strong] gate,
         #[weak] from_wallet,
         move |_| {
             let plan = match prepared.lock().unwrap().clone() {
@@ -999,7 +1108,7 @@ fn sol_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
             error.set_visible(false);
             status.set_label("Broadcasting…");
             status.set_visible(true);
-            confirm_box.set_visible(false);
+            gate.invalidate();
 
             let (sender, receiver) = crate::configuration::ui_channel::unbounded();
             thread::spawn(move || {

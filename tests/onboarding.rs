@@ -27,8 +27,14 @@ fn create_confirm_restore_and_password_checks() {
         Err(OnboardingError::InvalidPhrase)
     );
     assert_eq!(
-        validate_password("pw", "no"),
+        validate_password("a-long-enough-password", "a-different-password"),
         Err(OnboardingError::PasswordMismatch)
     );
-    assert!(validate_password("pw", "pw").is_ok());
+    assert!(validate_password("a-long-enough-password", "a-long-enough-password").is_ok());
+    // Short passwords are refused before the mismatch check, so a PIN cannot become the
+    // only thing protecting a copied wallet file.
+    assert_eq!(
+        validate_password("pw", "pw"),
+        Err(OnboardingError::PasswordTooShort)
+    );
 }

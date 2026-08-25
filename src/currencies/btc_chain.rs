@@ -16,9 +16,29 @@ use bdk_wallet::template::Bip84;
 use bdk_wallet::{KeychainKind, SignOptions, Wallet};
 
 use crate::configuration::block_error;
+use crate::currencies::fees::{check_fee_is_sane, clamp_fee_rate};
 
 const STOP_GAP: usize = 20;
 const PARALLEL_REQUESTS: usize = 1;
+/// Matches the ceiling the shared HTTP client applies to every other chain. BDK builds its
+/// own transports, so without this the Bitcoin backends would be the one path with no
+/// timeout at all — a wedged Esplora or Electrum server would pin the sync thread forever.
+const NETWORK_TIMEOUT_SECS: u64 = 30;
+
+fn esplora_client(url: &str) -> bdk_esplora::esplora_client::BlockingClient {
+    EsploraBuilder::new(url)
+        .timeout(NETWORK_TIMEOUT_SECS)
+        .build_blocking()
+}
+
+fn electrum_client_for(url: &str) -> Result<BdkElectrumClient<electrum_client::Client>, block_error::Error> {
+    let config = electrum_client::ConfigBuilder::new()
+        .timeout(Some(NETWORK_TIMEOUT_SECS as u8))
+        .build();
+    let raw = electrum_client::Client::from_config(url, config)
+        .map_err(|e| block_error::Error::new(format!("electrum client: {e}")))?;
+    Ok(BdkElectrumClient::new(raw))
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum BtcBackend {
@@ -81,6 +101,11 @@ impl BtcSyncState {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct PreparedSend {
+    /// The account this plan was built against. `sign_and_broadcast` refuses a key that
+    /// derives anything else, so a plan reviewed for one account can never be signed by
+    /// another — the UI re-reads the account dropdown at confirm time, and without this
+    /// binding a change to that dropdown would silently debit the wrong wallet.
+    pub from: String,
     pub to: String,
     pub amount_sats: u64,
     pub fee_sats: u64,
@@ -152,10 +177,7 @@ pub fn is_bech32_address(address: &str) -> bool {
 }
 
 pub fn btc_to_sats(input: &str) -> Result<u64, block_error::Error> {
-    let s = input.trim().replace(',', "");
-    if s.is_empty() {
-        return Err(block_error::Error::new("amount is required".to_string()));
-    }
+    let s = crate::currencies::amount::normalize_decimal_input(input)?;
     if let Some((whole, frac)) = s.split_once('.') {
         if frac.len() > 8 {
             return Err(block_error::Error::new("amount has more than 8 decimal places".to_string()));
@@ -195,11 +217,13 @@ pub fn format_btc(sats: u64) -> String {
 }
 
 pub fn fee_rate_from_tier(tiers: &FeeTiers, label: &str) -> f32 {
-    match label.to_ascii_lowercase().as_str() {
-        "low" => tiers.low,
-        "high" => tiers.high,
-        _ => tiers.medium,
-    }
+    let defaults = FeeTiers::default();
+    let (rate, fallback) = match label.to_ascii_lowercase().as_str() {
+        "low" => (tiers.low, defaults.low),
+        "high" => (tiers.high, defaults.high),
+        _ => (tiers.medium, defaults.medium),
+    };
+    clamp_fee_rate(rate, fallback)
 }
 
 fn open_wallet(mnemonic: &str, passphrase: &str, network: Network) -> Result<Wallet, block_error::Error> {
@@ -228,7 +252,7 @@ fn open_wallet(mnemonic: &str, passphrase: &str, network: Network) -> Result<Wal
 fn sync_wallet(wallet: &mut Wallet, backend: &BtcBackend) -> Result<(), block_error::Error> {
     match backend {
         BtcBackend::Esplora(url) => {
-            let client = EsploraBuilder::new(url).build_blocking();
+            let client = esplora_client(url);
             let request = wallet.start_full_scan();
             let update = client
                 .full_scan(request, STOP_GAP, PARALLEL_REQUESTS)
@@ -238,9 +262,7 @@ fn sync_wallet(wallet: &mut Wallet, backend: &BtcBackend) -> Result<(), block_er
                 .map_err(|e| block_error::Error::new(format!("apply esplora update: {e}")))?;
         }
         BtcBackend::Electrum(url) => {
-            let raw = electrum_client::Client::new(url)
-                .map_err(|e| block_error::Error::new(format!("electrum client: {e}")))?;
-            let client = BdkElectrumClient::new(raw);
+            let client = electrum_client_for(url)?;
             let request = wallet.start_full_scan();
             let update = client
                 .full_scan(request, STOP_GAP, 5, false)
@@ -308,16 +330,17 @@ pub fn fetch_fee_tiers(btc_node: &str, network_name: &str) -> FeeTiers {
         BtcBackend::Electrum(_) => return FeeTiers::default(),
     };
     let estimates_url = format!("{}/fee-estimates", url.trim_end_matches('/'));
-    let Ok(resp) = reqwest::blocking::get(&estimates_url) else {
+    let Ok(text) = crate::configuration::http::get_text(&estimates_url) else {
         return FeeTiers::default();
     };
-    let Ok(map) = resp.json::<std::collections::HashMap<String, f32>>() else {
+    let Ok(map) = serde_json::from_str::<std::collections::HashMap<String, f32>>(&text) else {
         return FeeTiers::default();
     };
+    let defaults = FeeTiers::default();
     FeeTiers {
-        high: *map.get("1").unwrap_or(&5.0),
-        medium: *map.get("3").unwrap_or(&2.0),
-        low: *map.get("6").unwrap_or(&1.0),
+        high: clamp_fee_rate(*map.get("1").unwrap_or(&defaults.high), defaults.high),
+        medium: clamp_fee_rate(*map.get("3").unwrap_or(&defaults.medium), defaults.medium),
+        low: clamp_fee_rate(*map.get("6").unwrap_or(&defaults.low), defaults.low),
     }
 }
 
@@ -360,6 +383,10 @@ pub fn prepare_send(
     let address = validate_address(to, network)?;
     let backend = parse_backend(btc_node, network);
     let mut wallet = open_wallet(mnemonic, passphrase, network)?;
+    let from = wallet
+        .peek_address(KeychainKind::External, 0)
+        .address
+        .to_string();
     sync_wallet(&mut wallet, &backend)?;
     let (_psbt, fee) = finish_psbt(
         &mut wallet,
@@ -367,7 +394,9 @@ pub fn prepare_send(
         amount_sats,
         fee_rate_sat_vb,
     )?;
+    check_fee_is_sane(fee, amount_sats)?;
     Ok(PreparedSend {
+        from,
         to: address.to_string(),
         amount_sats,
         fee_sats: fee,
@@ -381,21 +410,31 @@ pub fn sign_and_broadcast(
     passphrase: &str,
     network_name: &str,
     btc_node: &str,
-    to: &str,
-    amount_sats: u64,
-    fee_rate_sat_vb: f32,
+    plan: &PreparedSend,
 ) -> Result<String, block_error::Error> {
     let network = parse_network(network_name);
-    let address = validate_address(to, network)?;
+    let address = validate_address(&plan.to, network)?;
     let backend = parse_backend(btc_node, network);
     let mut wallet = open_wallet(mnemonic, passphrase, network)?;
+    let from = wallet
+        .peek_address(KeychainKind::External, 0)
+        .address
+        .to_string();
+    if from != plan.from {
+        return Err(block_error::Error::new(
+            "this key does not belong to the account the transaction was reviewed for".to_string(),
+        ));
+    }
     sync_wallet(&mut wallet, &backend)?;
-    let (mut psbt, _fee) = finish_psbt(
+    let (mut psbt, fee) = finish_psbt(
         &mut wallet,
         address.script_pubkey(),
-        amount_sats,
-        fee_rate_sat_vb,
+        plan.amount_sats,
+        plan.fee_rate_sat_vb,
     )?;
+    // Re-checked here, not just at prepare time: the fee is rebuilt from a fresh sync, so a
+    // node that inflated its estimate between review and confirm would otherwise slip past.
+    check_fee_is_sane(fee, plan.amount_sats)?;
     let signed = wallet
         .sign(&mut psbt, SignOptions::default())
         .map_err(|e| block_error::Error::new(format!("signing failed: {e:?}")))?;
@@ -413,15 +452,13 @@ pub fn sign_and_broadcast(
 fn broadcast_tx(backend: &BtcBackend, tx: &Transaction) -> Result<(), block_error::Error> {
     match backend {
         BtcBackend::Esplora(url) => {
-            let client = EsploraBuilder::new(url).build_blocking();
+            let client = esplora_client(url);
             client
                 .broadcast(tx)
                 .map_err(|e| block_error::Error::new(format!("broadcast failed: {e}")))?;
         }
         BtcBackend::Electrum(url) => {
-            let raw = electrum_client::Client::new(url)
-                .map_err(|e| block_error::Error::new(format!("electrum client: {e}")))?;
-            let client = BdkElectrumClient::new(raw);
+            let client = electrum_client_for(url)?;
             client
                 .transaction_broadcast(tx)
                 .map_err(|e| block_error::Error::new(format!("broadcast failed: {e}")))?;
@@ -481,6 +518,7 @@ mod tests {
     #[test]
     fn prepared_send_summary_has_fee_and_total() {
         let prepared = PreparedSend {
+            from: "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4".into(),
             to: "bc1qcr8te4kr609gcawutmrza0j4xv80jy8z306fyu".into(),
             amount_sats: 100_000,
             fee_sats: 250,

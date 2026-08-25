@@ -13,7 +13,7 @@ fn generate_from_known_mnemonic() {
         "",
     )
     .unwrap();
-    let address = wallet.address.unwrap();
+    let address = wallet.address.clone().unwrap();
     assert!(address.starts_with("0x"));
     assert_eq!(address.len(), 42);
     assert!(wallet.private_key.is_some());

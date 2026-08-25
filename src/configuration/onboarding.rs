@@ -19,6 +19,7 @@ impl WordCount {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OnboardingError {
     EmptyPassword,
+    PasswordTooShort,
     PasswordMismatch,
     PhraseMismatch,
     InvalidPhrase,
@@ -28,6 +29,9 @@ impl OnboardingError {
     pub fn as_label(&self) -> &'static str {
         match self {
             Self::EmptyPassword => "Password must not be empty.",
+            Self::PasswordTooShort => {
+                "Password must be at least 12 characters. A short one can be guessed offline by anyone who copies the wallet file."
+            }
             Self::PasswordMismatch => "Passwords do not match.",
             Self::PhraseMismatch => "Recovery phrase does not match.",
             Self::InvalidPhrase => {
@@ -63,9 +67,14 @@ pub fn parse_restore_phrase(typed: &str) -> Result<String, OnboardingError> {
     seed::parse_mnemonic(&normalize_phrase(typed)).map_err(|_| OnboardingError::InvalidPhrase)
 }
 
+/// Mirrors `wallet_store::check_password_strength`, so the UI refuses a weak password with a
+/// readable message before `StoreSession::create` refuses it with a generic one.
 pub fn validate_password(password: &str, repeat: &str) -> Result<(), OnboardingError> {
     if password.is_empty() {
         return Err(OnboardingError::EmptyPassword);
+    }
+    if crate::configuration::wallet_store::check_password_strength(password).is_err() {
+        return Err(OnboardingError::PasswordTooShort);
     }
     if password != repeat {
         return Err(OnboardingError::PasswordMismatch);
@@ -129,9 +138,17 @@ mod tests {
             Err(OnboardingError::EmptyPassword)
         );
         assert_eq!(
-            validate_password("secret", "other"),
+            validate_password("a-long-enough-password", "other-long-password"),
             Err(OnboardingError::PasswordMismatch)
         );
-        assert!(validate_password("secret", "secret").is_ok());
+        assert!(validate_password("a-long-enough-password", "a-long-enough-password").is_ok());
+    }
+
+    #[test]
+    fn password_must_survive_an_offline_guessing_attack() {
+        // A PIN is the case worth naming: the store file can be copied off a seized phone
+        // and attacked without any rate limit this app could impose.
+        assert_eq!(validate_password("1234", "1234"), Err(OnboardingError::PasswordTooShort));
+        assert_eq!(validate_password("secret", "secret"), Err(OnboardingError::PasswordTooShort));
     }
 }

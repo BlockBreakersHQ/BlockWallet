@@ -13,6 +13,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::configuration::block_error;
+use crate::configuration::http;
+use crate::currencies::fees::{check_fee_is_sane, clamp_fee_rate};
 use crate::currencies::ltc::double_sha256;
 
 const DUST_LIMIT_SATS: u64 = 1_000;
@@ -149,10 +151,7 @@ pub fn decode_wif(wif: &str) -> Result<([u8; 32], LtcNetwork), block_error::Erro
 }
 
 pub fn ltc_to_sats(input: &str) -> Result<u64, block_error::Error> {
-    let s = input.trim().replace(',', "");
-    if s.is_empty() {
-        return Err(block_error::Error::new("amount is required".to_string()));
-    }
+    let s = crate::currencies::amount::normalize_decimal_input(input)?;
     if let Some((whole, frac)) = s.split_once('.') {
         if frac.len() > 8 {
             return Err(block_error::Error::new("amount has more than 8 decimal places".to_string()));
@@ -205,11 +204,13 @@ impl Default for FeeTiers {
 }
 
 pub fn fee_rate_from_tier(tiers: &FeeTiers, label: &str) -> f32 {
-    match label.to_ascii_lowercase().as_str() {
-        "low" => tiers.low,
-        "high" => tiers.high,
-        _ => tiers.medium,
-    }
+    let defaults = FeeTiers::default();
+    let (rate, fallback) = match label.to_ascii_lowercase().as_str() {
+        "low" => (tiers.low, defaults.low),
+        "high" => (tiers.high, defaults.high),
+        _ => (tiers.medium, defaults.medium),
+    };
+    clamp_fee_rate(rate, fallback)
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -306,7 +307,7 @@ pub(crate) fn select_utxos_largest_first(
 }
 
 fn get_json(url: &str) -> Result<Value, block_error::Error> {
-    let text = reqwest::blocking::get(url)?.text()?;
+    let text = http::get_text(url)?;
     serde_json::from_str(&text).map_err(|e| block_error::Error::new(format!("invalid response from esplora: {e}")))
 }
 
@@ -343,9 +344,8 @@ fn get_utxos(base: &str, address: &str) -> Result<Vec<CandidateUtxo>, block_erro
 }
 
 fn get_tip_height(base: &str) -> u64 {
-    reqwest::blocking::get(format!("{base}/blocks/tip/height"))
+    http::get_text(&format!("{base}/blocks/tip/height"))
         .ok()
-        .and_then(|r| r.text().ok())
         .and_then(|t| t.trim().parse::<u64>().ok())
         .unwrap_or(0)
 }
@@ -407,11 +407,19 @@ fn get_history(base: &str, address: &str, tip_height: u64) -> Vec<LtcHistoryItem
 }
 
 fn fetch_fee_tiers(base: &str) -> FeeTiers {
+    let defaults = FeeTiers::default();
+    // Every rate is clamped on the way in, so an absurd or malformed estimate from the node
+    // is neutralised here rather than being carried into transaction building.
+    let bound = |low: f32, medium: f32, high: f32| FeeTiers {
+        low: clamp_fee_rate(low, defaults.low),
+        medium: clamp_fee_rate(medium, defaults.medium),
+        high: clamp_fee_rate(high, defaults.high),
+    };
     if let Ok(map) = get_json(&format!("{base}/fee-estimates")) {
         if let Some(obj) = map.as_object() {
             let get = |k: &str| obj.get(k).and_then(Value::as_f64).map(|v| v as f32);
             if let (Some(high), Some(medium), Some(low)) = (get("1"), get("3"), get("6")) {
-                return FeeTiers { low, medium, high };
+                return bound(low, medium, high);
             }
         }
     }
@@ -420,10 +428,10 @@ fn fetch_fee_tiers(base: &str) -> FeeTiers {
     if let Ok(rec) = get_json(&format!("{base}/v1/fees/recommended")) {
         let get = |k: &str| rec.get(k).and_then(Value::as_f64).map(|v| v as f32);
         if let (Some(high), Some(medium), Some(low)) = (get("fastestFee"), get("halfHourFee"), get("economyFee")) {
-            return FeeTiers { low, medium, high };
+            return bound(low, medium, high);
         }
     }
-    FeeTiers::default()
+    defaults
 }
 
 pub fn fetch_fee_tiers_for(ltc_node: &str, network_name: &str) -> FeeTiers {
@@ -433,11 +441,7 @@ pub fn fetch_fee_tiers_for(ltc_node: &str, network_name: &str) -> FeeTiers {
 }
 
 fn broadcast_raw(base: &str, hex_tx: &str) -> Result<String, block_error::Error> {
-    let resp = reqwest::blocking::Client::new()
-        .post(format!("{base}/tx"))
-        .body(hex_tx.to_string())
-        .send()?;
-    let text = resp.text()?;
+    let text = http::post_text(&format!("{base}/tx"), hex_tx.to_string())?;
     let trimmed = text.trim();
     if trimmed.len() == 64 && trimmed.chars().all(|c| c.is_ascii_hexdigit()) {
         Ok(trimmed.to_string())
@@ -537,6 +541,7 @@ pub fn prepare_send(
         // Not worth an uneconomical change output; fold the dust into the fee instead.
         (fee_sats.saturating_add(raw_change), 0)
     };
+    check_fee_is_sane(final_fee, amount_sats)?;
 
     Ok(PreparedSend {
         from: from.to_string(),
@@ -574,8 +579,22 @@ pub fn sign_and_broadcast(
         .map_err(|_| block_error::Error::new("litecoin key is not compressed".to_string()))?;
     let from_script = ScriptBuf::new_p2wpkh(&pubkey_hash);
 
+    // The plan's UTXOs and change output belong to `plan.from`. The UI re-reads the account
+    // dropdown at confirm time, so without this the wrong key could be paired with this
+    // plan — signing would fail at the node instead of here, and the change output would
+    // have been addressed to an account the user never reviewed.
+    let derived_from = encode_address(pubkey_hash.as_byte_array(), network)?;
+    if derived_from != plan.from {
+        return Err(block_error::Error::new(
+            "this key does not belong to the account the transaction was reviewed for".to_string(),
+        ));
+    }
+
+    // Re-validated against the network in force at broadcast, not just at prepare time.
+    validate_address(&plan.to, network)?;
     let to_decoded = decode_address(&plan.to)?;
     let to_script = witness_program_script(&to_decoded)?;
+    check_fee_is_sane(plan.fee_sats, plan.amount_sats)?;
 
     let mut inputs = Vec::with_capacity(plan.utxos.len());
     let mut prevout_amounts = Vec::with_capacity(plan.utxos.len());
@@ -766,5 +785,55 @@ mod tests {
         let secret_key = SecretKey::from_slice(&secret_key_bytes).unwrap();
         let our_signature = secp.sign_ecdsa(&message, &secret_key);
         assert_eq!(our_signature.serialize_der().as_ref(), expected_sig.signature.serialize_der().as_ref());
+    }
+
+    /// A plan carries the account it was built for, and signing refuses any other key.
+    ///
+    /// The UI re-reads the "From account" dropdown when Confirm is tapped, so without this
+    /// binding a plan reviewed for one account could be signed with another account's key —
+    /// spending its UTXOs and sending change to an address the user never saw.
+    #[test]
+    fn signing_refuses_a_key_from_a_different_account() {
+        let secret_a = [0x11u8; 32];
+        let secret_b = [0x22u8; 32];
+        let wif_b = encode_wif(&secret_b, LtcNetwork::Mainnet);
+
+        let secp = Secp256k1::new();
+        let key_a = PrivateKey::new(SecretKey::from_slice(&secret_a).unwrap(), bdk_wallet::bitcoin::Network::Bitcoin);
+        let hash_a = key_a.public_key(&secp).wpubkey_hash().unwrap();
+        let address_a = encode_address(hash_a.as_byte_array(), LtcNetwork::Mainnet).unwrap();
+
+        let plan = PreparedSend {
+            from: address_a,
+            to: "ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9".to_string(),
+            amount_sats: 100_000,
+            fee_sats: 250,
+            fee_rate_sat_vb: 2.0,
+            total_sats: 100_250,
+            change_sats: 0,
+            utxos: vec![SelectedUtxo {
+                txid: "0000000000000000000000000000000000000000000000000000000000000001".to_string(),
+                vout: 0,
+                value_sats: 200_000,
+            }],
+        };
+
+        // Account B's key against account A's plan. Must be refused locally, before any
+        // network call, rather than producing a transaction the node happens to reject.
+        let err = sign_and_broadcast(&wif_b, &plan, "", "litecoin").unwrap_err();
+        match err {
+            block_error::Error::New(message) => {
+                assert!(message.contains("does not belong to the account"), "got: {message}")
+            }
+            other => panic!("expected an account-binding error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn preparing_a_send_refuses_a_fee_larger_than_the_amount() {
+        // Guards the node-supplied fee estimate: this is the shape of the failure a hostile
+        // or broken endpoint can otherwise force.
+        assert!(check_fee_is_sane(98_000_000, 1_000_000).is_err());
+        assert!(check_fee_is_sane(250, 100_000).is_ok());
     }
 }

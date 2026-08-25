@@ -15,9 +15,11 @@ pub struct CurrencyPairs {
 impl CurrencyPairs {
     pub fn new(app_settings: ApplicationSettings) -> CurrencyPairs {
         let mut pairs: Vec<(Token, Arc<Mutex<String>>)> = Vec::new();
-        let default = app_settings.default_currency;
+        // Cloned rather than moved out: `ApplicationSettings` zeroizes its secrets on drop,
+        // which means its fields cannot be moved out piecewise.
+        let default = app_settings.default_currency.clone();
 
-        for (_key, value) in app_settings.starred {
+        for (_key, value) in app_settings.starred.clone() {
             pairs.push((value, Arc::new(Mutex::new(String::from("Uninitialized")))));
         }
 

@@ -56,6 +56,18 @@ pub struct ApplicationSettings {
     pub sync_epoch          : Arc<AtomicU64>,
 }
 
+/// `ApplicationSettings` is `Clone`, and it is cloned by value in several places — most
+/// notably every navigation to a send screen, which takes an owned snapshot of all four
+/// wallet lists. `lock_store` wipes only the instance it is called on, so every other clone
+/// used to be freed with the mnemonic and private keys still in its heap allocations. This
+/// makes the wipe unconditional: whichever copy goes out of scope, it takes its secrets with
+/// it, which is what the app tells users locking does.
+impl Drop for ApplicationSettings {
+    fn drop(&mut self) {
+        self.wipe_secrets();
+    }
+}
+
 impl std::fmt::Debug for ApplicationSettings {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ApplicationSettings")
@@ -146,17 +158,12 @@ impl ApplicationSettings {
                 }
             };
 
-            if !ypath.as_os_str().is_empty() && !ypath.exists() {
-                match File::create(&ypath) {
-                    Ok(_) => {
-                        let data = "INFURA_KEY=\nETHERSCAN_KEY=\n";
-                        if let Err(why) = fs::write(&ypath, data) {
-                            tracing::warn!(path = %ypath.display(), %why, "could not write network config");
-                        }
-                    },
-                    Err(why) => tracing::warn!(path = %ypath.display(), %why, "could not create network config"),
-                };
-            } else if ypath.exists() {
+            // `network.yml` is a legacy seeding path for the two API keys. The keys are
+            // credentials, and their real home is the encrypted store — this file is read
+            // once to migrate a pre-existing value in and is never written to again, so a
+            // new install never creates a plaintext copy. Anything found here is deleted
+            // after being read, so a key that was sitting in the clear stops being so.
+            if ypath.exists() {
                 let printable_path = ypath.clone();
                 let content = match fs::read_to_string(ypath) {
                     Ok(content) => content,
@@ -167,13 +174,25 @@ impl ApplicationSettings {
                 };
 
                 let contents: Vec<&str> = content.split("\n").collect();
-    
+
                 for i in 0..contents.len() {
                     if let Some(value) = contents[i].strip_prefix("INFURA_KEY=") {
-                        i_key = value.to_string();
+                        i_key = value.trim().to_string();
                     } else if let Some(value) = contents[i].strip_prefix("ETHERSCAN_KEY=") {
-                        e_key = value.to_string();
+                        e_key = value.trim().to_string();
                     }
+                }
+
+                // Migrated. The values now live in the encrypted store, so the plaintext
+                // copy is removed rather than left behind for whoever reads the filesystem
+                // next. Overwritten before unlinking, since a plain remove leaves the old
+                // contents recoverable on most filesystems.
+                if !i_key.is_empty() || !e_key.is_empty() {
+                    let blank = vec![b'0'; content.len()];
+                    let _ = fs::write(&printable_path, blank);
+                }
+                if let Err(why) = fs::remove_file(&printable_path) {
+                    tracing::warn!(path = %printable_path.display(), %why, "could not remove legacy network config");
                 }
             }
         }
@@ -386,6 +405,33 @@ impl ApplicationSettings {
         // there's no token re-bundling to do here.
         let network = crate::currencies::ltc_chain::parse_network(name);
         self.ltc_network = crate::currencies::ltc_chain::network_name(network).to_string();
+
+        // Re-derive the primary account on the new network, exactly as apply_btc_network does.
+        // Litecoin's address and WIF encoding are network-specific, so without this the wallet
+        // keeps its old-network address while every network-dependent decision flips: the send
+        // view would hide the "spends real litecoin" acknowledgement, and the receive screen
+        // would present a mainnet ltc1q… address labelled as testnet.
+        let Some(phrase) = self.mnemonic.clone() else {
+            return;
+        };
+        let passphrase = self.seed_passphrase.clone().unwrap_or_default();
+        // Imported accounts (a bare WIF, no mnemonic) are left alone: they carry their own key
+        // and are not derivable from this seed.
+        let extras: Vec<LitecoinWallet> = self
+            .ltc_wallets
+            .iter()
+            .filter(|wallet| wallet.mnemonic.as_deref() != Some(phrase.as_str()))
+            .cloned()
+            .collect();
+        match seed::litecoin_from_seed_on(&phrase, &passphrase, "Litecoin", network) {
+            Ok(primary) => {
+                self.ltc_wallets = vec![primary];
+                self.ltc_wallets.extend(extras);
+            }
+            Err(_) => {
+                crate::configuration::logging::error("failed to re-derive Litecoin account on network change");
+            }
+        }
     }
 
     pub fn apply_custom_tokens(&mut self) {
@@ -472,15 +518,15 @@ impl ApplicationSettings {
         (None, None)
     }
 
-    pub fn lock_store(&mut self) {
-        if let Some(session) = self.store_session.clone() {
-            let _ = session.save(&self.to_payload());
-        }
-        if let Some(mut session) = self.store_session.take() {
-            session.wipe();
-        }
+    /// Erase every secret this instance holds, without touching disk.
+    ///
+    /// Split out of `lock_store` so `Drop` can reuse it: dropping must never write the store,
+    /// but it must always clear the keys.
+    pub fn wipe_secrets(&mut self) {
         crate::configuration::secrets::wipe_optional_string(&mut self.mnemonic);
         crate::configuration::secrets::wipe_optional_string(&mut self.seed_passphrase);
+        crate::configuration::secrets::wipe_string(&mut self.infura_key);
+        crate::configuration::secrets::wipe_string(&mut self.etherscan_key);
         for wallet in &mut self.btc_wallets {
             wallet.wipe_secrets();
         }
@@ -497,6 +543,16 @@ impl ApplicationSettings {
         self.eth_wallets.clear();
         self.sol_wallets.clear();
         self.ltc_wallets.clear();
+    }
+
+    pub fn lock_store(&mut self) {
+        if let Some(session) = self.store_session.clone() {
+            let _ = session.save(&self.to_payload());
+        }
+        if let Some(mut session) = self.store_session.take() {
+            session.wipe();
+        }
+        self.wipe_secrets();
         self.logged_in = false;
         self.sync_epoch.fetch_add(1, Ordering::SeqCst);
     }
@@ -1193,20 +1249,20 @@ mod tests {
     #[test]
     fn test_generate_btc_wallet() {
         let wallet = ApplicationSettings::generate_btc_wallet(String::from("test_name")).unwrap();
-        assert_eq!(wallet.wallet_name.unwrap(), "test_name");
+        assert_eq!(wallet.wallet_name.clone().unwrap(), "test_name");
     }
 
     #[test]
     fn test_generate_eth_wallet() {
         let wallet = ApplicationSettings::generate_eth_wallet(String::from("test_name")).unwrap();
-        assert_eq!(wallet.wallet_name.unwrap(), "test_name");
+        assert_eq!(wallet.wallet_name.clone().unwrap(), "test_name");
     }
 
     #[test]
     fn test_generate_ltc_wallet() {
         let wallet = ApplicationSettings::generate_ltc_wallet(String::from("test_name")).unwrap();
-        assert_eq!(wallet.wallet_name.unwrap(), "test_name");
-        assert!(wallet.address.unwrap().starts_with("ltc1q"));
+        assert_eq!(wallet.wallet_name.clone().unwrap(), "test_name");
+        assert!(wallet.address.clone().unwrap().starts_with("ltc1q"));
     }
 
     #[test]

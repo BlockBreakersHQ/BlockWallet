@@ -1,8 +1,10 @@
 use adw::prelude::*;
 use adw::ApplicationWindow;
-use glib::clone;
-use gtk::Orientation;
+use glib::{clone, ControlFlow};
+use gtk::{Button, Orientation};
 use std::sync::{Arc, Mutex};
+use std::thread;
+use zeroize::Zeroize;
 
 use crate::configuration::application_settings::*;
 use crate::views::stack;
@@ -101,8 +103,8 @@ pub fn login_view(window: ApplicationWindow, app_settings: ApplicationSettings) 
         #[weak] input,
         #[weak] failed_login,
         #[strong] app_settings,
-        move |_| {
-            try_unlock(&window, &input, &failed_login, &app_settings);
+        move |button| {
+            try_unlock(&window, &input, &failed_login, button, &app_settings);
         }
     ));
     // `connect_entry_activated`, not `connect_activate`: the latter compiles, because
@@ -112,9 +114,10 @@ pub fn login_view(window: ApplicationWindow, app_settings: ApplicationSettings) 
         #[weak] window,
         #[weak] input,
         #[weak] failed_login,
+        #[weak] button,
         #[strong] app_settings,
         move |_| {
-            try_unlock(&window, &input, &failed_login, &app_settings);
+            try_unlock(&window, &input, &failed_login, &button, &app_settings);
         }
     ));
 }
@@ -123,26 +126,55 @@ fn try_unlock(
     window: &ApplicationWindow,
     input: &adw::PasswordEntryRow,
     failed_login: &gtk::Label,
+    button: &Button,
     app_settings: &Arc<Mutex<ApplicationSettings>>,
 ) {
-    let password = input.text().to_string();
+    let mut password = input.text().to_string();
     input.set_text("");
     if password.is_empty() {
         failed_login.set_visible(true);
         return;
     }
 
-    let unlocked = match app_settings.lock().unwrap().unlock_store(&password) {
-        Ok(_) => true,
-        Err(_) => {
-            failed_login.set_visible(true);
-            false
-        }
-    };
+    // Argon2id at 64 MiB / t=3 takes appreciable time on a Librem 5, and this used to run on
+    // the GTK main thread: the whole UI froze for the duration of every attempt, including
+    // every wrong one. Off-thread instead, with the button disabled so a second tap cannot
+    // start a concurrent derivation.
+    failed_login.set_visible(false);
+    button.set_sensitive(false);
+    button.set_label("Unlocking…");
 
-    if unlocked {
-        failed_login.set_visible(false);
-        let settings = app_settings.lock().unwrap().clone();
-        stack::stack_view(window, settings);
-    }
+    let (sender, receiver) = crate::configuration::ui_channel::unbounded();
+    let settings_for_thread = app_settings.clone();
+    thread::spawn(move || {
+        let result = settings_for_thread.lock().unwrap().unlock_store(&password);
+        // The password has served its purpose; wipe this copy rather than letting the
+        // allocation go back to the heap with the plaintext still in it.
+        password.zeroize();
+        let _ = sender.send_blocking(result.is_ok());
+    });
+
+    crate::configuration::ui_channel::attach(
+        receiver,
+        clone!(
+            #[weak] window,
+            #[weak] failed_login,
+            #[weak] button,
+            #[strong] app_settings,
+            #[upgrade_or]
+            ControlFlow::Break,
+            move |unlocked| {
+                button.set_sensitive(true);
+                button.set_label("Unlock");
+                if unlocked {
+                    failed_login.set_visible(false);
+                    let settings = app_settings.lock().unwrap().clone();
+                    stack::stack_view(&window, settings);
+                } else {
+                    failed_login.set_visible(true);
+                }
+                ControlFlow::Break
+            }
+        ),
+    );
 }

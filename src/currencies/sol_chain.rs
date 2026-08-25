@@ -222,13 +222,7 @@ pub fn validate_address(address: &str) -> Result<Pubkey, block_error::Error> {
 }
 
 pub fn parse_token_amount(input: &str, decimals: u8) -> Result<u64, block_error::Error> {
-    let s = input.trim().replace(',', "");
-    if s.is_empty() {
-        return Err(block_error::Error::new("amount is required".into()));
-    }
-    if s.starts_with('-') {
-        return Err(block_error::Error::new("amount must be greater than 0".into()));
-    }
+    let s = crate::currencies::amount::normalize_decimal_input(input)?;
     let (whole, frac) = match s.split_once('.') {
         Some((whole, frac)) => (whole, frac),
         None => (s.as_str(), ""),
@@ -292,11 +286,9 @@ fn compact_u16_encode(mut value: u16, out: &mut Vec<u8>) {
 
 fn rpc_call(rpc: &str, method: &str, params: Value) -> Result<Value, block_error::Error> {
     let body = json!({"jsonrpc": "2.0", "id": 1, "method": method, "params": params});
-    let response: Value = reqwest::blocking::Client::new()
-        .post(rpc)
-        .json(&body)
-        .send()?
-        .json()?;
+    let text = crate::configuration::http::post_json(rpc, &body)?;
+    let response: Value = serde_json::from_str(&text)
+        .map_err(|e| block_error::Error::new(format!("invalid response from the solana rpc: {e}")))?;
     if let Some(error) = response.get("error") {
         return Err(block_error::Error::new(format!("solana rpc error: {error}")));
     }
@@ -759,6 +751,16 @@ pub fn sign_and_broadcast(
     let rpc = resolve_rpc(sol_node, network);
     let signing_key = signing_key_from_base58(private_key)?;
     let from_pk = validate_address(&plan.from)?;
+    // The UI re-reads the account dropdown at confirm time, so the key handed in here is not
+    // guaranteed to be the one the plan was built for. A mismatch would produce a signature
+    // that does not verify against the declared fee payer, which the cluster would reject —
+    // catching it here turns a confusing broadcast failure into a precise message, and stops
+    // a stale plan from ever being paired with the wrong account.
+    if signing_key.verifying_key().to_bytes() != from_pk {
+        return Err(block_error::Error::new(
+            "this key does not belong to the account the transaction was reviewed for".to_string(),
+        ));
+    }
     let to_pk = validate_address(&plan.to)?;
     let recent_blockhash = get_latest_blockhash(&rpc)?;
 
