@@ -56,6 +56,44 @@ pub fn needs_chain_tag(token_name: &str, chain: &str) -> bool {
     !token_name.eq_ignore_ascii_case(chain_display_name(chain))
 }
 
+/// The Block Wallet logo lockup as an image that follows the light/dark theme.
+///
+/// The artwork is drawn for light backgrounds — the cube's faces and the word "Block" are
+/// a near-black navy that disappears on a dark surface — so `Logo-dark.png` carries a
+/// recoloured variant. Returns `None` when no logo file is installed, letting callers fall
+/// back to a symbolic icon plus a text title.
+pub fn logo_image(size: i32) -> Option<gtk::Image> {
+    let dir = crate::configuration::paths::images_path().ok()?;
+    let light = dir.join("Logo.png");
+    if !light.is_file() {
+        return None;
+    }
+    let dark = dir.join("Logo-dark.png");
+
+    let image = gtk::Image::new();
+    image.set_pixel_size(size);
+
+    let style = adw::StyleManager::default();
+    image.set_from_file(Some(pick_logo(&light, &dark, style.is_dark())));
+    // The system theme can flip while the app is open, so track it rather than sampling
+    // once at construction.
+    style.connect_dark_notify(glib::clone!(
+        #[weak] image,
+        move |style: &adw::StyleManager| {
+            image.set_from_file(Some(pick_logo(&light, &dark, style.is_dark())));
+        }
+    ));
+    Some(image)
+}
+
+fn pick_logo<'a>(light: &'a Path, dark: &'a Path, is_dark: bool) -> &'a Path {
+    if is_dark && dark.is_file() {
+        dark
+    } else {
+        light
+    }
+}
+
 /// Round coin mark: the bundled PNG when one exists, otherwise a chain-coloured monogram.
 ///
 /// Not every token has an icon (LTC has no bundled PNG at all, and add-by-contract tokens

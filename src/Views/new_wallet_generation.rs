@@ -4,7 +4,7 @@ use glib::clone;
 use gtk::{Button, Orientation};
 use std::cell::RefCell;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
@@ -460,22 +460,16 @@ fn choice_page() -> (gtk::Box, Button, Button, Button, Button, gtk::Label) {
     page.set_valign(gtk::Align::Center);
     page.set_vexpand(true);
 
-    let logo_path = match ApplicationSettings::find_images_path() {
-        Ok(mut path) => {
-            path.push("Logo.png");
-            path
+    const TAGLINE: &str =
+        "Self-custody Bitcoin, Ethereum, Solana and Litecoin. Your keys stay on this device.";
+    match ui::logo_image(190) {
+        Some(logo) => {
+            page.append(&logo);
+            // The artwork already reads "Block Wallet", so only the tagline is added here.
+            page.append(&wrapped_label(TAGLINE, &["onboard-subtitle"]));
         }
-        Err(_) => PathBuf::new(),
-    };
-    if logo_path.is_file() {
-        let logo = gtk::Image::from_file(&logo_path);
-        logo.set_pixel_size(104);
-        page.append(&logo);
+        None => page.append(&step_header("Block Wallet", TAGLINE)),
     }
-    page.append(&step_header(
-        "Block Wallet",
-        "Self-custody Bitcoin, Ethereum, Solana and Litecoin. Your keys stay on this device.",
-    ));
 
     // Creating is the common path, so it gets its own group and the only accent button.
     // Restore and import are recovery paths and sit in a quieter second group.

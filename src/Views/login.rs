@@ -2,7 +2,6 @@ use adw::prelude::*;
 use adw::ApplicationWindow;
 use glib::clone;
 use gtk::Orientation;
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::configuration::application_settings::*;
@@ -20,33 +19,31 @@ pub fn login_view(window: ApplicationWindow, app_settings: ApplicationSettings) 
     header.add_css_class("flat");
     header.set_title_widget(Some(&gtk::Label::new(None)));
 
-    let logo_path = match ApplicationSettings::find_images_path() {
-        Ok(mut path) => {
-            path.push("Logo.png");
-            path
-        }
-        Err(_) => PathBuf::new(),
-    };
-
     // The unlock screen is the app's first impression and has exactly one job, so it gets
     // a centred lockup rather than a form crammed against the top of the window.
     let lockup = ui::vbox(10);
     lockup.set_halign(gtk::Align::Center);
-    if logo_path.is_file() {
-        let login_logo = gtk::Image::from_file(&logo_path);
-        login_logo.set_pixel_size(104);
-        lockup.append(&login_logo);
-    } else {
-        let fallback = gtk::Image::from_icon_name("changes-prevent-symbolic");
-        fallback.set_pixel_size(88);
-        lockup.append(&fallback);
+    let logo = ui::logo_image(190);
+    let has_logo = logo.is_some();
+    match &logo {
+        Some(image) => lockup.append(image),
+        None => {
+            let fallback = gtk::Image::from_icon_name("changes-prevent-symbolic");
+            fallback.set_pixel_size(88);
+            lockup.append(&fallback);
+        }
     }
-    lockup.append(
-        &gtk::Label::builder()
-            .label("Block Wallet")
-            .css_classes(["onboard-title"])
-            .build(),
-    );
+    // The logo artwork already carries the "Block Wallet" wordmark, so the text title
+    // would just say it twice. It stays as the fallback for when the file is missing and
+    // only a symbolic icon is shown.
+    if !has_logo {
+        lockup.append(
+            &gtk::Label::builder()
+                .label("Block Wallet")
+                .css_classes(["onboard-title"])
+                .build(),
+        );
+    }
     lockup.append(
         &gtk::Label::builder()
             .label("Enter your password to decrypt this wallet on this device.")
