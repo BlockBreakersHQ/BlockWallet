@@ -8,12 +8,23 @@ use block_wallet::views::{login, new_wallet_generation};
 use block_wallet::configuration::initialization;
 use block_wallet::configuration::application_settings::ApplicationSettings;
 
-const APP_ID: &str = "org.BlockBreakers.Wallet";
+const APP_ID: &str = "io.github.BlockBreakersHQ.BlockWallet";
+
+/// The GTK application ID.
+///
+/// Inside Flatpak this must match the Flatpak app ID, or the Wayland surface is tagged
+/// with the wrong app and Phosh shows the wrong icon and title in the switcher. The devel
+/// manifest deliberately uses a `.Devel` suffix so it can be installed next to a release
+/// build, so the ID cannot simply be hardcoded. `FLATPAK_ID` is set by the runtime and is
+/// authoritative when present; outside Flatpak it is absent and the constant is used.
+fn app_id() -> String {
+    std::env::var("FLATPAK_ID").unwrap_or_else(|_| APP_ID.to_string())
+}
 
 fn main() {
     block_wallet::configuration::logging::init();
 
-    let app = Application::builder().application_id(APP_ID).build();
+    let app = Application::builder().application_id(app_id()).build();
     app.connect_startup(|_| load_css());
     app.connect_startup(|_| load_images());
     app.connect_activate(build_ui);

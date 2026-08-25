@@ -58,7 +58,7 @@ Install with Flatpak (`docs/packaging.md`) or a `.deb`. Building natively on the
 ## 6. Kill switch / privacy
 
 - [ ] With WWAN/Wi-Fi off, Activity and Home do not panic
-- [ ] No mnemonic or private key in `~/.local/state/blockwallet/blockwallet.log` (or the Flatpak equivalent under `~/.var/app/org.BlockBreakers.Wallet/`)
+- [ ] No mnemonic or private key in `~/.local/state/blockwallet/blockwallet.log` (or the Flatpak equivalent under `~/.var/app/io.github.BlockBreakersHQ.BlockWallet/`)
 
 ## 7. Package
 

@@ -24,7 +24,7 @@ cargo run --release
 
 If the binary is already built: `target/debug/block_wallet` (or `block_wallet.exe`).
 
-Override wallet files with `BLOCKWALLET_HOME`. Flatpak: `flatpak run org.BlockBreakers.Wallet`.
+Override wallet files with `BLOCKWALLET_HOME`. Flatpak: `flatpak run io.github.BlockBreakersHQ.BlockWallet`.
 
 ---
 

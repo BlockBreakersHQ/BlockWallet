@@ -4,7 +4,7 @@ Self-custody Bitcoin, Ethereum, Solana, and Litecoin wallet for the [Librem 5](h
 
 **Status:** v0.1.0 packaged snapshot. Do not put mainnet funds in it until the [Librem 5 checklist](docs/LIBREM5.md) is complete.
 
-Application ID: `org.BlockBreakers.Wallet`
+Application ID: `io.github.BlockBreakersHQ.BlockWallet`
 
 ## What works today
 
@@ -69,13 +69,13 @@ RUST_LOG=debug cargo run
 
 ## Desktop / AppStream
 
-- `data/org.BlockBreakers.Wallet.desktop`
-- `data/org.BlockBreakers.Wallet.metainfo.xml`
-- `data/icons/hicolor/256x256/apps/org.BlockBreakers.Wallet.png`
+- `data/io.github.BlockBreakersHQ.BlockWallet.desktop`
+- `data/io.github.BlockBreakersHQ.BlockWallet.metainfo.xml`
+- `data/icons/hicolor/256x256/apps/io.github.BlockBreakersHQ.BlockWallet.png`
 
 ## Packaging and device QA
 
-- Flatpak manifest: `data/org.BlockBreakers.Wallet.json` (no home filesystem access; keys stay in XDG / Flatpak app data)
+- Flatpak manifest: `data/io.github.BlockBreakersHQ.BlockWallet.json` (no home filesystem access; keys stay in XDG / Flatpak app data)
 - Debian/PureOS sketch: `packaging/debian/`
 - How to build and install: [docs/packaging.md](docs/packaging.md)
 - Librem 5 manual checklist: [docs/LIBREM5.md](docs/LIBREM5.md)

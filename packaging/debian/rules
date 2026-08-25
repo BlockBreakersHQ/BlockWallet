@@ -15,9 +15,9 @@ override_dh_auto_test:
 
 override_dh_auto_install:
 	install -Dm755 target/release/block_wallet debian/blockwallet/usr/bin/block_wallet
-	install -Dm644 data/org.BlockBreakers.Wallet.desktop debian/blockwallet/usr/share/applications/org.BlockBreakers.Wallet.desktop
-	install -Dm644 data/org.BlockBreakers.Wallet.metainfo.xml debian/blockwallet/usr/share/metainfo/org.BlockBreakers.Wallet.metainfo.xml
-	install -Dm644 data/icons/hicolor/256x256/apps/org.BlockBreakers.Wallet.png debian/blockwallet/usr/share/icons/hicolor/256x256/apps/org.BlockBreakers.Wallet.png
+	install -Dm644 data/io.github.BlockBreakersHQ.BlockWallet.desktop debian/blockwallet/usr/share/applications/io.github.BlockBreakersHQ.BlockWallet.desktop
+	install -Dm644 data/io.github.BlockBreakersHQ.BlockWallet.metainfo.xml debian/blockwallet/usr/share/metainfo/io.github.BlockBreakersHQ.BlockWallet.metainfo.xml
+	install -Dm644 data/icons/hicolor/256x256/apps/io.github.BlockBreakersHQ.BlockWallet.png debian/blockwallet/usr/share/icons/hicolor/256x256/apps/io.github.BlockBreakersHQ.BlockWallet.png
 	mkdir -p debian/blockwallet/usr/share/blockwallet
 	cp -a Images debian/blockwallet/usr/share/blockwallet/Images
 

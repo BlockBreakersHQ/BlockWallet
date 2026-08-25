@@ -1,0 +1,57 @@
+{
+    "//": "Local development manifest: builds the working tree and is allowed network access",
+    "//2": "so cargo can fetch crates. Use this while iterating. The release manifest",
+    "//3": "(io.github.BlockBreakersHQ.BlockWallet.json) builds a pinned tag offline and is what stores consume.",
+    "//4": "The app ID is suffixed .Devel so this installs alongside a released copy without",
+    "//5": "sharing its ~/.var/app data directory - i.e. without touching a real wallet. The",
+    "//6": "installed desktop/metainfo files are retargeted to that ID during build, otherwise",
+    "//7": "the icon and AppStream entry would point at the release ID and fail to resolve.",
+    "app-id": "io.github.BlockBreakersHQ.BlockWallet.Devel",
+    "runtime": "org.gnome.Platform",
+    "runtime-version": "50",
+    "sdk": "org.gnome.Sdk",
+    "sdk-extensions": [
+        "org.freedesktop.Sdk.Extension.rust-stable"
+    ],
+    "command": "block_wallet",
+    "finish-args": [
+        "--share=ipc",
+        "--share=network",
+        "--socket=fallback-x11",
+        "--socket=wayland",
+        "--device=dri",
+        "--talk-name=org.freedesktop.secrets"
+    ],
+    "build-options": {
+        "append-path": "/usr/lib/sdk/rust-stable/bin",
+        "env": {
+            "CARGO_HOME": "/run/build/block-wallet/cargo"
+        },
+        "build-args": [
+            "--share=network"
+        ]
+    },
+    "modules": [
+        {
+            "name": "block-wallet",
+            "buildsystem": "simple",
+            "build-commands": [
+                "cargo build --release --locked",
+                "install -Dm755 ./target/release/block_wallet /app/bin/block_wallet",
+                "install -Dm644 data/io.github.BlockBreakersHQ.BlockWallet.desktop /app/share/applications/io.github.BlockBreakersHQ.BlockWallet.Devel.desktop",
+                "install -Dm644 data/io.github.BlockBreakersHQ.BlockWallet.metainfo.xml /app/share/metainfo/io.github.BlockBreakersHQ.BlockWallet.Devel.metainfo.xml",
+                "install -Dm644 data/icons/hicolor/256x256/apps/io.github.BlockBreakersHQ.BlockWallet.png /app/share/icons/hicolor/256x256/apps/io.github.BlockBreakersHQ.BlockWallet.Devel.png",
+                "sed -i -e 's|^Name=.*|Name=Block Wallet (Devel)|' -e 's|^Icon=.*|Icon=io.github.BlockBreakersHQ.BlockWallet.Devel|' -e 's|^StartupWMClass=.*|StartupWMClass=io.github.BlockBreakersHQ.BlockWallet.Devel|' /app/share/applications/io.github.BlockBreakersHQ.BlockWallet.Devel.desktop",
+                "sed -i -e 's|<id>.*</id>|<id>io.github.BlockBreakersHQ.BlockWallet.Devel</id>|' -e 's|<launchable type=\"desktop-id\">.*</launchable>|<launchable type=\"desktop-id\">io.github.BlockBreakersHQ.BlockWallet.Devel.desktop</launchable>|' -e 's|<icon type=\"stock\">.*</icon>|<icon type=\"stock\">io.github.BlockBreakersHQ.BlockWallet.Devel</icon>|' /app/share/metainfo/io.github.BlockBreakersHQ.BlockWallet.Devel.metainfo.xml",
+                "mkdir -p /app/share/blockwallet",
+                "cp -a Images /app/share/blockwallet/Images"
+            ],
+            "sources": [
+                {
+                    "type": "dir",
+                    "path": ".."
+                }
+            ]
+        }
+    ]
+}

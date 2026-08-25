@@ -26,7 +26,12 @@ alloy = { version = "1", default-features = false, features = ["std", "providers
 argon2 = { version = "0.5", features = ["std"] }
 bdk_wallet = { version = "1", features = ["keys-bip39"] }
 bdk_esplora = { version = "0.20", default-features = false, features = ["blocking"] }
-bdk_electrum = "0.20"
+# `ring` rather than the default `aws-lc-rs` rustls provider. aws-lc-rs drags in
+# aws-lc-sys, which needs cmake and builds a large C library — a real problem on the
+# Librem 5 (4 slow cores, 3 GB RAM) and an extra build-dep for the .deb. `use-rustls-ring`
+# still gives TLS 1.2 + 1.3 with webpki roots, and `proxy` support is pinned by
+# bdk_electrum itself so Tor/SOCKS is unaffected.
+bdk_electrum = { version = "0.20", default-features = false, features = ["use-rustls-ring"] }
 chacha20poly1305 = "0.10"
 chrono = "0.4.23"
 colored = "2.0.0"
