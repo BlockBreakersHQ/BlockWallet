@@ -1,0 +1,17 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Block Wallet
+GenericName=Cryptocurrency Wallet
+Comment=Self-custody Bitcoin and Ethereum wallet
+Exec=block_wallet
+Icon=org.BlockBreakers.Wallet
+Terminal=false
+Categories=Finance;Office;GTK;GNOME;
+Keywords=bitcoin;ethereum;wallet;crypto;self-custody;
+StartupNotify=true
+StartupWMClass=org.BlockBreakers.Wallet
+DBusActivatable=false
+X-Purism-FormFactor=Workstation;Mobile;
+# Translators: Do not translate
+X-GNOME-UsesNotifications=false

@@ -1,0 +1,26 @@
+#!/usr/bin/make -f
+
+export DH_VERBOSE = 1
+export CARGO_HOME = $(CURDIR)/debian/cargo-home
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	mkdir -p "$(CARGO_HOME)"
+	cargo build --release --locked
+
+override_dh_auto_test:
+	cargo test --release --locked --offline || cargo test --release --locked
+
+override_dh_auto_install:
+	install -Dm755 target/release/block_wallet debian/blockwallet/usr/bin/block_wallet
+	install -Dm644 data/org.BlockBreakers.Wallet.desktop debian/blockwallet/usr/share/applications/org.BlockBreakers.Wallet.desktop
+	install -Dm644 data/org.BlockBreakers.Wallet.metainfo.xml debian/blockwallet/usr/share/metainfo/org.BlockBreakers.Wallet.metainfo.xml
+	install -Dm644 data/icons/hicolor/256x256/apps/org.BlockBreakers.Wallet.png debian/blockwallet/usr/share/icons/hicolor/256x256/apps/org.BlockBreakers.Wallet.png
+	mkdir -p debian/blockwallet/usr/share/blockwallet
+	cp -a Images debian/blockwallet/usr/share/blockwallet/Images
+
+override_dh_auto_clean:
+	cargo clean || true
+	dh_auto_clean

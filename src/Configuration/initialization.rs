@@ -5,7 +5,7 @@ use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
 use serde::Deserialize;
-use glib::{StaticType, Cast};
+use glib::prelude::*;
 
 use crate::ApplicationSettings;
 use crate::currencies::tokens::*;
@@ -39,26 +39,14 @@ pub async fn download_icons() -> Result<String, Box<dyn Error>> {
         .text()
         .await?;
 
-    let cpath = match ApplicationSettings::find_config_path(){
-        Ok(mut cp) => {
-            cp.pop();
-            cp.push("CurrencyDetails.json");
-            cp
-        },
+    let cpath = match ApplicationSettings::find_currency_details_path() {
+        Ok(cp) => cp,
         Err(_) => PathBuf::new()
     };
 
-    let mut ipath = match ApplicationSettings::find_images_path(){
-        Ok(mut ip) => {
-            ip.push("Icons");
-            ip
-        },
-        Err(_) => { 
-            let mut path = ApplicationSettings::find_config_path().unwrap();
-            path.pop();
-            path.push("Imges/Icons");
-            path
-        }
+    let ipath = match crate::configuration::paths::icon_cache_path() {
+        Ok(ip) => ip,
+        Err(_) => PathBuf::new()
     };
 
     let icons_path = ipath.display().to_string();
@@ -68,8 +56,8 @@ pub async fn download_icons() -> Result<String, Box<dyn Error>> {
             Ok(mut cf) => {
                 let _ = write!(cf, "{}", resp);
             },
-            Err(e) => {
-                ApplicationSettings::write_error_to_path(&ApplicationSettings::find_error_path()?, e.to_string());
+            Err(_) => {
+                crate::configuration::logging::error("failed to write currency details cache");
             }
         };
     }
@@ -77,15 +65,20 @@ pub async fn download_icons() -> Result<String, Box<dyn Error>> {
     let tokens_parsed: HashMap<String, L2> = serde_json::from_str(&resp)?;
     let currencies: &L2 = &tokens_parsed.get("tokens").unwrap();
 
-    let logo = reqwest::get("https://github.com/BlockBreakersHQ/BlockWallet/raw/main/Images/Logo.png").await?;
-    let logo_path = format!("{}/logo.png", ipath.pop().clone());
-    let mut logo_out = File::create(logo_path.clone()).expect("failed to create file");
-    logo_out.write_all(&mut logo.bytes().await?)?;
+    let images = crate::configuration::paths::images_path().unwrap_or_else(|_| PathBuf::new());
+    let logo_path = images.join("Logo.png");
+    if !logo_path.exists() && !images.as_os_str().is_empty() {
+        let logo = reqwest::get("https://github.com/BlockBreakersHQ/BlockWallet/raw/main/Images/Logo.png").await?;
+        let mut logo_out = File::create(&logo_path)?;
+        logo_out.write_all(&mut logo.bytes().await?)?;
+    }
 
-    let settings = reqwest::get("https://github.com/BlockBreakersHQ/BlockWallet/raw/main/Images/cog.png").await?;
-    let settings_path = format!("{}/settings.png", ipath.pop().clone());
-    let mut settings_out = File::create(settings_path.clone()).expect("failed to create file");
-    settings_out.write_all(&mut settings.bytes().await?)?;
+    let settings_path = images.join("cog.png");
+    if !settings_path.exists() && !images.as_os_str().is_empty() {
+        let settings = reqwest::get("https://github.com/BlockBreakersHQ/BlockWallet/raw/main/Images/cog.png").await?;
+        let mut settings_out = File::create(&settings_path)?;
+        settings_out.write_all(&mut settings.bytes().await?)?;
+    }
 
     let btc_icon = reqwest::get("https://dynamic-assets.coinbase.com/e785e0181f1a23a30d9476038d9be91e9f6c63959b538eabbc51a1abc8898940383291eede695c3b8dfaa1829a9b57f5a2d0a16b0523580346c6b8fab67af14b/asset_icons/b57ac673f06a4b0338a596817eb0a50ce16e2059f327dc117744449a47915cb2.png").await?;
     let btc_path = format!("{}/{}.png", icons_path, "BTC");
@@ -106,7 +99,7 @@ pub async fn download_icons() -> Result<String, Box<dyn Error>> {
             out.write_all(&mut icon.bytes().await?)?;
         }
     }
-    println!("INFO: Downloading icons complete.");
+    tracing::info!("token icon download complete");
     Ok(resp)
 }
 
@@ -116,12 +109,8 @@ pub async fn download_token_details() -> Result<String, Box<dyn Error>> {
         .text()
         .await?;
 
-    let cpath = match ApplicationSettings::find_config_path(){
-        Ok(mut cp) => {
-            cp.pop();
-            cp.push("CurrencyDetails.json");
-            cp
-        },
+    let cpath = match ApplicationSettings::find_currency_details_path() {
+        Ok(cp) => cp,
         Err(_) => PathBuf::new()
     };
 
@@ -130,26 +119,37 @@ pub async fn download_token_details() -> Result<String, Box<dyn Error>> {
             Ok(mut cf) => {
                 let _ = write!(cf, "{}", resp);
             },
-            Err(e) => {
-                ApplicationSettings::write_error_to_path(&ApplicationSettings::find_error_path()?, e.to_string());
+            Err(_) => {
+                crate::configuration::logging::error("failed to write currency details cache");
             }
         };
     }
     Ok(resp)
 }
 
+pub fn load_tokens() -> Tokens {
+    let tokens = Tokens::new();
+    let path = match ApplicationSettings::find_currency_details_path() {
+        Ok(path) => path,
+        Err(_) => return tokens,
+    };
+    let json = match fs::read_to_string(&path) {
+        Ok(json) if !json.is_empty() => json,
+        _ => return tokens,
+    };
+    match parse_token_details(&json, tokens.clone()) {
+        Ok(parsed) => parsed,
+        Err(_) => {
+            crate::configuration::logging::error("failed to parse token details cache");
+            tokens
+        }
+    }
+}
+
 pub fn parse_token_details(currency_json: &str, mut tokens: Tokens) -> Result<Tokens, Box<dyn Error>> {
     let tokens_parsed: HashMap<String, L2> = serde_json::from_str(&currency_json)?;
     let contracts: &L2 = &tokens_parsed.get("tokens").unwrap();
 
-    let mut icon_path = match ApplicationSettings::find_images_path(){
-        Ok(mut ip) => {
-            ip.push("Icons");
-            ip
-        },
-        Err(_) => PathBuf::new()
-    };
-    
     let mut usable_keys: HashMap<String, L3> = HashMap::new();
 
     for (key, value) in &contracts.address {
@@ -159,28 +159,29 @@ pub fn parse_token_details(currency_json: &str, mut tokens: Tokens) -> Result<To
         }
     }
 
-    let token_list = gio::ListStore::new(glib::BoxedAnyObject::static_type());
+    let token_list = gio::ListStore::new::<glib::BoxedAnyObject>();
 
     for (key, _value) in &usable_keys {
+        let logo = crate::configuration::paths::token_icon_path(&usable_keys.get(key).unwrap().symbol);
         token_list.append(&glib::BoxedAnyObject::new(Token {
             symbol:     usable_keys.get(key).unwrap().symbol.clone(),
             name:       usable_keys.get(key).unwrap().name.clone(),
             decimals:   usable_keys.get(key).unwrap().decimals,
             address:    usable_keys.get(key).unwrap().address.clone(),
-            logo:       icon_path.clone()
+            logo:       logo.clone(),
+            chain:      String::from("eth"),
         }));
 
-        icon_path.push(format!("{}.png", usable_keys.get(key).unwrap().symbol));
-        tokens.eth_tokens.insert(usable_keys.get(key).unwrap().symbol.clone(),
+        tokens.eth_tokens.insert(format!("eth:{}", usable_keys.get(key).unwrap().symbol),
             Token {
                 symbol:     usable_keys.get(key).unwrap().symbol.clone(),
                 name:       usable_keys.get(key).unwrap().name.clone(),
                 decimals:   usable_keys.get(key).unwrap().decimals,
                 address:    usable_keys.get(key).unwrap().address.clone(),
-                logo:       icon_path.clone()
+                logo,
+                chain:      String::from("eth"),
             },
         );
-        icon_path.pop();
     }
     
     Ok(tokens)

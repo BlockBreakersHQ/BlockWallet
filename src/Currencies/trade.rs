@@ -15,15 +15,39 @@ pub struct Trade {
 
 impl Trade {
     pub fn new(app_settings: ApplicationSettings) -> Trade {
-        let eth  = app_settings.tokens.eth_tokens["ETH"].clone();
-        let usdc = app_settings.tokens.eth_tokens["USDC"].clone();
-        
+        let eth = app_settings
+            .tokens
+            .eth_tokens
+            .get("eth:ETH")
+            .cloned()
+            .unwrap_or_else(|| Token {
+                name: String::from("Ethereum"),
+                symbol: String::from("ETH"),
+                address: String::from("0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"),
+                logo: crate::configuration::paths::token_icon_path("ETH"),
+                decimals: 18,
+                chain: String::from("eth"),
+            });
+        let usdc = app_settings
+            .tokens
+            .eth_tokens
+            .get("eth:USDC")
+            .cloned()
+            .unwrap_or_else(|| Token {
+                name: String::from("USD Coin"),
+                symbol: String::from("USDC"),
+                address: String::from("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
+                logo: crate::configuration::paths::token_icon_path("USDC"),
+                decimals: 6,
+                chain: String::from("eth"),
+            });
+
         Trade {
-            from_token:     usdc,
-            to_token:       eth,
-            from_amount:    0.0,
-            to_amount:      0.0,
-            estimated_gas:  0.0
+            from_token: usdc,
+            to_token: eth,
+            from_amount: 0.0,
+            to_amount: 0.0,
+            estimated_gas: 0.0,
         }
     }
 
@@ -41,24 +65,45 @@ impl Trade {
 
         let resp = match reqwest::get(one_inch_get_quote_url).await {
             Ok(resp) => resp,
-            Err(e) => {println!("error: {}", e.to_string());return self.clone();}
+            Err(_) => {
+                crate::configuration::logging::warn("swap quote request failed");
+                return self.clone();
+            }
         };
 
         let text = match resp.text().await {
             Ok(text) => text,
-            Err(e) => {println!("error: {}", e.to_string());return self.clone();}
+            Err(_) => {
+                crate::configuration::logging::warn("swap quote body read failed");
+                return self.clone();
+            }
         };
 
         let json: Value = match serde_json::from_str(&text) {
             Ok(r)  => r,
-            Err(e) => {println!("error: {}", e.to_string());return self.clone();}
+            Err(_) => {
+                crate::configuration::logging::warn("swap quote parse failed");
+                return self.clone();
+            }
         };
 
-        let mut to_amount: f64 = json["toTokenAmount"].to_string().replace("\"", "").parse::<f64>().expect("ERROR: Parsing value failed.");
-        to_amount = to_amount / CurrencyPairs::get_exponent(json["toToken"]["decimals"].to_string().parse::<i32>().expect("ERROR: Parsing value failed."));
-        let mut from_amount: f64 = json["fromTokenAmount"].to_string().replace("\"", "").parse::<f64>().expect("ERROR: Parsing value failed.");
-        from_amount = from_amount / CurrencyPairs::get_exponent(json["fromToken"]["decimals"].to_string().parse::<i32>().expect("ERROR: Parsing value failed."));
-        let estimated_gas = json["estimatedGas"].to_string().replace("\"", "").parse::<f64>().expect("ERROR: Parsing value failed.");
+        let Ok(mut to_amount) = json["toTokenAmount"].to_string().replace('"', "").parse::<f64>() else {
+            return self.clone();
+        };
+        let Ok(to_decimals) = json["toToken"]["decimals"].to_string().parse::<i32>() else {
+            return self.clone();
+        };
+        to_amount /= CurrencyPairs::get_exponent(to_decimals);
+        let Ok(mut from_amount) = json["fromTokenAmount"].to_string().replace('"', "").parse::<f64>() else {
+            return self.clone();
+        };
+        let Ok(from_decimals) = json["fromToken"]["decimals"].to_string().parse::<i32>() else {
+            return self.clone();
+        };
+        from_amount /= CurrencyPairs::get_exponent(from_decimals);
+        let Ok(estimated_gas) = json["estimatedGas"].to_string().replace('"', "").parse::<f64>() else {
+            return self.clone();
+        };
 
 
         self.estimated_gas = estimated_gas;

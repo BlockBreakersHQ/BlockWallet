@@ -5,8 +5,6 @@ use std::fmt::Display;
 use std::collections::HashMap;
 use serde::Serialize;
 
-use crate::ApplicationSettings;
-
 #[derive(Clone, Debug)]
 pub struct Tokens {
     pub eth_tokens: HashMap<String, Token>,
@@ -160,24 +158,101 @@ impl Tokens {
             ("0x8290333cef9e6d528dd5618fb97a76f268f3edd4".to_string(), TransferMethods::TransferFrom)  // ANKR
         ]);
 
-        let btc_path = match ApplicationSettings::find_images_path(){
-            Ok(mut bp) => {
-                bp.push("Icons/btc.png");
-                bp
-            },
-            Err(_) => PathBuf::new()
-        };
-
-        let t = Token {
-            name    : String::from("Bitcoin"),
-            symbol  : String::from("BTC"),
-            address : String::from("0x0000000000000000000000000000000000000000"),
-            logo    : btc_path,
-            decimals: 8
-        };
+        let btc_path = crate::configuration::paths::token_icon_path("BTC");
+        let eth_path = crate::configuration::paths::token_icon_path("ETH");
+        let sol_path = crate::configuration::paths::token_icon_path("SOL");
+        let ltc_path = crate::configuration::paths::token_icon_path("LTC");
+        let usdc_path = crate::configuration::paths::token_icon_path("USDC");
 
         let mut eth_tokens = HashMap::new();
-        eth_tokens.insert(String::from("BTC"), t);
+        eth_tokens.insert(
+            String::from("btc:BTC"),
+            Token {
+                name: String::from("Bitcoin"),
+                symbol: String::from("BTC"),
+                address: String::from("0x0000000000000000000000000000000000000000"),
+                logo: btc_path,
+                decimals: 8,
+                chain: String::from("btc"),
+            },
+        );
+        eth_tokens.insert(
+            String::from("ltc:LTC"),
+            Token {
+                name: String::from("Litecoin"),
+                symbol: String::from("LTC"),
+                address: String::from("ltc:native"),
+                logo: ltc_path,
+                decimals: 8,
+                chain: String::from("ltc"),
+            },
+        );
+        eth_tokens.insert(
+            String::from("eth:ETH"),
+            Token {
+                name: String::from("Ethereum"),
+                symbol: String::from("ETH"),
+                address: String::from("0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"),
+                logo: eth_path,
+                decimals: 18,
+                chain: String::from("eth"),
+            },
+        );
+        eth_tokens.insert(
+            String::from("sol:SOL"),
+            Token {
+                name: String::from("Solana"),
+                symbol: String::from("SOL"),
+                address: String::from("11111111111111111111111111111111"),
+                logo: sol_path,
+                decimals: 9,
+                chain: String::from("sol"),
+            },
+        );
+        eth_tokens.insert(
+            String::from("eth:USDC"),
+            Token {
+                name: String::from("USD Coin"),
+                symbol: String::from("USDC"),
+                address: String::from("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"),
+                logo: usdc_path,
+                decimals: 6,
+                chain: String::from("eth"),
+            },
+        );
+        eth_tokens.insert(
+            String::from("eth:USDT"),
+            Token {
+                name: String::from("Tether USD"),
+                symbol: String::from("USDT"),
+                address: String::from("0xdac17f958d2ee523a2206206994597c13d831ec7"),
+                logo: crate::configuration::paths::token_icon_path("USDT"),
+                decimals: 6,
+                chain: String::from("eth"),
+            },
+        );
+        eth_tokens.insert(
+            String::from("eth:DAI"),
+            Token {
+                name: String::from("Dai Stablecoin"),
+                symbol: String::from("DAI"),
+                address: String::from("0x6b175474e89094c44da98b954eedeac495271d0f"),
+                logo: crate::configuration::paths::token_icon_path("DAI"),
+                decimals: 18,
+                chain: String::from("eth"),
+            },
+        );
+        eth_tokens.insert(
+            String::from("eth:WBTC"),
+            Token {
+                name: String::from("Wrapped BTC"),
+                symbol: String::from("WBTC"),
+                address: String::from("0x2260fac5e5542a773aa44fbcfedf7c193bc2c599"),
+                logo: crate::configuration::paths::token_icon_path("WBTC"),
+                decimals: 8,
+                chain: String::from("eth"),
+            },
+        );
 
         Tokens {
             eth_tokens:      eth_tokens,
@@ -206,17 +281,22 @@ pub struct Token {
     pub symbol  : String,
     pub address : String,
     pub logo    : PathBuf,
-    pub decimals: i32
+    pub decimals: i32,
+    /// Which wallet family this token belongs to: "btc", "eth", or "sol". This is the real
+    /// dispatch key for chain-specific UI/send logic — `symbol` alone is not unique across
+    /// chains (e.g. USDC exists as both an ERC-20 and an SPL token).
+    pub chain   : String
 }
 
 impl Token {
-    pub fn new(name: String, ticker: String, address: String, logo: PathBuf, digits: i32) -> Self {
+    pub fn new(name: String, ticker: String, address: String, logo: PathBuf, digits: i32, chain: String) -> Self {
         Token {
             name    : name,
             symbol  : ticker,
             address : address,
             logo    : logo,
-            decimals: digits
+            decimals: digits,
+            chain   : chain
         }
     }
 
@@ -226,7 +306,8 @@ impl Token {
             symbol  : String::new(),
             address : String::new(),
             logo    : PathBuf::new(),
-            decimals: 0
+            decimals: 0,
+            chain   : String::from("eth")
         }
     }
 }

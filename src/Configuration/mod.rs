@@ -1,3 +1,12 @@
 pub mod block_error;
 pub mod application_settings;
+pub mod clipboard;
 pub mod initialization;
+pub mod logging;
+pub mod onboarding;
+pub mod paths;
+pub mod secrets;
+pub mod seed;
+pub mod ui_channel;
+pub mod wallet_display;
+pub mod wallet_store;

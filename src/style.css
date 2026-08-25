@@ -1,88 +1,85 @@
-.stack-switcher button {
-    min-height: 22px;
-    min-width: 24px;
-    border: 0px;
-    background-color: #4d5261;
-    background-size: 16px 16px;
-    background-repeat: no-repeat;
-    background-position: center;
-    box-shadow: inset 0 0 0 1px blue;
+#stack_bar {
+    min-height: 48px;
 }
 
-.stack-switcher label {
-    border: 0px;
-    background-color: red;
-    background-size: 16px 16px;
-    background-repeat: no-repeat;
-    background-position: center;
-    box-shadow: inset 0 0 0 1px blue;
-    color: white;
+.currency-row {
+    min-height: 56px;
 }
 
-label-error {
-    color: red;
+.standard_button,
+.transaction_button {
+    min-height: 44px;
+    min-width: 44px;
+    margin-top: 4px;
+    margin-bottom: 4px;
+}
+
+.label-error {
+    color: @error_color;
     font-weight: bold;
-    font-family: Helvetica;
-    font-size: 12px;
+    font-size: 0.9rem;
 }
 
-label-standard {
-    color: white;
+.label-standard {
     font-weight: bold;
-    font-family: Helvetica;
-    font-size: 12px;
+    font-size: 0.9rem;
 }
 
-label-currency_name {
-    color: white;
+.currency-name {
     font-weight: bold;
-    font-family: Helvetica;
-    font-size: 16px;
+    font-size: 1rem;
 }
 
-label-currency_ticker {
-    color: gray;
-    font-family: Helvetica;
-    font-size: 12px;
+.currency-ticker {
+    opacity: 0.7;
+    font-size: 0.85rem;
 }
 
-label-currency_price {
-    font-size: 12px;
+.currency-price {
+    font-size: 0.9rem;
 }
 
-btc_wallet_details {
+.btc-wallet-details,
+.eth-wallet-details {
     font-weight: bold;
-    font-family: Helvetica;
-    font-size: 12px;
+    font-size: 0.85rem;
 }
 
-eth_wallet_details {
+.wallet-expander {
     font-weight: bold;
-    font-family: Helvetica;
-    font-size: 12px;
+    font-size: 0.9rem;
+    min-height: 44px;
 }
 
-wallet_expander_row {
+.transaction-positive {
+    color: @success_color;
     font-weight: bold;
-    font-family: Helvetica;
-    font-size: 12px;
+    font-size: 0.9rem;
 }
 
-positive_transaction_label {
-    color: green;
+.transaction-negative {
+    color: @error_color;
     font-weight: bold;
-    font-family: Helvetica;
-    font-size: 12px;
+    font-size: 0.9rem;
 }
 
-negative_transaction_label {
-    color: red;
-    font-weight: bold;
-    font-family: Helvetica;
-    font-size: 12px;
+.receiver-box {
+    background-color: alpha(@view_fg_color, 0.06);
+    border-radius: 8px;
+    padding: 8px;
 }
 
-reciever_box {
-    /*border: 1px solid red; Working border example*/
-    background-color: rgb(30, 30, 30);
+.seed-word {
+    font-family: monospace;
+    font-size: 0.95rem;
+}
+
+.seed-warning {
+    font-size: 0.9rem;
+}
+
+.seed-grid {
+    background-color: alpha(@view_fg_color, 0.06);
+    border-radius: 8px;
+    padding: 8px;
 }

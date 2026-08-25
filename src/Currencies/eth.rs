@@ -1,33 +1,36 @@
 use colored::*;
 use core::{fmt, fmt::Display};
-use serde::{Serialize};
+use serde::Serialize;
 use serde_json::Value;
 use fast_qr::convert::{image::ImageBuilder, Builder, Shape};
 use fast_qr::qr::QRBuilder;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 
-use ethers::{
-    core::{types::TransactionRequest},
-    providers::{Http, Middleware, Provider},
-    prelude::*,
-    signers::{coins_bip39::English, MnemonicBuilder},
-};
+use alloy::network::TransactionBuilder;
+use alloy::primitives::{Address, U256};
+use alloy::providers::{Provider, ProviderBuilder};
+use alloy::rpc::types::TransactionRequest;
+use alloy::signers::k256::ecdsa::SigningKey;
+use alloy::signers::local::coins_bip39::English;
+use alloy::signers::local::{MnemonicBuilder, PrivateKeySigner};
 
-use bip39::{Language, Mnemonic, MnemonicType};
+use bip39::Mnemonic;
+use rand::RngCore;
 
 use crate::configuration::*;
-use crate::configuration::application_settings::ApplicationSettings;
 use crate::currencies::transactions::*;
 use crate::currencies::tokens::*;
 use crate::currencies::currency_pairs::*;
 
+const DEFAULT_ETH_PATH: &str = "m/44'/60'/0'/0/0";
+
 pub fn generate_eth_basic_wallet() -> Option<EthereumWallet> {
     match EthereumWallet::new() {
         Ok(eth_wallet) => return Some(eth_wallet),
-        Err(e) => {
-            let path = ApplicationSettings::find_error_path().unwrap();
-            ApplicationSettings::write_error_to_path(&path, format!("ERROR: {:?}", e));
+        Err(_) => {
+            crate::configuration::logging::error("ethereum wallet generation failed");
             return None
         }
     };
@@ -36,12 +39,11 @@ pub fn generate_eth_basic_wallet() -> Option<EthereumWallet> {
 pub fn generate_eth_hd_wallet() -> Option<EthereumWallet> {
     match EthereumWallet::new_hd(
         24,
-        "m/44'/60'/0'/0'/0",
+        DEFAULT_ETH_PATH,
     ) {
         Ok(eth_wallet) => return Some(eth_wallet),
-        Err(e) => {
-            let path = ApplicationSettings::find_error_path().unwrap();
-            ApplicationSettings::write_error_to_path(&path, format!("ERROR: {:?}", e));
+        Err(_) => {
+            crate::configuration::logging::error("ethereum HD wallet generation failed");
             return None
         }
     };
@@ -49,14 +51,13 @@ pub fn generate_eth_hd_wallet() -> Option<EthereumWallet> {
 
 pub fn generate_from_mnemonic(mnemonic: &str, mut path: &str) -> Option<EthereumWallet> {
     if path.is_empty() {
-        path = "m/44'/60'/0'/0'/0";
+        path = DEFAULT_ETH_PATH;
     }
 
-    match EthereumWallet::from_mnemonic(mnemonic, path) {
+    match EthereumWallet::from_mnemonic(mnemonic, path, "") {
         Ok(eth_wallet) => return Some(eth_wallet),
-        Err(e) => {
-            let path = ApplicationSettings::find_error_path().unwrap();
-            ApplicationSettings::write_error_to_path(&path, format!("ERROR: {:?}", e));
+        Err(_) => {
+            crate::configuration::logging::error("ethereum wallet from mnemonic failed");
             return None
         }
     };
@@ -65,32 +66,12 @@ pub fn generate_from_mnemonic(mnemonic: &str, mut path: &str) -> Option<Ethereum
 pub fn generate_from_private_key(private_key: &str) -> Option<EthereumWallet> {
     match EthereumWallet::from_private_key(private_key) {
         Ok(eth_wallet) => return Some(eth_wallet),
-        Err(e) => {
-            let path = ApplicationSettings::find_error_path().unwrap();
-            ApplicationSettings::write_error_to_path(&path, format!("ERROR: {:?}", e));
+        Err(_) => {
+            crate::configuration::logging::error("ethereum wallet from private key failed");
             return None
         }
     }
 }
-
-/*pub fn generate_from_extended_private_key(extended_private_key: &str, path: &str) -> Option<EthereumWallet> {
-    let path_option;
-    if path.is_empty() {
-        path_option = Some(String::from("m/44'/60'/0'/0'/0"));
-    }
-    else {
-        path_option = Some(String::from(path));
-    }
-
-    match EthereumWallet::from_extended_private_key(extended_private_key, &path_option) {
-        Ok(eth_wallet) => return Some(eth_wallet),
-        Err(e) => {
-            let path = ApplicationSettings::find_error_path().unwrap();
-            ApplicationSettings::write_error_to_path(&path, format!("ERROR: {:?}", e));
-            return None
-        }
-    }
-}*/
 
 #[derive(Serialize, Debug, Default, Clone)]
 pub struct EthereumWallet {
@@ -102,10 +83,6 @@ pub struct EthereumWallet {
     pub password: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mnemonic: Option<String>,
-    //#[serde(skip_serializing_if = "Option::is_none")]
-    //pub extended_private_key: Option<String>,
-    //#[serde(skip_serializing_if = "Option::is_none")]
-    //pub extended_public_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub private_key: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -117,101 +94,62 @@ pub struct EthereumWallet {
     pub balance: Arc<Mutex<String>>,
     pub erc20_balances: Arc<Mutex<HashMap<String, f64>>>,
     pub transactions: Arc<Mutex<Vec<EthTransaction>>>,
+    pub history: Arc<Mutex<Vec<crate::currencies::eth_chain::EthHistoryItem>>>,
     pub last_block: Arc<Mutex<i64>>,
     
 }
 
 impl EthereumWallet {
     pub fn new() -> Result<Self, block_error::Error> {
-        Ok(Self {
-            address: Some(String::from("0x95222290DD7278Aa3Ddd389Cc1E1d165CC4BAfe5")),
-            ..Default::default()
-        })
+        Self::new_hd(12, DEFAULT_ETH_PATH)
     }
 
     pub fn new_hd(word_count: u8, path: &str) -> Result<Self, block_error::Error> {
-        let words = match word_count {
-            12 => MnemonicType::Words12,
-            15 => MnemonicType::Words15,
-            18 => MnemonicType::Words18,
-            21 => MnemonicType::Words21,
-            24 => MnemonicType::Words24,
-            _ => return Err(block_error::Error::new(format!("Invalid word count provided: {:?}. Valid optiuons are 12, 15, 18, 21, 24", word_count)))
+        let entropy_len = match word_count {
+            12 => 16,
+            15 => 20,
+            18 => 24,
+            21 => 28,
+            24 => 32,
+            _ => return Err(block_error::Error::new(format!("Invalid word count provided: {:?}. Valid options are 12, 15, 18, 21, 24", word_count)))
         };
-
-        let mnemonic = String::from(Mnemonic::new(words, Language::English).phrase());
-
-        let wallet = MnemonicBuilder::<English>::default()
-            .phrase(&*mnemonic)
-            .word_count(24)
-            .derivation_path(path)?
-            .build()?;
-
-        let private_key = Some(format!("0x{:02X?}", wallet.signer().to_bytes()).replace(", ", "").replace("[", "").replace("]", ""));
-        let public_key = Some(format!("0x{:02X?}", wallet.signer().verifying_key().to_bytes()).replace(", ", "").replace("[", "").replace("]", ""));
-        let address = Some(format!("0x{:02X?}", wallet.address().as_bytes()).replace(", ", "").replace("[", "").replace("]", ""));
-
-        Ok(Self {
-            mnemonic: Some(mnemonic),
-            private_key: private_key,
-            public_key: public_key,
-            address: address,
-            path: Some(path.to_string()),
-            ..Default::default()
-        })
+        let mut entropy = vec![0u8; entropy_len];
+        rand::thread_rng().fill_bytes(&mut entropy);
+        let mnemonic = Mnemonic::from_entropy(&entropy)
+            .map_err(|e| block_error::Error::new(format!("Mnemonic generation failed: {:?}", e)))?;
+        Self::from_mnemonic(&mnemonic.to_string(), path, "")
     }
 
-    pub fn from_mnemonic(mnemonic: &str, path: &str) -> Result<Self, block_error::Error> {
-        let wallet = MnemonicBuilder::<English>::default()
-            .phrase(mnemonic)
-            .word_count(24)
-            .derivation_path(path)?
-            .build()?;
+    pub fn from_mnemonic(mnemonic: &str, path: &str, passphrase: &str) -> Result<Self, block_error::Error> {
+        let mut builder = MnemonicBuilder::<English>::default().phrase(mnemonic);
+        builder = builder
+            .derivation_path(path)
+            .map_err(|e| block_error::Error::new(format!("Invalid derivation path {:?}: {:?}", path, e)))?;
+        if !passphrase.is_empty() {
+            builder = builder.password(passphrase);
+        }
+        let signer = builder
+            .build()
+            .map_err(|e| block_error::Error::new(format!("Alloy mnemonic wallet failed: {:?}", e)))?;
 
-        let private_key = Some(format!("0x{:02X?}", wallet.signer().to_bytes()).replace(", ", "").replace("[", "").replace("]", ""));
-        let public_key = Some(format!("0x{:02X?}", wallet.signer().verifying_key().to_bytes()).replace(", ", "").replace("[", "").replace("]", ""));
-        let address = Some(format!("0x{:02X?}", wallet.address().as_bytes()).replace(", ", "").replace("[", "").replace("]", ""));
-
-        Ok(Self {
-            mnemonic: Some(mnemonic.to_string()),
-            private_key: private_key,
-            public_key: public_key,
-            address: address,
-            path: Some(path.to_string()),
-            ..Default::default()
-        })
+        let mut wallet = wallet_from_signer(signer, Some(mnemonic.to_string()), Some(path.to_string()));
+        if !passphrase.is_empty() {
+            wallet.password = Some(passphrase.to_string());
+        }
+        Ok(wallet)
     }
-
-    /*pub fn from_extended_private_key(extended_private_key: &str, path: &Option<String>) -> Result<Self, block_error::Error> {
-        Ok(Self {
-            address: Some(String::from("0x95222290DD7278Aa3Ddd389Cc1E1d165CC4BAfe5")),
-            ..Default::default()
-        })
-    }*/
 
     pub fn from_private_key(private_key: &str) -> Result<Self, block_error::Error> {
-        let mut private_key = private_key.to_string();
-
-        if private_key.starts_with("0x") || private_key.starts_with("0X") {
-            private_key = private_key.replace("0x", "");
-            private_key = private_key.replace("0X", "");
+        let mut key = private_key.trim().to_string();
+        if key.starts_with("0x") || key.starts_with("0X") {
+            key = key[2..].to_string();
         }
 
-        let wallet = match private_key.parse::<LocalWallet>() {
-            Ok(wallet) => wallet,
-            Err(_) => return Err(block_error::Error::new(format!("Invalid private key provided: {:?}", private_key)))
-        };
+        let signer = PrivateKeySigner::from_str(&key)
+            .or_else(|_| PrivateKeySigner::from_str(&format!("0x{}", key)))
+            .map_err(|e| block_error::Error::new(format!("Invalid private key provided: {:?}", e)))?;
 
-        let private_key = Some(format!("0x{:02X?}", wallet.signer().to_bytes()).replace(", ", "").replace("[", "").replace("]", ""));
-        let public_key = Some(format!("0x{:02X?}", wallet.signer().verifying_key().to_bytes()).replace(", ", "").replace("[", "").replace("]", ""));
-        let address = Some(format!("0x{:02X?}", wallet.address().as_bytes()).replace(", ", "").replace("[", "").replace("]", ""));
-
-        Ok(Self {
-            private_key: private_key,
-            public_key: public_key,
-            address: address,
-            ..Default::default()
-        })
+        Ok(wallet_from_signer(signer, None, None))
     }
 
     pub async fn get_balance(address: String, etherscan_key: String) -> Option<String> {
@@ -242,10 +180,8 @@ impl EthereumWallet {
     }
 
     pub async fn get_erc20_balances(&mut self, etherscan_key: String, tokens: HashMap<String, Token>) {
-        //self.address = Some(String::from("0x28C6c06298d514Db089934071355E5743bf21d60"));
-        self.address = Some(String::from("0x95222290DD7278Aa3Ddd389Cc1E1d165CC4BAfe5"));
         let orig_address = match &self.address {
-            Some(address) => address,
+            Some(address) => address.clone(),
             None => return
         };
 
@@ -273,12 +209,15 @@ impl EthereumWallet {
 
         let mut eth_transactions: Vec<EthTransaction> = match serde_json::from_str(&json["result"].to_string()) {
             Ok(eth_transactions) => eth_transactions,
-            Err(e) => panic!("Error parsing eth_transactions: {}", e)
+            Err(e) => {
+                tracing::warn!("etherscan token history unavailable: {e}");
+                return;
+            }
         };
 
         if eth_transactions.len() > 0 {
             *self.last_block.lock().unwrap() = match &eth_transactions[eth_transactions.len() - 1].blockNumber {
-                Some(block_number) => block_number.parse::<i64>().expect("ERROR: Parsing block_number failed."),
+                Some(block_number) => block_number.parse::<i64>().unwrap_or(0),
                 None => 0
             };
         } else {
@@ -294,13 +233,15 @@ impl EthereumWallet {
             };
 
             if eth_transaction.value == Some("0".to_string()) {
-                eth_transactions.remove(eth_transactions.iter().position(|x| x == &eth_transaction).unwrap());
+                if let Some(index) = eth_transactions.iter().position(|x| x == &eth_transaction) {
+                    eth_transactions.remove(index);
+                }
                 continue;
             }
 
             if tokens.contains_key(symbol) {
                 let decimals = match &eth_transaction.tokenDecimal {
-                    Some(decimals) => decimals.parse::<i32>().expect("ERROR: Parsing decimal failed.") + 1,
+                    Some(decimals) => decimals.parse::<i32>().unwrap_or(0) + 1,
                     None => continue
                 };
                 self.transactions.lock().unwrap().push(eth_transaction.clone());
@@ -322,7 +263,10 @@ impl EthereumWallet {
                             None => continue
                         };
                         
-                        let mut current_balance: f64 = value.parse::<f64>().expect("ERROR: Parsing value failed.");
+                        let mut current_balance: f64 = match value.parse::<f64>() {
+                            Ok(v) => v,
+                            Err(_) => continue,
+                        };
                         current_balance = current_balance / CurrencyPairs::get_exponent(decimals);
                         balance = balance + current_balance;
                         self.erc20_balances.lock().unwrap().insert(eth_transaction.tokenSymbol.clone().unwrap(), balance);
@@ -333,7 +277,10 @@ impl EthereumWallet {
                             None => continue
                         };
 
-                        let mut current_balance: f64 = value.parse::<f64>().expect("ERROR: Parsing value failed.");
+                        let mut current_balance: f64 = match value.parse::<f64>() {
+                            Ok(v) => v,
+                            Err(_) => continue,
+                        };
                         current_balance = current_balance / CurrencyPairs::get_exponent(decimals);
                         balance = balance - current_balance;
                         self.erc20_balances.lock().unwrap().insert(eth_transaction.tokenSymbol.clone().unwrap(), balance);
@@ -347,7 +294,10 @@ impl EthereumWallet {
                             None => continue
                         };
                         
-                        let mut current_balance: f64 = value.parse::<f64>().expect("ERROR: Parsing value failed.");
+                        let mut current_balance: f64 = match value.parse::<f64>() {
+                            Ok(v) => v,
+                            Err(_) => continue,
+                        };
                         current_balance = current_balance / CurrencyPairs::get_exponent(decimals);
                         balance = balance + current_balance;
                         self.erc20_balances.lock().unwrap().insert(eth_transaction.tokenSymbol.clone().unwrap(), balance);
@@ -358,7 +308,10 @@ impl EthereumWallet {
                             None => continue
                         };
                         
-                        let mut current_balance: f64 = value.parse::<f64>().expect("ERROR: Parsing value failed.");
+                        let mut current_balance: f64 = match value.parse::<f64>() {
+                            Ok(v) => v,
+                            Err(_) => continue,
+                        };
                         current_balance = current_balance / CurrencyPairs::get_exponent(decimals);
                         balance = balance - current_balance;
                         self.erc20_balances.lock().unwrap().insert(eth_transaction.tokenSymbol.clone().unwrap(), balance);
@@ -372,15 +325,25 @@ impl EthereumWallet {
             self.wallet_name = Some(name);
     }
 
+    pub fn wipe_secrets(&mut self) {
+        crate::configuration::secrets::wipe_optional_string(&mut self.mnemonic);
+        crate::configuration::secrets::wipe_optional_string(&mut self.password);
+        crate::configuration::secrets::wipe_optional_string(&mut self.private_key);
+        crate::configuration::secrets::wipe_optional_string(&mut self.public_key);
+    }
+
     pub fn generate_qr_address(&self) -> Result<gdk4::Texture, block_error::Error> {
         let address = match &self.address {
             Some(addr) => addr,
             None => ""
         };
 
+        if address.is_empty() {
+            return Err(block_error::Error::new("no receive address for QR".to_string()));
+        }
         let qrcode = QRBuilder::new(address.to_string())
             .build()
-            .unwrap();
+            .map_err(|e| block_error::Error::new(format!("QR encode failed: {e:?}")))?;
 
         let img = ImageBuilder::default()
             .shape(Shape::RoundedSquare)
@@ -397,36 +360,62 @@ impl EthereumWallet {
     }
 
     pub async fn ether_transaction(&self, receiver: &str, amount: u64) -> Result<(), block_error::Error> {
-        let provider = match Provider::<Http>::try_from("http://127.0.0.1:8545") { //https://eth.llamarpc.com
-            Ok(provider) => provider,
-            Err(e) => return Err(block_error::Error::new(e.to_string()))
-        };
-
         let private_key = match &self.private_key {
             Some(private_key) => private_key.to_lowercase().replace("0x", ""),
             None => return Err(block_error::Error::new("ERROR: private_key is not set!".to_string()))
         };
 
-        let wallet = private_key.parse::<LocalWallet>()?;
-        let tx;
-
-        if !receiver.to_lowercase().contains(".eth")  {
-            let rec = receiver.to_lowercase().replace("0x", "").parse::<H160>()?;
-            tx = TransactionRequest::new().to(rec).value(amount).from(wallet.address());
-        } else {
-            tx = TransactionRequest::new().to(receiver).value(amount).from(wallet.address());
+        if receiver.to_lowercase().contains(".eth") {
+            return Err(block_error::Error::new("ENS names are not supported yet".to_string()));
         }
-        
-        let tx = match provider.send_transaction(tx, None).await {
-            Ok(tx) => tx,
-            Err(e) => return Err(block_error::Error::new(e.to_string()))
-        };
 
-        let tx = tx.await?;
+        let signer = PrivateKeySigner::from_str(&private_key)
+            .or_else(|_| PrivateKeySigner::from_str(&format!("0x{}", private_key)))
+            .map_err(|e| block_error::Error::new(format!("Invalid private key: {:?}", e)))?;
 
-        println!("{}", serde_json::to_string(&tx)?);
+        let to = Address::from_str(receiver)
+            .map_err(|e| block_error::Error::new(format!("Invalid receiver address: {:?}", e)))?;
+
+        let url = "http://127.0.0.1:8545"
+            .parse()
+            .map_err(|e| block_error::Error::new(format!("Invalid ETH RPC URL: {:?}", e)))?;
+        let provider = ProviderBuilder::new().wallet(signer).connect_http(url);
+
+        let tx = TransactionRequest::default()
+            .with_to(to)
+            .with_value(U256::from(amount));
+
+        let pending = provider.send_transaction(tx).await.map_err(|e| {
+            block_error::Error::new(format!("ETH send failed: {:?}", e))
+        })?;
+        let receipt = pending.get_receipt().await.map_err(|e| {
+            block_error::Error::new(format!("ETH receipt failed: {:?}", e))
+        })?;
+
+        tracing::info!("ethereum transaction submitted");
+        let _ = receipt;
         Ok(())
     }
+}
+
+fn wallet_from_signer(signer: PrivateKeySigner, mnemonic: Option<String>, path: Option<String>) -> EthereumWallet {
+    let private_key = Some(format!("0x{}", hex::encode(signer.to_bytes())));
+    let public_key = signing_key_to_public_hex(signer.credential());
+    let address = Some(format!("{}", signer.address()));
+
+    EthereumWallet {
+        mnemonic,
+        private_key,
+        public_key,
+        address,
+        path,
+        ..Default::default()
+    }
+}
+
+fn signing_key_to_public_hex(key: &SigningKey) -> Option<String> {
+    let point = key.verifying_key().to_encoded_point(false);
+    Some(format!("0x{}", hex::encode(point.as_bytes())))
 }
 
 #[cfg_attr(tarpaulin, skip)]
@@ -439,38 +428,6 @@ impl Display for EthereumWallet {
             },
             match &self.path {
                 Some(path) => format!("      {}                 {}\n", "Path".cyan().bold(), path),
-                _ => "".to_owned(),
-            },
-            match &self.password {
-                Some(password) => format!("      {}             {}\n", "Password".cyan().bold(), password),
-                _ => "".to_owned(),
-            },
-            match &self.mnemonic {
-                Some(mnemonic) => format!("      {}             {}\n", "Mnemonic".cyan().bold(), mnemonic),
-                _ => "".to_owned(),
-            },/*
-            match &self.extended_private_key {
-                Some(extended_private_key) => format!(
-                    "      {} {}\n",
-                    "Extended Private Key".cyan().bold(),
-                    extended_private_key
-                ),
-                _ => "".to_owned(),
-            },
-            match &self.extended_public_key {
-                Some(extended_public_key) => format!(
-                    "      {}  {}\n",
-                    "Extended Public Key".cyan().bold(),
-                    extended_public_key
-                ),
-                _ => "".to_owned(),
-            },*/
-            match &self.private_key {
-                Some(private_key) => format!("      {}          {}\n", "Private Key".cyan().bold(), private_key),
-                _ => "".to_owned(),
-            },
-            match &self.public_key {
-                Some(public_key) => format!("      {}           {}\n", "Public Key".cyan().bold(), public_key),
                 _ => "".to_owned(),
             },
             match &self.address {
@@ -486,5 +443,67 @@ impl Display for EthereumWallet {
 
         let output = output[..output.len() - 1].to_owned();
         write!(f, "\n{}", output)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn generate_from_known_mnemonic() {
+        let wallet = generate_from_mnemonic(
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+            "",
+        )
+        .unwrap();
+        let address = wallet.address.unwrap();
+        assert!(address.starts_with("0x"));
+        assert_eq!(address.len(), 42);
+        assert!(wallet.private_key.is_some());
+        assert!(wallet.mnemonic.is_some());
+    }
+
+    #[test]
+    fn generate_from_private_key_roundtrips_address() {
+        let generated = generate_eth_hd_wallet().unwrap();
+        let key = generated.private_key.clone().unwrap();
+        let wallet = generate_from_private_key(&key).unwrap();
+        assert_eq!(wallet.address, generated.address);
+        assert!(wallet.public_key.is_some());
+    }
+
+    #[test]
+    fn wipe_secrets_clears_key_material_and_keeps_address() {
+        let mut wallet = EthereumWallet::from_mnemonic(
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+            "m/44'/60'/0'/0/0",
+            "",
+        )
+        .unwrap();
+        let address = wallet.address.clone();
+        assert!(wallet.mnemonic.is_some());
+        assert!(wallet.private_key.is_some());
+        wallet.wipe_secrets();
+        assert!(wallet.mnemonic.is_none());
+        assert!(wallet.private_key.is_none());
+        assert!(wallet.password.is_none());
+        assert!(wallet.public_key.is_none());
+        assert_eq!(wallet.address, address);
+    }
+
+    #[test]
+    fn display_omits_mnemonic_and_private_key() {
+        let wallet = EthereumWallet::from_mnemonic(
+            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+            "m/44'/60'/0'/0/0",
+            "",
+        )
+        .unwrap();
+        let key = wallet.private_key.clone().unwrap();
+        let rendered = format!("{wallet}");
+        assert!(!rendered.contains("abandon"));
+        assert!(!rendered.contains(&key));
+        assert!(rendered.contains("0x"));
     }
 }

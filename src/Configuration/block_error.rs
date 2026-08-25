@@ -1,7 +1,3 @@
-use ethers::prelude::*;
-
-use crate::configuration::block_error::signer::SignerMiddlewareError;
-
 #[derive(Debug)]
 pub enum Error {
     IOError(std::io::Error),
@@ -47,45 +43,15 @@ impl From<reqwest::Error> for Error {
     }
 }
 
-impl From<cocoon::Error> for Error {
-    fn from(error: cocoon::Error) -> Self {
-        Error::Crate("cocoon", format!("{:?}", error))
-    }
-}
-
 impl From<rustc_hex::FromHexError> for Error {
     fn from(error: rustc_hex::FromHexError) -> Self {
-        Error::Crate("cocoon", format!("{:?}", error))
+        Error::Crate("hex", format!("{:?}", error))
     }
 }
 
-impl From<bitcoin::util::key::Error> for Error {
-    fn from(error: bitcoin::util::key::Error) -> Self {
-        Error::Crate("bitcoin", format!("{:?}", error))
-    }
-}
-
-impl From<WalletError> for Error {
-    fn from(error: WalletError) -> Self {
-        Error::Crate("ethers", format!("{:?}", error))
-    }
-}
-
-impl From<ethers::providers::ProviderError> for Error {
-    fn from(error: ethers::providers::ProviderError) -> Self {
-        Error::Crate("ethers", format!("{:?}", error))
-    }
-}
-
-impl From<ethers::utils::ConversionError> for Error {
-    fn from(error: ethers::utils::ConversionError) -> Self {
-        Error::Crate("ethers", format!("{:?}", error))
-    }
-}
-
-impl From<SignerMiddlewareError<ethers::providers::Provider<Http>, Wallet<ethers::core::k256::ecdsa::SigningKey>>> for Error {
-    fn from(error: SignerMiddlewareError<ethers::providers::Provider<Http>, Wallet<ethers::core::k256::ecdsa::SigningKey>>) -> Self {
-        Error::Crate("ethers", format!("{:?}", error))
+impl From<alloy::signers::local::LocalSignerError> for Error {
+    fn from(error: alloy::signers::local::LocalSignerError) -> Self {
+        Error::Crate("alloy", format!("{:?}", error))
     }
 }
 

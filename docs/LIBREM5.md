@@ -1,0 +1,62 @@
+# Librem 5 test checklist
+
+Complete this on a real Librem 5 (Phosh, aarch64, ~3 GB RAM) before treating v0.1.0 as done. Prefer **Bitcoin testnet**, **Ethereum Sepolia**, **Solana devnet**, and **Litecoin testnet**. Do not use mainnet funds.
+
+Install with Flatpak (`docs/packaging.md`) or a `.deb`. Building natively on the phone can take hours.
+
+## 1. Install
+
+- [ ] App appears in the app grid as **Block Wallet**
+- [ ] Icon and `.desktop` `X-Purism-FormFactor=Mobile` are present
+- [ ] First launch opens at about 360×720, not a desktop-only layout
+- [ ] Touch targets (Unlock, tab bar, Send/Receive) are usable with a finger
+
+## 2. Onboard
+
+- [ ] Create 12-word wallet: write down phrase, confirm, set password
+- [ ] Force-quit and reopen: unlock screen, not a second create flow
+- [ ] Restore on a throwaway profile with a known test phrase; BTC address is BIP84 `tb1q`/`bc1q`, ETH is `0x…`, SOL is a base58 address, and LTC is `ltc1q…`/`tltc1q…`
+- [ ] Lock wipes keys from the UI; Wallets does not show the mnemonic until Reveal + password
+
+## 3. Receive (radios on and off)
+
+- [ ] Settings → **Use test networks** → Save
+- [ ] Bitcoin receive: address + QR visible
+- [ ] Ethereum receive: address + QR visible
+- [ ] Solana receive: address + QR visible
+- [ ] Litecoin receive: address + QR visible
+- [ ] Enable airplane mode / kill switches: receive address and QR still show
+- [ ] Banner says the node is unreachable / receive still works
+- [ ] Copy address: clipboard clears within 30 seconds
+
+## 4. Send (testnet)
+
+- [ ] Fund the testnet BTC address from a faucet; wait for a confirmation
+- [ ] Send a small amount: Review → summary shows **testnet** → Confirm and broadcast
+- [ ] Mainnet send requires the “I understand this spends real bitcoin” checkbox (spot-check by turning test networks off; do not broadcast)
+- [ ] ETH Sepolia: send a tiny amount of ETH the same way
+- [ ] Optional: send a Sepolia ERC-20 if you have a test token
+- [ ] SOL devnet: airdrop with `solana airdrop`, send a tiny amount back; Review → summary shows **devnet**
+- [ ] Optional: send the bundled devnet USDC-SPL (or a token added by mint address) to confirm the associated-token-account creation path works
+- [ ] Settings → switch the ETH network dropdown to an L2 (Arbitrum/Base/Optimism/Polygon/BSC/Avalanche): balance row shows the correct native symbol (MATIC/BNB/AVAX where applicable, ETH otherwise), and the "I understand this spends real value" checkbox is visible and gates Confirm on send (not just on mainnet — this is the safety-check bug fixed this pass, worth double-checking on-device)
+- [ ] LTC testnet: fund from a faucet, send a small amount back; Review → summary shows **testnet**; mainnet send requires the "I understand this spends real litecoin" checkbox (spot-check by turning test networks off; do not broadcast)
+
+## 5. Lock and settings
+
+- [ ] Header **Lock** returns to Unlock
+- [ ] Wrong password stays locked
+- [ ] Auto-lock (2 minutes) fires after idle
+- [ ] Change BTC Electrum/Esplora URL, ETH RPC, SOL RPC, and LTC Esplora URL; Save; balances refresh or show offline honestly
+- [ ] Fiat prices stay optional (CoinGecko); send/receive work with prices off
+
+## 6. Kill switch / privacy
+
+- [ ] With WWAN/Wi-Fi off, Activity and Home do not panic
+- [ ] No mnemonic or private key in `~/.local/state/blockwallet/blockwallet.log` (or the Flatpak equivalent under `~/.var/app/org.BlockBreakers.Wallet/`)
+
+## 7. Package
+
+- [ ] aarch64 Flatpak **or** `.deb` installs and launches
+- [ ] Uninstall does not leave keys outside XDG / Flatpak app data
+
+When every box is checked, tag `v0.1.0`. Until then keep the AppStream warning: not for mainnet funds.

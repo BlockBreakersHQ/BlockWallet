@@ -1,0 +1,27 @@
+Source: blockwallet
+Section: utils
+Priority: optional
+Maintainer: Block Breakers <wallet@blockbreakers.org>
+Build-Depends: debhelper-compat (= 13),
+               cargo,
+               rustc (>= 1.85),
+               pkg-config,
+               libgtk-4-dev,
+               libadwaita-1-dev,
+               libssl-dev,
+               libclang-dev
+Standards-Version: 4.7.0
+Homepage: https://github.com/BlockBreakersHQ/BlockWallet
+Rules-Requires-Root: no
+
+Package: blockwallet
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Self-custody Bitcoin and Ethereum wallet
+ Block Wallet is a GTK4/libadwaita self-custody wallet for the Librem 5
+ and other Linux phones. Keys stay on the device in an encrypted store
+ under XDG directories. Bitcoin uses BIP84 native SegWit via BDK; Ethereum
+ uses BIP44 via Alloy. Point both chains at your own servers.
+ .
+ Do not store mainnet funds until you have completed the Librem 5 test
+ checklist in docs/LIBREM5.md.
