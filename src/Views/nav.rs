@@ -1,4 +1,4 @@
-use gtk::prelude::*;
+use adw::prelude::*;
 use gtk::{Button, Orientation};
 
 /// In-tab list/detail/send navigation without walking the widget tree.
@@ -6,6 +6,10 @@ use gtk::{Button, Orientation};
 pub struct Nav {
     pub stack: gtk::Stack,
     pub back: Button,
+    /// Strip holding the back button. Owned here, and shown or hidden directly by
+    /// `push`/`show_list`, so a pushed page always gets a visible way back and a list page
+    /// never reserves an empty strip.
+    bar: gtk::Box,
 }
 
 impl Nav {
@@ -17,14 +21,29 @@ impl Nav {
         stack.add_named(list, Some("list"));
         stack.set_visible_child_name("list");
 
-        let back = Button::from_icon_name("go-previous-symbolic");
+        // Icon plus "Back": on a phone an unlabelled arrow floating over content is easy
+        // to miss, and this is the only way out of a detail or send page.
+        let content = adw::ButtonContent::builder()
+            .icon_name("go-previous-symbolic")
+            .label("Back")
+            .build();
+        let back = Button::builder().child(&content).build();
         back.set_tooltip_text(Some("Back"));
-        back.set_visible(false);
-        back.add_css_class("standard_button");
+        back.add_css_class("flat");
         back.set_valign(gtk::Align::Center);
 
+        let bar = gtk::Box::builder()
+            .orientation(Orientation::Horizontal)
+            .spacing(6)
+            .margin_start(6)
+            .margin_end(6)
+            .margin_top(4)
+            .visible(false)
+            .build();
+        bar.append(&back);
+
         let stack_back = stack.clone();
-        let back_btn = back.clone();
+        let bar_back = bar.clone();
         back.connect_clicked(move |_| {
             let current = stack_back
                 .visible_child_name()
@@ -33,26 +52,18 @@ impl Nav {
                 stack_back.set_visible_child_name("detail");
             } else {
                 stack_back.set_visible_child_name("list");
-                back_btn.set_visible(false);
+                bar_back.set_visible(false);
             }
         });
 
-        Self { stack, back }
+        Self { stack, back, bar }
     }
 
     pub fn wrap(self) -> gtk::Box {
-        let bar = gtk::Box::builder()
-            .orientation(Orientation::Horizontal)
-            .spacing(6)
-            .margin_start(4)
-            .margin_end(4)
-            .build();
-        bar.append(&self.back);
-
         let outer = gtk::Box::builder()
             .orientation(Orientation::Vertical)
             .build();
-        outer.append(&bar);
+        outer.append(&self.bar);
         outer.append(&self.stack);
         outer
     }
@@ -63,12 +74,12 @@ impl Nav {
         }
         self.stack.add_named(child, Some(name));
         self.stack.set_visible_child_name(name);
-        self.back.set_visible(true);
+        self.bar.set_visible(true);
     }
 
     pub fn show_list(&self) {
         self.stack.set_visible_child_name("list");
-        self.back.set_visible(false);
+        self.bar.set_visible(false);
     }
 }
 
@@ -102,17 +113,10 @@ pub fn format_btc_units(display: &str, units: &str) -> String {
     display.to_string()
 }
 
+/// Inline status strip. Delegates to the shared notice styling so there is exactly one
+/// banner look in the app.
 pub fn banner(text: &str) -> gtk::Label {
-    gtk::Label::builder()
-        .label(text)
-        .wrap(true)
-        .justify(gtk::Justification::Center)
-        .margin_start(12)
-        .margin_end(12)
-        .margin_top(8)
-        .margin_bottom(4)
-        .css_classes(["label-standard"])
-        .build()
+    crate::views::ui::notice(text)
 }
 
 #[cfg(test)]

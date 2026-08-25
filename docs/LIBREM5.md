@@ -10,6 +10,9 @@ Install with Flatpak (`docs/packaging.md`) or a `.deb`. Building natively on the
 - [ ] Icon and `.desktop` `X-Purism-FormFactor=Mobile` are present
 - [ ] First launch opens at about 360×720, not a desktop-only layout
 - [ ] Touch targets (Unlock, tab bar, Send/Receive) are usable with a finger
+- [ ] Tab bar shows four real icons (Home / Wallets / Assets / Activity), not missing-image glyphs
+- [ ] Switch Phosh to dark mode: cards, banners and text all follow it, and the receive QR keeps a white frame that still scans
+- [ ] Change the system accent colour: buttons and the balance card follow it
 
 ## 2. Onboard
 
@@ -27,7 +30,8 @@ Install with Flatpak (`docs/packaging.md`) or a `.deb`. Building natively on the
 - [ ] Litecoin receive: address + QR visible
 - [ ] Enable airplane mode / kill switches: receive address and QR still show
 - [ ] Banner says the node is unreachable / receive still works
-- [ ] Copy address: clipboard clears within 30 seconds
+- [ ] Copy address: a toast confirms the copy, and the clipboard clears within 30 seconds
+- [ ] Each receive QR is large enough to scan from another phone at arm's length
 
 ## 4. Send (testnet)
 
@@ -46,7 +50,9 @@ Install with Flatpak (`docs/packaging.md`) or a `.deb`. Building natively on the
 - [ ] Header **Lock** returns to Unlock
 - [ ] Wrong password stays locked
 - [ ] Auto-lock (2 minutes) fires after idle
-- [ ] Change BTC Electrum/Esplora URL, ETH RPC, SOL RPC, and LTC Esplora URL; Save; balances refresh or show offline honestly
+- [ ] Change BTC Electrum/Esplora URL, ETH RPC, SOL RPC, and LTC Esplora URL; Save; a toast confirms and balances refresh or show offline honestly
+- [ ] Every Settings row has a readable title and subtitle at 360 px wide; nothing is clipped or requires horizontal scrolling
+- [ ] Header shows the LIVE / TEST NETWORKS chip and it matches the network actually in use
 - [ ] Fiat prices stay optional (CoinGecko); send/receive work with prices off
 
 ## 6. Kill switch / privacy

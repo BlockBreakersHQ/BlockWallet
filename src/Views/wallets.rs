@@ -1,7 +1,6 @@
 use adw::prelude::*;
 use glib::clone;
-use gtk::prelude::*;
-use gtk::{Button, Image, Orientation};
+use gtk::{Image, Orientation};
 use pango::WrapMode;
 use std::sync::{Arc, Mutex};
 
@@ -17,124 +16,64 @@ use crate::currencies::ltc;
 use crate::currencies::ltc::LitecoinWallet;
 use crate::currencies::sol;
 use crate::currencies::sol::SolanaWallet;
+use crate::views::ui;
 
 pub fn wallet_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, Arc<Mutex<ApplicationSettings>>) {
-    let btc_data_displayed = Arc::new(Mutex::new(false));
-    let eth_data_displayed = Arc::new(Mutex::new(false));
-    let sol_data_displayed = Arc::new(Mutex::new(false));
-    let ltc_data_displayed = Arc::new(Mutex::new(false));
-
     let btc_wallets = app_settings.lock().unwrap().btc_wallets.clone();
     let eth_wallets = app_settings.lock().unwrap().eth_wallets.clone();
     let sol_wallets = app_settings.lock().unwrap().sol_wallets.clone();
     let ltc_wallets = app_settings.lock().unwrap().ltc_wallets.clone();
 
-    let scrollable_box = gtk::Box::builder()
-        .orientation(Orientation::Vertical)
-        .margin_top(6)
-        .margin_bottom(6)
-        .vexpand(true)
-        .build();
-    scrollable_box.set_widget_name("wallet_scrollable_box");
+    let scrollable_box = ui::page_body(12);
 
-    let scrollable_container = gtk::ScrolledWindow::builder()
-        .child(&scrollable_box)
-        .name("wallet_scrollable_container")
-        .build();
+    scrollable_box.append(&ui::notice(
+        "One recovery phrase backs every account here. Addresses are safe to share; the phrase never is.",
+    ));
 
-    let btc_button = setup_button("Bitcoin");
-    let eth_button = setup_button("Ethereum");
-    let sol_button = setup_button("Solana");
-    let ltc_button = setup_button("Litecoin");
-    let add_wallet_button = setup_button("Add account");
+    // All four chains are shown at once in titled groups. The old screen hid every
+    // account behind a toggle button per chain, so a fresh wallet opened on four
+    // identical grey buttons and no information at all.
+    let btc_group = chain_group("btc", &btc_wallets.len().to_string());
+    let eth_group = chain_group("eth", &eth_wallets.len().to_string());
+    let sol_group = chain_group("sol", &sol_wallets.len().to_string());
+    let ltc_group = chain_group("ltc", &ltc_wallets.len().to_string());
 
-    let wallet_box = gtk::Box::builder()
-        .orientation(Orientation::Vertical)
-        .margin_top(6)
-        .margin_bottom(6)
-        .build();
+    for wallet in &btc_wallets {
+        add_btc_wallet(&btc_group, wallet, app_settings.clone());
+    }
+    for wallet in &eth_wallets {
+        add_eth_wallet(&eth_group, wallet, app_settings.clone());
+    }
+    for wallet in &sol_wallets {
+        add_sol_wallet(&sol_group, wallet, app_settings.clone());
+    }
+    for wallet in &ltc_wallets {
+        add_ltc_wallet(&ltc_group, wallet, app_settings.clone());
+    }
 
-    scrollable_box.append(&btc_button);
-    scrollable_box.append(&eth_button);
-    scrollable_box.append(&sol_button);
-    scrollable_box.append(&ltc_button);
-    scrollable_box.append(&add_wallet_button);
+    scrollable_box.append(&btc_group);
+    scrollable_box.append(&eth_group);
+    scrollable_box.append(&sol_group);
+    scrollable_box.append(&ltc_group);
 
-    let btc_currency_details = populate_btc_currency_details(&btc_wallets, app_settings.clone());
-    let eth_currency_details = populate_eth_currency_details(&eth_wallets, app_settings.clone());
-    let sol_currency_details = populate_sol_currency_details(&sol_wallets, app_settings.clone());
-    let ltc_currency_details = populate_ltc_currency_details(&ltc_wallets, app_settings.clone());
-    scrollable_box.insert_child_after(&btc_currency_details, Some(&btc_button));
-    scrollable_box.insert_child_after(&eth_currency_details, Some(&eth_button));
-    scrollable_box.insert_child_after(&sol_currency_details, Some(&sol_button));
-    scrollable_box.insert_child_after(&ltc_currency_details, Some(&ltc_button));
-    let btc_currency_details_clone = btc_currency_details.clone();
-    let eth_currency_details_clone = eth_currency_details.clone();
-    let btc_currency_details_clone2 = btc_currency_details.clone();
-    let eth_currency_details_clone2 = eth_currency_details.clone();
-    let btc_currency_details_clone3 = btc_currency_details.clone();
-    let eth_currency_details_clone3 = eth_currency_details.clone();
-    let sol_currency_details_clone = sol_currency_details.clone();
-    let sol_currency_details_clone2 = sol_currency_details.clone();
-    let sol_currency_details_clone3 = sol_currency_details.clone();
-    let ltc_currency_details_clone = ltc_currency_details.clone();
-    let ltc_currency_details_clone2 = ltc_currency_details.clone();
-    let ltc_currency_details_clone3 = ltc_currency_details.clone();
+    let add_group = adw::PreferencesGroup::new();
+    let add_wallet_button = ui::icon_button("Add account", "list-add-symbolic");
+    add_group.add(&add_wallet_button);
+    scrollable_box.append(&add_group);
+
+    let scrollable_container = ui::scroller(&scrollable_box);
+    let wallet_box = ui::vbox(0);
 
     let new_wallet_box = new_wallet_box(
         app_settings.clone(),
-        Arc::new(Mutex::new(btc_currency_details.clone())),
-        Arc::new(Mutex::new(eth_currency_details.clone())),
-        Arc::new(Mutex::new(sol_currency_details.clone())),
-        Arc::new(Mutex::new(ltc_currency_details.clone())),
+        Arc::new(Mutex::new(btc_group.clone())),
+        Arc::new(Mutex::new(eth_group.clone())),
+        Arc::new(Mutex::new(sol_group.clone())),
+        Arc::new(Mutex::new(ltc_group.clone())),
         Arc::new(Mutex::new(scrollable_container.clone())),
     );
     wallet_box.append(&scrollable_container);
     wallet_box.append(&new_wallet_box);
-
-    btc_button.connect_clicked(move |_| {
-        let mut shown = btc_data_displayed.lock().unwrap();
-        *shown = !*shown;
-        btc_currency_details.set_visible(*shown);
-        if *shown {
-            eth_currency_details_clone.set_visible(false);
-            sol_currency_details_clone.set_visible(false);
-            ltc_currency_details_clone.set_visible(false);
-        }
-    });
-
-    eth_button.connect_clicked(move |_| {
-        let mut shown = eth_data_displayed.lock().unwrap();
-        *shown = !*shown;
-        eth_currency_details.set_visible(*shown);
-        if *shown {
-            btc_currency_details_clone.set_visible(false);
-            sol_currency_details_clone2.set_visible(false);
-            ltc_currency_details_clone2.set_visible(false);
-        }
-    });
-
-    sol_button.connect_clicked(move |_| {
-        let mut shown = sol_data_displayed.lock().unwrap();
-        *shown = !*shown;
-        sol_currency_details.set_visible(*shown);
-        if *shown {
-            btc_currency_details_clone2.set_visible(false);
-            eth_currency_details_clone2.set_visible(false);
-            ltc_currency_details_clone3.set_visible(false);
-        }
-    });
-
-    ltc_button.connect_clicked(move |_| {
-        let mut shown = ltc_data_displayed.lock().unwrap();
-        *shown = !*shown;
-        ltc_currency_details.set_visible(*shown);
-        if *shown {
-            btc_currency_details_clone3.set_visible(false);
-            eth_currency_details_clone3.set_visible(false);
-            sol_currency_details_clone3.set_visible(false);
-        }
-    });
 
     add_wallet_button.connect_clicked(move |_| {
         new_wallet_box.set_visible(true);
@@ -144,95 +83,19 @@ pub fn wallet_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, 
     (wallet_box, app_settings)
 }
 
-fn populate_btc_currency_details(
-    btc_wallets: &[BitcoinWallet],
-    app_settings: Arc<Mutex<ApplicationSettings>>,
-) -> gtk::Box {
-    let widgets = gtk::Box::builder()
-        .orientation(Orientation::Vertical)
-        .visible(false)
-        .build();
-    for wallet in btc_wallets {
-        append_account_card(
-            &widgets,
-            wallet.wallet_name.as_deref(),
-            wallet.address.as_deref(),
-            "BTC",
-            btc_qr_box(wallet),
-            app_settings.clone(),
-        );
-    }
-    widgets
-}
-
-fn populate_eth_currency_details(
-    eth_wallets: &[EthereumWallet],
-    app_settings: Arc<Mutex<ApplicationSettings>>,
-) -> gtk::Box {
-    let widgets = gtk::Box::builder()
-        .orientation(Orientation::Vertical)
-        .visible(false)
-        .build();
-    for wallet in eth_wallets {
-        append_account_card(
-            &widgets,
-            wallet.wallet_name.as_deref(),
-            wallet.address.as_deref(),
-            "ETH",
-            eth_qr_box(wallet),
-            app_settings.clone(),
-        );
-    }
-    widgets
-}
-
-fn populate_sol_currency_details(
-    sol_wallets: &[SolanaWallet],
-    app_settings: Arc<Mutex<ApplicationSettings>>,
-) -> gtk::Box {
-    let widgets = gtk::Box::builder()
-        .orientation(Orientation::Vertical)
-        .visible(false)
-        .build();
-    for wallet in sol_wallets {
-        append_account_card(
-            &widgets,
-            wallet.wallet_name.as_deref(),
-            wallet.address.as_deref(),
-            "SOL",
-            sol_qr_box(wallet),
-            app_settings.clone(),
-        );
-    }
-    widgets
-}
-
-fn populate_ltc_currency_details(
-    ltc_wallets: &[LitecoinWallet],
-    app_settings: Arc<Mutex<ApplicationSettings>>,
-) -> gtk::Box {
-    let widgets = gtk::Box::builder()
-        .orientation(Orientation::Vertical)
-        .visible(false)
-        .build();
-    for wallet in ltc_wallets {
-        append_account_card(
-            &widgets,
-            wallet.wallet_name.as_deref(),
-            wallet.address.as_deref(),
-            "LTC",
-            ltc_qr_box(wallet),
-            app_settings.clone(),
-        );
-    }
-    widgets
+fn chain_group(chain: &str, count: &str) -> adw::PreferencesGroup {
+    let plural = if count == "1" { "account" } else { "accounts" };
+    ui::group_with_description(
+        ui::chain_display_name(chain),
+        &format!("{count} {plural}"),
+    )
 }
 
 fn append_account_card(
-    parent: &gtk::Box,
+    parent: &adw::PreferencesGroup,
     name: Option<&str>,
     address: Option<&str>,
-    icon: &str,
+    chain: &str,
     qr_box: gtk::Box,
     app_settings: Arc<Mutex<ApplicationSettings>>,
 ) {
@@ -245,51 +108,63 @@ fn append_account_card(
         wallet_display::truncate_address(&address_text)
     };
 
-    let address_label = gtk::Label::builder()
-        .label(&lines[1])
-        .halign(gtk::Align::Start)
-        .hexpand(true)
-        .wrap(true)
-        .wrap_mode(WrapMode::Char)
-        .selectable(true)
-        .css_classes(["btc-wallet-details"])
-        .margin_start(12)
-        .margin_end(12)
-        .build();
+    let address_label = ui::mono_address(&lines[1]);
+    address_label.set_margin_start(12);
+    address_label.set_margin_end(12);
+    address_label.set_margin_top(8);
 
-    let copy_address = setup_button("Copy address");
+    let copy_address = ui::icon_button("Copy address", "edit-copy-symbolic");
+    copy_address.set_margin_start(12);
+    copy_address.set_margin_end(12);
     let address_for_copy = address_text.clone();
     copy_address.connect_clicked(move |_| {
         if !address_for_copy.is_empty() {
             clipboard::copy_text(&address_for_copy);
+            ui::toast("Address copied. The clipboard clears shortly.");
         }
     });
 
-    let qr_button = setup_button("Show QR code");
+    let qr_button = ui::icon_button("Show QR code", "scanner-symbolic");
+    qr_button.set_margin_start(12);
+    qr_button.set_margin_end(12);
     qr_box.set_halign(gtk::Align::Center);
     let qr_box_toggle = qr_box.clone();
     qr_button.connect_clicked(move |button| {
         let show = !qr_box_toggle.is_visible();
         qr_box_toggle.set_visible(show);
-        button.set_label(if show { "Hide QR code" } else { "Show QR code" });
+        if let Some(content) = button.child().and_then(|c| c.downcast::<adw::ButtonContent>().ok()) {
+            content.set_label(if show { "Hide QR code" } else { "Show QR code" });
+        }
     });
 
     let expander = adw::ExpanderRow::builder()
         .title(&title)
         .subtitle(&subtitle)
-        .margin_start(12)
-        .margin_end(12)
-        .height_request(44)
         .css_classes(["wallet-expander"])
-        .icon_name(icon)
         .build();
+    // The real coin logo, same as Home and Assets, falling back to a coloured monogram
+    // where no PNG is bundled. The old code passed "BTC"/"ETH" as an icon-theme name,
+    // which resolves to nothing and rendered as the broken-image glyph.
+    let symbol = chain_symbol(chain);
+    let logo = crate::configuration::paths::token_icon_path(symbol);
+    expander.add_prefix(&ui::coin_mark(&logo, symbol, chain, 32));
+
     expander.add_row(&address_label);
     expander.add_row(&copy_address);
     expander.add_row(&qr_box);
     expander.add_row(&qr_button);
     expander.add_row(&reveal_box(address_text, app_settings));
 
-    parent.append(&expander);
+    parent.add(&expander);
+}
+
+fn chain_symbol(chain: &str) -> &'static str {
+    match chain {
+        "btc" => "BTC",
+        "sol" => "SOL",
+        "ltc" => "LTC",
+        _ => "ETH",
+    }
 }
 
 fn reveal_box(address: String, app_settings: Arc<Mutex<ApplicationSettings>>) -> gtk::Box {
@@ -301,46 +176,53 @@ fn reveal_box(address: String, app_settings: Arc<Mutex<ApplicationSettings>>) ->
         .margin_bottom(8)
         .build();
 
-    let reveal_button = setup_button("Reveal backup details");
-    let password = gtk::Entry::builder()
+    let reveal_button = ui::icon_button("Reveal backup details", "view-reveal-symbolic");
+    let password = gtk::PasswordEntry::builder()
         .placeholder_text("Password")
-        .visibility(false)
+        .show_peek_icon(true)
         .hexpand(true)
         .visible(false)
         .build();
-    let unlock_details = setup_button("Show details");
+    let unlock_details = ui::button("Show details");
     unlock_details.set_visible(false);
-    let error = gtk::Label::builder()
-        .label("Password incorrect.")
+    let error = ui::error_label("Password incorrect.");
+    // Anyone who sees this text owns the funds. It gets the loudest treatment in the app.
+    let warning = gtk::Label::builder()
+        .label("Anyone with this phrase can spend these funds. Never type it into a website or share it.")
         .wrap(true)
+        .wrap_mode(WrapMode::WordChar)
+        .xalign(0.0)
         .visible(false)
-        .css_classes(["label-error"])
+        .css_classes(["danger-note"])
         .build();
     let phrase_label = gtk::Label::builder()
         .halign(gtk::Align::Start)
+        .xalign(0.0)
         .wrap(true)
         .wrap_mode(WrapMode::WordChar)
         .selectable(true)
         .visible(false)
-        .css_classes(["seed-word"])
+        .css_classes(["seed-chip"])
         .build();
     let key_label = gtk::Label::builder()
         .halign(gtk::Align::Start)
+        .xalign(0.0)
         .wrap(true)
         .wrap_mode(WrapMode::Char)
         .selectable(true)
         .visible(false)
-        .css_classes(["seed-word"])
+        .css_classes(["seed-chip"])
         .build();
-    let copy_phrase = setup_button("Copy recovery phrase");
+    let copy_phrase = ui::icon_button("Copy recovery phrase", "edit-copy-symbolic");
     copy_phrase.set_visible(false);
-    let hide_button = setup_button("Hide details");
+    let hide_button = ui::icon_button("Hide details", "view-conceal-symbolic");
     hide_button.set_visible(false);
 
     box_.append(&reveal_button);
     box_.append(&password);
     box_.append(&unlock_details);
     box_.append(&error);
+    box_.append(&warning);
     box_.append(&phrase_label);
     box_.append(&key_label);
     box_.append(&copy_phrase);
@@ -361,6 +243,7 @@ fn reveal_box(address: String, app_settings: Arc<Mutex<ApplicationSettings>>) ->
     unlock_details.connect_clicked(clone!(
         #[weak] password,
         #[weak] error,
+        #[weak] warning,
         #[weak] phrase_label,
         #[weak] key_label,
         #[weak] copy_phrase,
@@ -377,6 +260,7 @@ fn reveal_box(address: String, app_settings: Arc<Mutex<ApplicationSettings>>) ->
             }
             error.set_visible(false);
             let (mnemonic, private_key) = app_settings.lock().unwrap().secrets_for_address(&address);
+            warning.set_visible(true);
             if let Some(phrase) = mnemonic.filter(|value| !value.is_empty()) {
                 phrase_label.set_label(&format!("Recovery phrase: {phrase}"));
                 phrase_label.set_visible(true);
@@ -402,6 +286,7 @@ fn reveal_box(address: String, app_settings: Arc<Mutex<ApplicationSettings>>) ->
                 .to_string();
             if !phrase.is_empty() {
                 clipboard::copy_text_timed(&phrase);
+                ui::toast("Recovery phrase copied. The clipboard clears shortly.");
             }
         }
     ));
@@ -414,6 +299,7 @@ fn reveal_box(address: String, app_settings: Arc<Mutex<ApplicationSettings>>) ->
         #[weak] reveal_button,
         #[weak] password,
         #[weak] error,
+        #[weak] warning,
         move |_| {
             phrase_label.set_label("");
             key_label.set_label("");
@@ -421,6 +307,7 @@ fn reveal_box(address: String, app_settings: Arc<Mutex<ApplicationSettings>>) ->
             key_label.set_visible(false);
             copy_phrase.set_visible(false);
             hide_button.set_visible(false);
+            warning.set_visible(false);
             password.set_text("");
             password.set_visible(false);
             error.set_visible(false);
@@ -432,7 +319,7 @@ fn reveal_box(address: String, app_settings: Arc<Mutex<ApplicationSettings>>) ->
 }
 
 fn add_btc_wallet(
-    btc_box: &gtk::Box,
+    btc_box: &adw::PreferencesGroup,
     btcw: &BitcoinWallet,
     app_settings: Arc<Mutex<ApplicationSettings>>,
 ) {
@@ -440,14 +327,14 @@ fn add_btc_wallet(
         btc_box,
         btcw.wallet_name.as_deref(),
         btcw.address.as_deref(),
-        "BTC",
+        "btc",
         btc_qr_box(btcw),
         app_settings,
     );
 }
 
 fn add_eth_wallet(
-    eth_box: &gtk::Box,
+    eth_box: &adw::PreferencesGroup,
     ethw: &EthereumWallet,
     app_settings: Arc<Mutex<ApplicationSettings>>,
 ) {
@@ -455,14 +342,14 @@ fn add_eth_wallet(
         eth_box,
         ethw.wallet_name.as_deref(),
         ethw.address.as_deref(),
-        "ETH",
+        "eth",
         eth_qr_box(ethw),
         app_settings,
     );
 }
 
 fn add_sol_wallet(
-    sol_box: &gtk::Box,
+    sol_box: &adw::PreferencesGroup,
     solw: &SolanaWallet,
     app_settings: Arc<Mutex<ApplicationSettings>>,
 ) {
@@ -470,14 +357,14 @@ fn add_sol_wallet(
         sol_box,
         solw.wallet_name.as_deref(),
         solw.address.as_deref(),
-        "SOL",
+        "sol",
         sol_qr_box(solw),
         app_settings,
     );
 }
 
 fn add_ltc_wallet(
-    ltc_box: &gtk::Box,
+    ltc_box: &adw::PreferencesGroup,
     ltcw: &LitecoinWallet,
     app_settings: Arc<Mutex<ApplicationSettings>>,
 ) {
@@ -485,7 +372,7 @@ fn add_ltc_wallet(
         ltc_box,
         ltcw.wallet_name.as_deref(),
         ltcw.address.as_deref(),
-        "LTC",
+        "ltc",
         ltc_qr_box(ltcw),
         app_settings,
     );
@@ -512,83 +399,80 @@ fn qr_box_from_texture(texture: Option<gtk::gdk::Texture>) -> gtk::Box {
         .orientation(Orientation::Vertical)
         .visible(false)
         .halign(gtk::Align::Center)
+        .margin_start(12)
+        .margin_end(12)
         .build();
     if let Some(qr_code) = texture {
         let qr_image = Image::from_paintable(Some(&qr_code));
-        qr_image.set_pixel_size(160);
-        qr_box.append(&qr_image);
+        qr_image.set_pixel_size(170);
+        // White frame: the QR is dark modules on a light field and will not scan against
+        // a dark theme background.
+        let frame = gtk::Box::new(Orientation::Vertical, 0);
+        frame.add_css_class("qr-frame");
+        frame.set_halign(gtk::Align::Center);
+        frame.append(&qr_image);
+        qr_box.append(&frame);
     }
     qr_box
 }
 
 fn new_wallet_box(
     app_settings: Arc<Mutex<ApplicationSettings>>,
-    btc_box: Arc<Mutex<gtk::Box>>,
-    eth_box: Arc<Mutex<gtk::Box>>,
-    sol_box: Arc<Mutex<gtk::Box>>,
-    ltc_box: Arc<Mutex<gtk::Box>>,
+    btc_box: Arc<Mutex<adw::PreferencesGroup>>,
+    eth_box: Arc<Mutex<adw::PreferencesGroup>>,
+    sol_box: Arc<Mutex<adw::PreferencesGroup>>,
+    ltc_box: Arc<Mutex<adw::PreferencesGroup>>,
     scrollable_container: Arc<Mutex<gtk::ScrolledWindow>>,
 ) -> gtk::Box {
+    let content = ui::page_body(14);
+
+    let back_button = ui::icon_button("Back to accounts", "go-previous-symbolic");
+    content.append(&back_button);
+
+    content.append(&ui::notice(
+        "Add another account from this recovery phrase, or import an existing key. The phrase is never shown here.",
+    ));
+
+    let tokens = ["Bitcoin", "Ethereum", "Solana", "Litecoin"];
+
+    // ---- derive from the existing seed ----
+    let create_group = ui::group_with_description(
+        "New account",
+        "Derived from the recovery phrase already in this wallet.",
+    );
+    let token_selector = ui::combo_row("Chain", &tokens);
+    let wallet_name = ui::entry_row("Account name");
+    create_group.add(&token_selector);
+    create_group.add(&wallet_name);
+    let create_wallet_button = ui::primary_button("Add from recovery phrase");
+    create_group.add(&create_wallet_button);
+    let create_error = ui::error_label("Could not add that account.");
+    create_group.add(&create_error);
+    content.append(&create_group);
+
+    // ---- import an outside key ----
+    let import_group = ui::group_with_description(
+        "Import account",
+        "Bring in a key that was created elsewhere. It is stored in the same encrypted file.",
+    );
+    let import_token_selector = ui::combo_row("Chain", &tokens);
+    let import_wallet_name = ui::entry_row("Account name");
+    let import_secret = ui::password_row("WIF, private key or phrase");
+    import_group.add(&import_token_selector);
+    import_group.add(&import_wallet_name);
+    import_group.add(&import_secret);
+    let import_wallet_button = ui::button("Import account");
+    import_wallet_button.add_css_class("pill-button");
+    import_group.add(&import_wallet_button);
+    let import_error = ui::error_label("Could not import that key.");
+    import_group.add(&import_error);
+    content.append(&import_group);
+
     let new_wallet_box = gtk::Box::builder()
         .orientation(Orientation::Vertical)
         .visible(false)
-        .spacing(8)
-        .margin_start(12)
-        .margin_end(12)
         .build();
-
-    let intro = gtk::Label::builder()
-        .label("Add another account from this recovery phrase, or import a key. The phrase is never shown here.")
-        .wrap(true)
-        .wrap_mode(WrapMode::WordChar)
-        .css_classes(["label-standard"])
-        .build();
-
-    let tokens = ["Bitcoin", "Ethereum", "Solana", "Litecoin"];
-    let token_selector = gtk::DropDown::from_strings(&tokens);
-    let wallet_name = gtk::Entry::builder()
-        .placeholder_text("Account name")
-        .hexpand(true)
-        .build();
-    let create_wallet_button = setup_button("Add from recovery phrase");
-    create_wallet_button.add_css_class("suggested-action");
-    let create_error = gtk::Label::builder()
-        .label("Could not add that account.")
-        .wrap(true)
-        .visible(false)
-        .css_classes(["label-error"])
-        .build();
-
-    let import_token_selector = gtk::DropDown::from_strings(&tokens);
-    let import_wallet_name = gtk::Entry::builder()
-        .placeholder_text("Imported account name")
-        .hexpand(true)
-        .build();
-    let import_secret = gtk::Entry::builder()
-        .placeholder_text("WIF, private key, or recovery phrase")
-        .visibility(false)
-        .hexpand(true)
-        .build();
-    let import_wallet_button = setup_button("Import");
-    let import_error = gtk::Label::builder()
-        .label("Could not import that key.")
-        .wrap(true)
-        .visible(false)
-        .css_classes(["label-error"])
-        .build();
-    let back_button = setup_button("Back");
-
-    new_wallet_box.append(&intro);
-    new_wallet_box.append(&token_selector);
-    new_wallet_box.append(&wallet_name);
-    new_wallet_box.append(&create_wallet_button);
-    new_wallet_box.append(&create_error);
-    new_wallet_box.append(&import_token_selector);
-    new_wallet_box.append(&import_wallet_name);
-    new_wallet_box.append(&import_secret);
-    new_wallet_box.append(&import_wallet_button);
-    new_wallet_box.append(&import_error);
-    new_wallet_box.append(&back_button);
+    new_wallet_box.append(&ui::scroller(&content));
 
     let form = new_wallet_box.clone();
     back_button.connect_clicked(clone!(
@@ -770,17 +654,4 @@ fn new_wallet_box(
     ));
 
     new_wallet_box
-}
-
-fn setup_button(label: &str) -> Button {
-    let button = Button::builder()
-        .label(label)
-        .hexpand(true)
-        .margin_start(12)
-        .margin_end(12)
-        .margin_top(4)
-        .margin_bottom(4)
-        .build();
-    button.add_css_class("standard_button");
-    button
 }

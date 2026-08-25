@@ -1,5 +1,5 @@
+use adw::prelude::*;
 use glib::{clone, ControlFlow};
-use gtk::prelude::*;
 use gtk::{Button, Orientation};
 use pango::WrapMode;
 use std::sync::{Arc, Mutex};
@@ -11,6 +11,7 @@ use crate::currencies::eth_chain;
 use crate::currencies::ltc_chain;
 use crate::currencies::sol_chain;
 use crate::currencies::tokens::Token;
+use crate::views::ui;
 
 pub fn transaction_view(app_settings: ApplicationSettings, token: Token) -> (gtk::Box, ApplicationSettings) {
     match token.chain.as_str() {
@@ -21,15 +22,137 @@ pub fn transaction_view(app_settings: ApplicationSettings, token: Token) -> (gtk
     }
 }
 
-fn btc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
-    let box_ = gtk::Box::builder()
+/// The parts every send screen shares. Built once here so the four chains cannot drift
+/// apart visually, and so the confirmation gating is written in exactly one place.
+struct SendChrome {
+    page: gtk::Box,
+    /// Boxed-list group holding the account / recipient / amount / fee rows.
+    form: adw::PreferencesGroup,
+    error: gtk::Label,
+    review: Button,
+    confirm_box: gtk::Box,
+    summary: gtk::Label,
+    confirm: Button,
+    cancel: Button,
+    /// Testnet vs real-value strip above the summary, filled in when a plan is ready.
+    network_note: gtk::Label,
+    status: gtk::Label,
+}
+
+/// `spends_real_value` drives the acknowledgement checkbox: when true the Confirm button
+/// starts insensitive and only the checkbox can enable it.
+fn send_chrome(chain: &str, spends_real_value: bool, ack_text: &str) -> SendChrome {
+    let page = ui::page_body(14);
+
+    page.append(&ui::heading(&format!("Send {}", ui::chain_display_name(chain))));
+
+    let form = ui::group("Details");
+    page.append(&form);
+
+    let review = ui::primary_button("Review send");
+    page.append(&review);
+
+    let error = ui::error_label("");
+    page.append(&error);
+
+    // ---- review card ----
+    let confirm_box = gtk::Box::builder()
         .orientation(Orientation::Vertical)
-        .spacing(8)
-        .margin_start(12)
-        .margin_end(12)
-        .margin_top(8)
-        .margin_bottom(12)
+        .spacing(12)
+        .visible(false)
+        .css_classes(["review-card"])
         .build();
+
+    let network_note = gtk::Label::builder()
+        .label("")
+        .wrap(true)
+        .wrap_mode(WrapMode::WordChar)
+        .xalign(0.0)
+        .build();
+
+    let summary = gtk::Label::builder()
+        .wrap(true)
+        .wrap_mode(WrapMode::WordChar)
+        .halign(gtk::Align::Start)
+        .xalign(0.0)
+        .selectable(true)
+        .css_classes(["review-summary"])
+        .build();
+
+    let confirm = ui::primary_button("Confirm and broadcast");
+    let cancel = ui::button("Cancel");
+
+    let ack = gtk::CheckButton::with_label(ack_text);
+    ack.set_visible(spends_real_value);
+    if spends_real_value {
+        confirm.set_sensitive(false);
+    }
+    let confirm_gate = confirm.clone();
+    ack.connect_toggled(move |cb| {
+        confirm_gate.set_sensitive(cb.is_active());
+    });
+
+    confirm_box.append(&network_note);
+    confirm_box.append(&ui::heading("Review"));
+    confirm_box.append(&summary);
+    confirm_box.append(&ack);
+    confirm_box.append(&confirm);
+    confirm_box.append(&cancel);
+    page.append(&confirm_box);
+
+    let status = gtk::Label::builder()
+        .wrap(true)
+        .wrap_mode(WrapMode::WordChar)
+        .xalign(0.0)
+        .visible(false)
+        .css_classes(["info-banner"])
+        .build();
+    page.append(&status);
+
+    SendChrome {
+        page,
+        form,
+        error,
+        review,
+        confirm_box,
+        summary,
+        confirm,
+        cancel,
+        network_note,
+        status,
+    }
+}
+
+/// Style the strip above the review summary: green for testnet, amber for real value.
+fn set_network_note(label: &gtk::Label, testnet: bool, text: &str) {
+    label.set_label(text);
+    label.remove_css_class("testnet-note");
+    label.remove_css_class("spend-warning");
+    label.add_css_class(if testnet { "testnet-note" } else { "spend-warning" });
+}
+
+/// Wrap a send page so a long form still reaches its Confirm button on a 360×720 screen.
+fn scrolled(page: gtk::Box) -> gtk::Box {
+    let outer = ui::vbox(0);
+    outer.append(&ui::scroller(&page));
+    outer
+}
+
+fn btc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
+    let btc_mainnet = !app_settings.btc_network.eq_ignore_ascii_case("testnet");
+    let chrome = send_chrome("btc", btc_mainnet, "I understand this spends real bitcoin.");
+    let SendChrome {
+        page: box_,
+        form,
+        error,
+        review,
+        confirm_box,
+        summary,
+        confirm,
+        cancel,
+        network_note,
+        status,
+    } = chrome;
 
     let names: Vec<String> = app_settings
         .btc_wallets
@@ -42,75 +165,22 @@ fn btc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
         })
         .collect();
     let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
-    let from_wallet = gtk::DropDown::from_strings(&name_refs);
+    let from_row = ui::combo_row("From account", &name_refs);
+    let receive_address = ui::entry_row("Recipient");
+    let amount = ui::entry_row("Amount (BTC)");
+    let fee_row = ui::combo_row("Network fee", &["Low", "Medium", "High"]);
+    fee_row.set_selected(1);
 
-    let receive_address = gtk::Entry::builder()
-        .placeholder_text("Recipient (bc1… / tb1…)")
-        .hexpand(true)
-        .build();
-    let amount = gtk::Entry::builder()
-        .placeholder_text("Amount (BTC)")
-        .hexpand(true)
-        .build();
-    let fee = gtk::DropDown::from_strings(&["Low", "Medium", "High"]);
-    fee.set_selected(1);
+    form.add(&from_row);
+    form.add(&receive_address);
+    form.add(&amount);
+    form.add(&fee_row);
 
-    let review = Button::builder().label("Review send").hexpand(true).build();
-    review.add_css_class("standard_button");
-    review.add_css_class("suggested-action");
-
-    let error = gtk::Label::builder()
-        .wrap(true)
-        .visible(false)
-        .css_classes(["label-error"])
-        .build();
-
-    let confirm_box = gtk::Box::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(8)
-        .visible(false)
-        .css_classes(["receiver-box"])
-        .build();
-    let summary = gtk::Label::builder()
-        .wrap(true)
-        .wrap_mode(WrapMode::WordChar)
-        .halign(gtk::Align::Start)
-        .selectable(true)
-        .build();
-    let confirm = Button::builder().label("Confirm and broadcast").hexpand(true).build();
-    confirm.add_css_class("standard_button");
-    confirm.add_css_class("suggested-action");
-    let cancel = Button::builder().label("Cancel").hexpand(true).build();
-    cancel.add_css_class("standard_button");
-    let btc_mainnet = !app_settings.btc_network.eq_ignore_ascii_case("testnet");
-    let ack = gtk::CheckButton::with_label("I understand this spends real bitcoin.");
-    ack.set_visible(btc_mainnet);
-    if btc_mainnet {
-        confirm.set_sensitive(false);
-    }
-    let confirm_gate = confirm.clone();
-    ack.connect_toggled(move |cb| {
-        confirm_gate.set_sensitive(cb.is_active());
-    });
-    confirm_box.append(&summary);
-    confirm_box.append(&ack);
-    confirm_box.append(&confirm);
-    confirm_box.append(&cancel);
-
-    let status = gtk::Label::builder()
-        .wrap(true)
-        .visible(false)
-        .css_classes(["label-standard"])
-        .build();
-
-    box_.append(&from_wallet);
-    box_.append(&receive_address);
-    box_.append(&amount);
-    box_.append(&fee);
-    box_.append(&review);
-    box_.append(&error);
-    box_.append(&confirm_box);
-    box_.append(&status);
+    // The chrome exposes ComboRows, but the handlers below were written against
+    // `DropDown::selected()`. `ComboRow::selected()` has the same meaning, so the aliases
+    // keep the rest of this function unchanged.
+    let from_wallet = from_row.clone();
+    let fee = fee_row.clone();
 
     let app_settings = Arc::new(Mutex::new(app_settings));
     let prepared = Arc::new(Mutex::new(None::<btc_chain::PreparedSend>));
@@ -192,23 +262,28 @@ fn btc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
                     #[weak] error,
                     #[weak] confirm_box,
                     #[weak] summary,
+                    #[weak] network_note,
                     #[strong] prepared,
                     #[upgrade_or]
                     ControlFlow::Break,
                     move |result| {
                         match result {
                             Ok(plan) => {
-                                let prefix = if testnet {
-                                    "Bitcoin testnet — coins have no mainnet value.\n\n"
-                                } else {
-                                    "MAINNET: this spends real bitcoin.\n\n"
-                                };
-                                summary.set_label(&format!("{}{}", prefix, plan.summary()));
+                                set_network_note(
+                                    &network_note,
+                                    testnet,
+                                    if testnet {
+                                        "Bitcoin testnet. These coins have no mainnet value."
+                                    } else {
+                                        "Mainnet. This spends real bitcoin."
+                                    },
+                                );
+                                summary.set_label(&plan.summary());
                                 *prepared.lock().unwrap() = Some(plan);
                                 confirm_box.set_visible(true);
                             }
                             Err(_) => {
-                                error.set_label("Could not build that transaction. Check amount, address, balance, or whether the Bitcoin node is reachable. Receive still works offline.");
+                                error.set_label("Could not build that transaction. Check the amount, address and balance, and whether the Bitcoin node is reachable. Receiving still works offline.");
                                 error.set_visible(true);
                                 confirm_box.set_visible(false);
                             }
@@ -282,10 +357,17 @@ fn btc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
                     ControlFlow::Break,
                     move |result| {
                         match result {
-                            Ok(txid) => status.set_label(&format!("Sent. Transaction ID: {txid}")),
-                            Err(_) => status.set_label(
-                                "Broadcast failed. Node may be unreachable; the receive address is still valid offline.",
-                            ),
+                            Ok(txid) => {
+                                status.set_label(&format!("Sent. Transaction ID: {txid}"));
+                                ui::set_notice_warning(&status, false);
+                                ui::toast("Transaction broadcast.");
+                            }
+                            Err(_) => {
+                                status.set_label(
+                                    "Broadcast failed. The node may be unreachable; your receive address is still valid offline.",
+                                );
+                                ui::set_notice_warning(&status, true);
+                            }
                         }
                         ControlFlow::Break
                     }
@@ -294,18 +376,23 @@ fn btc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
         }
     ));
 
-    box_
+    scrolled(box_)
 }
 
 fn ltc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
-    let box_ = gtk::Box::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(8)
-        .margin_start(12)
-        .margin_end(12)
-        .margin_top(8)
-        .margin_bottom(12)
-        .build();
+    let ltc_mainnet = !app_settings.ltc_network.eq_ignore_ascii_case("testnet");
+    let SendChrome {
+        page: box_,
+        form,
+        error,
+        review,
+        confirm_box,
+        summary,
+        confirm,
+        cancel,
+        network_note,
+        status,
+    } = send_chrome("ltc", ltc_mainnet, "I understand this spends real litecoin.");
 
     let names: Vec<String> = app_settings
         .ltc_wallets
@@ -318,75 +405,19 @@ fn ltc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
         })
         .collect();
     let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
-    let from_wallet = gtk::DropDown::from_strings(&name_refs);
+    let from_row = ui::combo_row("From account", &name_refs);
+    let receive_address = ui::entry_row("Recipient");
+    let amount = ui::entry_row("Amount (LTC)");
+    let fee_row = ui::combo_row("Network fee", &["Low", "Medium", "High"]);
+    fee_row.set_selected(1);
 
-    let receive_address = gtk::Entry::builder()
-        .placeholder_text("Recipient (ltc1… / tltc1…)")
-        .hexpand(true)
-        .build();
-    let amount = gtk::Entry::builder()
-        .placeholder_text("Amount (LTC)")
-        .hexpand(true)
-        .build();
-    let fee = gtk::DropDown::from_strings(&["Low", "Medium", "High"]);
-    fee.set_selected(1);
+    form.add(&from_row);
+    form.add(&receive_address);
+    form.add(&amount);
+    form.add(&fee_row);
 
-    let review = Button::builder().label("Review send").hexpand(true).build();
-    review.add_css_class("standard_button");
-    review.add_css_class("suggested-action");
-
-    let error = gtk::Label::builder()
-        .wrap(true)
-        .visible(false)
-        .css_classes(["label-error"])
-        .build();
-
-    let confirm_box = gtk::Box::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(8)
-        .visible(false)
-        .css_classes(["receiver-box"])
-        .build();
-    let summary = gtk::Label::builder()
-        .wrap(true)
-        .wrap_mode(WrapMode::WordChar)
-        .halign(gtk::Align::Start)
-        .selectable(true)
-        .build();
-    let confirm = Button::builder().label("Confirm and broadcast").hexpand(true).build();
-    confirm.add_css_class("standard_button");
-    confirm.add_css_class("suggested-action");
-    let cancel = Button::builder().label("Cancel").hexpand(true).build();
-    cancel.add_css_class("standard_button");
-    let ltc_mainnet = !app_settings.ltc_network.eq_ignore_ascii_case("testnet");
-    let ack = gtk::CheckButton::with_label("I understand this spends real litecoin.");
-    ack.set_visible(ltc_mainnet);
-    if ltc_mainnet {
-        confirm.set_sensitive(false);
-    }
-    let confirm_gate = confirm.clone();
-    ack.connect_toggled(move |cb| {
-        confirm_gate.set_sensitive(cb.is_active());
-    });
-    confirm_box.append(&summary);
-    confirm_box.append(&ack);
-    confirm_box.append(&confirm);
-    confirm_box.append(&cancel);
-
-    let status = gtk::Label::builder()
-        .wrap(true)
-        .visible(false)
-        .css_classes(["label-standard"])
-        .build();
-
-    box_.append(&from_wallet);
-    box_.append(&receive_address);
-    box_.append(&amount);
-    box_.append(&fee);
-    box_.append(&review);
-    box_.append(&error);
-    box_.append(&confirm_box);
-    box_.append(&status);
+    let from_wallet = from_row.clone();
+    let fee = fee_row.clone();
 
     let app_settings = Arc::new(Mutex::new(app_settings));
     let prepared = Arc::new(Mutex::new(None::<ltc_chain::PreparedSend>));
@@ -450,23 +481,28 @@ fn ltc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
                     #[weak] error,
                     #[weak] confirm_box,
                     #[weak] summary,
+                    #[weak] network_note,
                     #[strong] prepared,
                     #[upgrade_or]
                     ControlFlow::Break,
                     move |result| {
                         match result {
                             Ok(plan) => {
-                                let prefix = if testnet {
-                                    "Litecoin testnet — coins have no mainnet value.\n\n"
-                                } else {
-                                    "MAINNET: this spends real litecoin.\n\n"
-                                };
-                                summary.set_label(&format!("{}{}", prefix, plan.summary()));
+                                set_network_note(
+                                    &network_note,
+                                    testnet,
+                                    if testnet {
+                                        "Litecoin testnet. These coins have no mainnet value."
+                                    } else {
+                                        "Mainnet. This spends real litecoin."
+                                    },
+                                );
+                                summary.set_label(&plan.summary());
                                 *prepared.lock().unwrap() = Some(plan);
                                 confirm_box.set_visible(true);
                             }
                             Err(_) => {
-                                error.set_label("Could not build that transaction. Check amount, address, balance, or whether the Litecoin node is reachable. Receive still works offline.");
+                                error.set_label("Could not build that transaction. Check the amount, address and balance, and whether the Litecoin node is reachable. Receiving still works offline.");
                                 error.set_visible(true);
                                 confirm_box.set_visible(false);
                             }
@@ -531,10 +567,17 @@ fn ltc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
                     ControlFlow::Break,
                     move |result| {
                         match result {
-                            Ok(txid) => status.set_label(&format!("Sent. Transaction ID: {txid}")),
-                            Err(_) => status.set_label(
-                                "Broadcast failed. Node may be unreachable; the receive address is still valid offline.",
-                            ),
+                            Ok(txid) => {
+                                status.set_label(&format!("Sent. Transaction ID: {txid}"));
+                                ui::set_notice_warning(&status, false);
+                                ui::toast("Transaction broadcast.");
+                            }
+                            Err(_) => {
+                                status.set_label(
+                                    "Broadcast failed. The node may be unreachable; your receive address is still valid offline.",
+                                );
+                                ui::set_notice_warning(&status, true);
+                            }
                         }
                         ControlFlow::Break
                     }
@@ -543,18 +586,25 @@ fn ltc_send_view(app_settings: ApplicationSettings) -> gtk::Box {
         }
     ));
 
-    box_
+    scrolled(box_)
 }
 
 fn eth_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
-    let box_ = gtk::Box::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(8)
-        .margin_start(12)
-        .margin_end(12)
-        .margin_top(8)
-        .margin_bottom(12)
-        .build();
+    // Gate on "is this a known testnet", not "is this literally mainnet" — an unrecognized or
+    // new network name (e.g. an L2) must default to showing the real-value warning, not hiding it.
+    let eth_real_value = !eth_chain::is_testnet(eth_chain::parse_network(&app_settings.eth_network));
+    let SendChrome {
+        page: box_,
+        form,
+        error,
+        review,
+        confirm_box,
+        summary,
+        confirm,
+        cancel,
+        network_note,
+        status,
+    } = send_chrome("eth", eth_real_value, "I understand this spends real value.");
 
     let names: Vec<String> = app_settings
         .eth_wallets
@@ -567,78 +617,21 @@ fn eth_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
         })
         .collect();
     let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
-    let from_wallet = gtk::DropDown::from_strings(&name_refs);
-
     let symbol = token.symbol.clone();
-    let receive_address = gtk::Entry::builder()
-        .placeholder_text("Recipient (0x…)")
-        .hexpand(true)
-        .build();
-    let amount = gtk::Entry::builder()
-        .placeholder_text(&format!("Amount ({symbol})"))
-        .hexpand(true)
-        .build();
-    let fee = gtk::DropDown::from_strings(&["Low", "Medium", "High"]);
-    fee.set_selected(1);
 
-    let review = Button::builder().label("Review send").hexpand(true).build();
-    review.add_css_class("standard_button");
-    review.add_css_class("suggested-action");
+    let from_row = ui::combo_row("From account", &name_refs);
+    let receive_address = ui::entry_row("Recipient");
+    let amount = ui::entry_row(&format!("Amount ({symbol})"));
+    let fee_row = ui::combo_row("Network fee", &["Low", "Medium", "High"]);
+    fee_row.set_selected(1);
 
-    let error = gtk::Label::builder()
-        .wrap(true)
-        .visible(false)
-        .css_classes(["label-error"])
-        .build();
+    form.add(&from_row);
+    form.add(&receive_address);
+    form.add(&amount);
+    form.add(&fee_row);
 
-    let confirm_box = gtk::Box::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(8)
-        .visible(false)
-        .css_classes(["receiver-box"])
-        .build();
-    let summary = gtk::Label::builder()
-        .wrap(true)
-        .wrap_mode(WrapMode::WordChar)
-        .halign(gtk::Align::Start)
-        .selectable(true)
-        .build();
-    let confirm = Button::builder().label("Confirm and broadcast").hexpand(true).build();
-    confirm.add_css_class("standard_button");
-    confirm.add_css_class("suggested-action");
-    let cancel = Button::builder().label("Cancel").hexpand(true).build();
-    cancel.add_css_class("standard_button");
-    // Gate on "is this a known testnet", not "is this literally mainnet" — an unrecognized or
-    // new network name (e.g. an L2) must default to showing the real-value warning, not hiding it.
-    let eth_real_value = !eth_chain::is_testnet(eth_chain::parse_network(&app_settings.eth_network));
-    let ack = gtk::CheckButton::with_label("I understand this spends real value.");
-    ack.set_visible(eth_real_value);
-    if eth_real_value {
-        confirm.set_sensitive(false);
-    }
-    let confirm_gate = confirm.clone();
-    ack.connect_toggled(move |cb| {
-        confirm_gate.set_sensitive(cb.is_active());
-    });
-    confirm_box.append(&summary);
-    confirm_box.append(&ack);
-    confirm_box.append(&confirm);
-    confirm_box.append(&cancel);
-
-    let status = gtk::Label::builder()
-        .wrap(true)
-        .visible(false)
-        .css_classes(["label-standard"])
-        .build();
-
-    box_.append(&from_wallet);
-    box_.append(&receive_address);
-    box_.append(&amount);
-    box_.append(&fee);
-    box_.append(&review);
-    box_.append(&error);
-    box_.append(&confirm_box);
-    box_.append(&status);
+    let from_wallet = from_row.clone();
+    let fee = fee_row.clone();
 
     let app_settings = Arc::new(Mutex::new(app_settings));
     let prepared = Arc::new(Mutex::new(None::<eth_chain::PreparedSend>));
@@ -715,23 +708,28 @@ fn eth_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
                     #[weak] error,
                     #[weak] confirm_box,
                     #[weak] summary,
+                    #[weak] network_note,
                     #[strong] prepared,
                     #[upgrade_or]
                     ControlFlow::Break,
                     move |result| {
                         match result {
                             Ok(plan) => {
-                                let prefix = if testnet {
-                                    "Sepolia testnet — coins have no mainnet value.\n\n"
-                                } else {
-                                    "MAINNET: this spends real ETH or tokens.\n\n"
-                                };
-                                summary.set_label(&format!("{}{}", prefix, plan.summary()));
+                                set_network_note(
+                                    &network_note,
+                                    testnet,
+                                    if testnet {
+                                        "Sepolia testnet. These coins have no mainnet value."
+                                    } else {
+                                        "Live network. This spends real value."
+                                    },
+                                );
+                                summary.set_label(&plan.summary());
                                 *prepared.lock().unwrap() = Some(plan);
                                 confirm_box.set_visible(true);
                             }
                             Err(_) => {
-                                error.set_label("Could not build that transaction. Check amount, address, balance, or whether the Ethereum node is reachable. Receive still works offline.");
+                                error.set_label("Could not build that transaction. Check the amount, address and balance, and whether the Ethereum node is reachable. Receiving still works offline.");
                                 error.set_visible(true);
                                 confirm_box.set_visible(false);
                             }
@@ -803,10 +801,17 @@ fn eth_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
                     ControlFlow::Break,
                     move |result| {
                         match result {
-                            Ok(txid) => status.set_label(&format!("Sent. Transaction ID: {txid}")),
-                            Err(_) => status.set_label(
-                                "Broadcast failed. Node may be unreachable; the receive address is still valid offline.",
-                            ),
+                            Ok(txid) => {
+                                status.set_label(&format!("Sent. Transaction ID: {txid}"));
+                                ui::set_notice_warning(&status, false);
+                                ui::toast("Transaction broadcast.");
+                            }
+                            Err(_) => {
+                                status.set_label(
+                                    "Broadcast failed. The node may be unreachable; your receive address is still valid offline.",
+                                );
+                                ui::set_notice_warning(&status, true);
+                            }
                         }
                         ControlFlow::Break
                     }
@@ -815,18 +820,23 @@ fn eth_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
         }
     ));
 
-    box_
+    scrolled(box_)
 }
 
 fn sol_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
-    let box_ = gtk::Box::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(8)
-        .margin_start(12)
-        .margin_end(12)
-        .margin_top(8)
-        .margin_bottom(12)
-        .build();
+    let sol_mainnet = !app_settings.sol_network.eq_ignore_ascii_case("devnet");
+    let SendChrome {
+        page: box_,
+        form,
+        error,
+        review,
+        confirm_box,
+        summary,
+        confirm,
+        cancel,
+        network_note,
+        status,
+    } = send_chrome("sol", sol_mainnet, "I understand this spends real SOL or tokens.");
 
     let names: Vec<String> = app_settings
         .sol_wallets
@@ -839,73 +849,26 @@ fn sol_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
         })
         .collect();
     let name_refs: Vec<&str> = names.iter().map(String::as_str).collect();
-    let from_wallet = gtk::DropDown::from_strings(&name_refs);
-
     let symbol = token.symbol.clone();
-    let receive_address = gtk::Entry::builder()
-        .placeholder_text("Recipient (base58 address)")
-        .hexpand(true)
-        .build();
-    let amount = gtk::Entry::builder()
-        .placeholder_text(&format!("Amount ({symbol})"))
-        .hexpand(true)
-        .build();
 
-    let review = Button::builder().label("Review send").hexpand(true).build();
-    review.add_css_class("standard_button");
-    review.add_css_class("suggested-action");
+    let from_row = ui::combo_row("From account", &name_refs);
+    let receive_address = ui::entry_row("Recipient");
+    let amount = ui::entry_row(&format!("Amount ({symbol})"));
 
-    let error = gtk::Label::builder()
-        .wrap(true)
-        .visible(false)
-        .css_classes(["label-error"])
+    form.add(&from_row);
+    form.add(&receive_address);
+    form.add(&amount);
+    // Solana has no user-selectable fee tier: the network charges a flat per-signature
+    // fee, so a Low/Medium/High control here would be a lie. Say so instead of leaving a
+    // conspicuous gap where the other chains have a fee row.
+    let fee_note = adw::ActionRow::builder()
+        .title("Network fee")
+        .subtitle("Flat 5000 lamports per signature")
         .build();
+    fee_note.add_prefix(&gtk::Image::from_icon_name("emblem-system-symbolic"));
+    form.add(&fee_note);
 
-    let confirm_box = gtk::Box::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(8)
-        .visible(false)
-        .css_classes(["receiver-box"])
-        .build();
-    let summary = gtk::Label::builder()
-        .wrap(true)
-        .wrap_mode(WrapMode::WordChar)
-        .halign(gtk::Align::Start)
-        .selectable(true)
-        .build();
-    let confirm = Button::builder().label("Confirm and broadcast").hexpand(true).build();
-    confirm.add_css_class("standard_button");
-    confirm.add_css_class("suggested-action");
-    let cancel = Button::builder().label("Cancel").hexpand(true).build();
-    cancel.add_css_class("standard_button");
-    let sol_mainnet = !app_settings.sol_network.eq_ignore_ascii_case("devnet");
-    let ack = gtk::CheckButton::with_label("I understand this spends real SOL or tokens.");
-    ack.set_visible(sol_mainnet);
-    if sol_mainnet {
-        confirm.set_sensitive(false);
-    }
-    let confirm_gate = confirm.clone();
-    ack.connect_toggled(move |cb| {
-        confirm_gate.set_sensitive(cb.is_active());
-    });
-    confirm_box.append(&summary);
-    confirm_box.append(&ack);
-    confirm_box.append(&confirm);
-    confirm_box.append(&cancel);
-
-    let status = gtk::Label::builder()
-        .wrap(true)
-        .visible(false)
-        .css_classes(["label-standard"])
-        .build();
-
-    box_.append(&from_wallet);
-    box_.append(&receive_address);
-    box_.append(&amount);
-    box_.append(&review);
-    box_.append(&error);
-    box_.append(&confirm_box);
-    box_.append(&status);
+    let from_wallet = from_row.clone();
 
     let app_settings = Arc::new(Mutex::new(app_settings));
     let prepared = Arc::new(Mutex::new(None::<sol_chain::PreparedSend>));
@@ -965,23 +928,28 @@ fn sol_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
                     #[weak] error,
                     #[weak] confirm_box,
                     #[weak] summary,
+                    #[weak] network_note,
                     #[strong] prepared,
                     #[upgrade_or]
                     ControlFlow::Break,
                     move |result| {
                         match result {
                             Ok(plan) => {
-                                let prefix = if testnet {
-                                    "Solana devnet — coins have no mainnet value.\n\n"
-                                } else {
-                                    "MAINNET: this spends real SOL or tokens.\n\n"
-                                };
-                                summary.set_label(&format!("{}{}", prefix, plan.summary()));
+                                set_network_note(
+                                    &network_note,
+                                    testnet,
+                                    if testnet {
+                                        "Solana devnet. These coins have no mainnet value."
+                                    } else {
+                                        "Mainnet. This spends real SOL or tokens."
+                                    },
+                                );
+                                summary.set_label(&plan.summary());
                                 *prepared.lock().unwrap() = Some(plan);
                                 confirm_box.set_visible(true);
                             }
                             Err(_) => {
-                                error.set_label("Could not build that transaction. Check amount, address, balance, or whether the Solana node is reachable. Receive still works offline.");
+                                error.set_label("Could not build that transaction. Check the amount, address and balance, and whether the Solana node is reachable. Receiving still works offline.");
                                 error.set_visible(true);
                                 confirm_box.set_visible(false);
                             }
@@ -1046,10 +1014,17 @@ fn sol_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
                     ControlFlow::Break,
                     move |result| {
                         match result {
-                            Ok(txid) => status.set_label(&format!("Sent. Transaction ID: {txid}")),
-                            Err(_) => status.set_label(
-                                "Broadcast failed. Node may be unreachable; the receive address is still valid offline.",
-                            ),
+                            Ok(txid) => {
+                                status.set_label(&format!("Sent. Transaction ID: {txid}"));
+                                ui::set_notice_warning(&status, false);
+                                ui::toast("Transaction broadcast.");
+                            }
+                            Err(_) => {
+                                status.set_label(
+                                    "Broadcast failed. The node may be unreachable; your receive address is still valid offline.",
+                                );
+                                ui::set_notice_warning(&status, true);
+                            }
                         }
                         ControlFlow::Break
                     }
@@ -1058,5 +1033,5 @@ fn sol_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
         }
     ));
 
-    box_
+    scrolled(box_)
 }

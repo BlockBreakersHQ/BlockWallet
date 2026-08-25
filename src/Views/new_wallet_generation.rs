@@ -1,7 +1,6 @@
 use adw::prelude::*;
 use adw::ApplicationWindow;
 use glib::clone;
-use gtk::prelude::*;
 use gtk::{Button, Orientation};
 use std::cell::RefCell;
 use std::fs;
@@ -11,6 +10,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::configuration::application_settings::*;
 use crate::configuration::onboarding::{self, WordCount};
+use crate::views::ui;
 use crate::views::{login, stack};
 
 #[derive(Default)]
@@ -26,9 +26,10 @@ pub fn generate_wallet_view(window: ApplicationWindow, app_settings: Application
 
     let title = gtk::Label::builder()
         .label("Set up wallet")
-        .css_classes(["title"])
+        .css_classes(["title-4"])
         .build();
     let header = adw::HeaderBar::new();
+    header.add_css_class("flat");
     header.set_title_widget(Some(&title));
 
     let stack = gtk::Stack::builder()
@@ -71,7 +72,7 @@ pub fn generate_wallet_view(window: ApplicationWindow, app_settings: Application
     outer.append(&header);
     outer.append(&scroll);
 
-    window.set_content(Some(&outer));
+    window.set_content(Some(&ui::with_toasts(&outer)));
     window.present();
 
     create_12.connect_clicked(clone!(
@@ -349,14 +350,26 @@ fn fill_seed_grid(grid: &gtk::Grid, phrase: &str) {
         grid.remove(&child);
     }
     for (index, word) in phrase.split_whitespace().enumerate() {
-        let label = gtk::Label::builder()
-            .label(&format!("{}. {}", index + 1, word))
-            .xalign(0.0)
-            .hexpand(true)
-            .selectable(true)
-            .css_classes(["seed-word"])
-            .build();
-        grid.attach(&label, (index % 2) as i32, (index / 2) as i32, 1, 1);
+        // Number and word as separate labels, so the index reads as a quiet ordinal and
+        // the word itself stays the prominent thing to copy down.
+        let chip = gtk::Box::new(Orientation::Horizontal, 8);
+        chip.add_css_class("seed-chip");
+        chip.append(
+            &gtk::Label::builder()
+                .label(&format!("{:>2}", index + 1))
+                .css_classes(["seed-index"])
+                .build(),
+        );
+        chip.append(
+            &gtk::Label::builder()
+                .label(word)
+                .xalign(0.0)
+                .hexpand(true)
+                .selectable(true)
+                .css_classes(["seed-word"])
+                .build(),
+        );
+        grid.attach(&chip, (index % 2) as i32, (index / 2) as i32, 1, 1);
     }
 }
 
@@ -370,17 +383,18 @@ fn textview_content(view: &gtk::TextView) -> String {
 fn page_box() -> gtk::Box {
     gtk::Box::builder()
         .orientation(Orientation::Vertical)
-        .margin_start(16)
-        .margin_end(16)
-        .margin_top(12)
-        .margin_bottom(16)
-        .spacing(10)
+        .margin_start(ui::GUTTER)
+        .margin_end(ui::GUTTER)
+        .margin_top(ui::GUTTER)
+        .margin_bottom(20)
+        .spacing(14)
         .build()
 }
 
 fn setup_button(label: &str) -> Button {
     let button = Button::builder().label(label).hexpand(true).build();
     button.add_css_class("standard_button");
+    button.add_css_class("pill-button");
     button
 }
 
@@ -390,6 +404,7 @@ fn wrapped_label(text: &str, classes: &[&str]) -> gtk::Label {
         .wrap(true)
         .wrap_mode(pango::WrapMode::WordChar)
         .justify(gtk::Justification::Center)
+        .max_width_chars(38)
         .build();
     for class in classes {
         label.add_css_class(class);
@@ -398,28 +413,53 @@ fn wrapped_label(text: &str, classes: &[&str]) -> gtk::Label {
 }
 
 fn error_label(text: &str) -> gtk::Label {
-    gtk::Label::builder()
-        .label(text)
-        .wrap(true)
-        .wrap_mode(pango::WrapMode::WordChar)
-        .visible(false)
-        .css_classes(["label-error"])
-        .build()
+    ui::error_label(text)
+}
+
+/// A step heading plus one line of explanation, so each onboarding page says what it is
+/// before it asks for anything.
+fn step_header(title: &str, subtitle: &str) -> gtk::Box {
+    let header = ui::vbox(4);
+    header.set_halign(gtk::Align::Center);
+    header.append(
+        &gtk::Label::builder()
+            .label(title)
+            .justify(gtk::Justification::Center)
+            .wrap(true)
+            .css_classes(["onboard-title"])
+            .build(),
+    );
+    header.append(&wrapped_label(subtitle, &["onboard-subtitle"]));
+    header
 }
 
 fn seed_text_view() -> gtk::TextView {
     gtk::TextView::builder()
         .wrap_mode(gtk::WrapMode::WordChar)
         .accepts_tab(false)
-        .left_margin(8)
-        .right_margin(8)
-        .top_margin(8)
-        .bottom_margin(8)
+        .left_margin(10)
+        .right_margin(10)
+        .top_margin(10)
+        .bottom_margin(10)
         .build()
+}
+
+/// Wrap the phrase entry boxes in a card so they read as a field, not a bare text area.
+fn seed_entry_frame(view: &gtk::TextView) -> gtk::ScrolledWindow {
+    let scroll = gtk::ScrolledWindow::builder()
+        .min_content_height(140)
+        .hscrollbar_policy(gtk::PolicyType::Never)
+        .child(view)
+        .build();
+    scroll.add_css_class("card");
+    scroll
 }
 
 fn choice_page() -> (gtk::Box, Button, Button, Button, Button, gtk::Label) {
     let page = page_box();
+    page.set_valign(gtk::Align::Center);
+    page.set_vexpand(true);
+
     let logo_path = match ApplicationSettings::find_images_path() {
         Ok(mut path) => {
             path.push("Logo.png");
@@ -427,25 +467,34 @@ fn choice_page() -> (gtk::Box, Button, Button, Button, Button, gtk::Label) {
         }
         Err(_) => PathBuf::new(),
     };
-    let logo = gtk::Image::from_file(logo_path);
-    logo.set_pixel_size(96);
-    page.append(&logo);
-    page.append(&wrapped_label(
-        "Create a new wallet or restore from a recovery phrase.",
-        &["label-standard"],
+    if logo_path.is_file() {
+        let logo = gtk::Image::from_file(&logo_path);
+        logo.set_pixel_size(104);
+        page.append(&logo);
+    }
+    page.append(&step_header(
+        "Block Wallet",
+        "Self-custody Bitcoin, Ethereum, Solana and Litecoin. Your keys stay on this device.",
     ));
 
+    // Creating is the common path, so it gets its own group and the only accent button.
+    // Restore and import are recovery paths and sit in a quieter second group.
+    let create_group = ui::group("Create a wallet");
     let create_12 = setup_button("Create 12-word wallet");
     create_12.add_css_class("suggested-action");
     let create_24 = setup_button("Create 24-word wallet");
+    create_group.add(&create_12);
+    create_group.add(&create_24);
+    page.append(&create_group);
+
+    let restore_group = ui::group("Already have one?");
     let restore_btn = setup_button("Restore from recovery phrase");
     let import_btn = setup_button("Import wallet file");
-    let choice_error = error_label("Could not generate a recovery phrase.");
+    restore_group.add(&restore_btn);
+    restore_group.add(&import_btn);
+    page.append(&restore_group);
 
-    page.append(&create_12);
-    page.append(&create_24);
-    page.append(&restore_btn);
-    page.append(&import_btn);
+    let choice_error = error_label("Could not generate a recovery phrase.");
     page.append(&choice_error);
     (
         page,
@@ -459,12 +508,21 @@ fn choice_page() -> (gtk::Box, Button, Button, Button, Button, gtk::Label) {
 
 fn show_seed_page() -> (gtk::Box, gtk::Grid, Button, Button) {
     let page = page_box();
-    page.append(&wrapped_label(
-        "Write these words down in order and keep them offline. They will not be shown again after you continue.",
-        &["seed-warning", "label-standard"],
+    page.append(&step_header(
+        "Your recovery phrase",
+        "These words are the only way to restore this wallet.",
     ));
+    page.append(
+        &gtk::Label::builder()
+            .label("Write them down in order and keep them offline. They will not be shown again after you continue. Anyone who has them can spend your funds.")
+            .wrap(true)
+            .wrap_mode(pango::WrapMode::WordChar)
+            .xalign(0.0)
+            .css_classes(["danger-note"])
+            .build(),
+    );
     let seed_grid = gtk::Grid::builder()
-        .column_spacing(12)
+        .column_spacing(8)
         .row_spacing(8)
         .column_homogeneous(true)
         .hexpand(true)
@@ -481,17 +539,12 @@ fn show_seed_page() -> (gtk::Box, gtk::Grid, Button, Button) {
 
 fn confirm_page() -> (gtk::Box, gtk::TextView, Button, Button, gtk::Label) {
     let page = page_box();
-    page.append(&wrapped_label(
-        "Enter the recovery phrase to confirm you have it written down.",
-        &["label-standard"],
+    page.append(&step_header(
+        "Confirm your phrase",
+        "Type the words back in order to prove you have them written down.",
     ));
     let confirm_view = seed_text_view();
-    let scroll = gtk::ScrolledWindow::builder()
-        .min_content_height(140)
-        .hscrollbar_policy(gtk::PolicyType::Never)
-        .child(&confirm_view)
-        .build();
-    page.append(&scroll);
+    page.append(&seed_entry_frame(&confirm_view));
     let confirm_error = error_label("Recovery phrase does not match.");
     let confirm_continue = setup_button("Confirm phrase");
     confirm_continue.add_css_class("suggested-action");
@@ -502,25 +555,23 @@ fn confirm_page() -> (gtk::Box, gtk::TextView, Button, Button, gtk::Label) {
     (page, confirm_view, confirm_continue, confirm_back, confirm_error)
 }
 
-fn restore_page() -> (gtk::Box, gtk::TextView, gtk::Entry, Button, Button, gtk::Label) {
+fn restore_page() -> (gtk::Box, gtk::TextView, adw::PasswordEntryRow, Button, Button, gtk::Label) {
     let page = page_box();
-    page.append(&wrapped_label(
-        "Enter your 12 or 24-word recovery phrase. Optional passphrase is the extra BIP39 word, not your app password.",
-        &["label-standard"],
+    page.append(&step_header(
+        "Restore a wallet",
+        "Enter your 12 or 24-word recovery phrase.",
     ));
     let restore_view = seed_text_view();
-    let scroll = gtk::ScrolledWindow::builder()
-        .min_content_height(140)
-        .hscrollbar_policy(gtk::PolicyType::Never)
-        .child(&restore_view)
-        .build();
-    page.append(&scroll);
-    let restore_pass = gtk::Entry::builder()
-        .placeholder_text("Optional passphrase")
-        .visibility(false)
-        .hexpand(true)
-        .build();
-    page.append(&restore_pass);
+    page.append(&seed_entry_frame(&restore_view));
+
+    let pass_group = ui::group_with_description(
+        "Optional passphrase",
+        "The extra BIP39 word, if you set one. This is not your app password.",
+    );
+    let restore_pass = adw::PasswordEntryRow::builder().title("Passphrase").build();
+    pass_group.add(&restore_pass);
+    page.append(&pass_group);
+
     let restore_error = error_label("That recovery phrase is not valid.");
     let restore_continue = setup_button("Continue");
     restore_continue.add_css_class("suggested-action");
@@ -538,28 +589,27 @@ fn restore_page() -> (gtk::Box, gtk::TextView, gtk::Entry, Button, Button, gtk::
     )
 }
 
-fn password_page() -> (gtk::Box, gtk::Entry, gtk::Entry, Button, Button, gtk::Label) {
+fn password_page() -> (gtk::Box, adw::PasswordEntryRow, adw::PasswordEntryRow, Button, Button, gtk::Label) {
     let page = page_box();
-    page.append(&wrapped_label(
-        "Choose a password to encrypt this wallet on this device. You will need it each time you unlock the app.",
-        &["label-standard"],
+    page.append(&step_header(
+        "Set a password",
+        "This encrypts the wallet on this device. You will need it each time you unlock the app.",
     ));
-    let password_input = gtk::Entry::builder()
-        .placeholder_text("Password")
-        .visibility(false)
-        .hexpand(true)
-        .build();
-    let repeat_input = gtk::Entry::builder()
-        .placeholder_text("Repeat password")
-        .visibility(false)
-        .hexpand(true)
-        .build();
+    let group = adw::PreferencesGroup::new();
+    let password_input = adw::PasswordEntryRow::builder().title("Password").build();
+    let repeat_input = adw::PasswordEntryRow::builder().title("Repeat password").build();
+    group.add(&password_input);
+    group.add(&repeat_input);
+    page.append(&group);
+
+    page.append(&ui::notice(
+        "There is no password reset. If you lose it, only your recovery phrase can restore this wallet.",
+    ));
+
     let password_error = error_label("Passwords do not match.");
     let password_save = setup_button("Save wallet");
     password_save.add_css_class("suggested-action");
     let password_back = setup_button("Back");
-    page.append(&password_input);
-    page.append(&repeat_input);
     page.append(&password_error);
     page.append(&password_save);
     page.append(&password_back);
@@ -573,21 +623,20 @@ fn password_page() -> (gtk::Box, gtk::Entry, gtk::Entry, Button, Button, gtk::La
     )
 }
 
-fn import_page() -> (gtk::Box, gtk::Entry, Button, Button, gtk::Label) {
+fn import_page() -> (gtk::Box, adw::EntryRow, Button, Button, gtk::Label) {
     let page = page_box();
-    page.append(&wrapped_label(
-        "Import an existing Block Wallet file (.dic).",
-        &["label-standard"],
+    page.append(&step_header(
+        "Import a wallet file",
+        "Load an existing Block Wallet store (.dic).",
     ));
-    let path_input = gtk::Entry::builder()
-        .placeholder_text("Path to .dic file")
-        .hexpand(true)
-        .build();
+    let group = adw::PreferencesGroup::new();
+    let path_input = adw::EntryRow::builder().title("Path to .dic file").build();
+    group.add(&path_input);
+    page.append(&group);
     let import_error = error_label("File not found or incorrect type.");
     let import_save = setup_button("Import");
     import_save.add_css_class("suggested-action");
     let import_back = setup_button("Back");
-    page.append(&path_input);
     page.append(&import_error);
     page.append(&import_save);
     page.append(&import_back);

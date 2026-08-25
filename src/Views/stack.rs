@@ -1,11 +1,11 @@
 use adw::prelude::*;
 use adw::ApplicationWindow;
 use glib::{clone, ControlFlow};
-use gtk::prelude::*;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::configuration::application_settings::*;
+use crate::views::ui;
 use crate::views::{activity, assets, header_bar, home, login, wallets};
 
 pub fn stack_view(window: &ApplicationWindow, app_settings_orig: ApplicationSettings) {
@@ -17,13 +17,19 @@ pub fn stack_view(window: &ApplicationWindow, app_settings_orig: ApplicationSett
     let stack = adw::ViewStack::new();
 
     let (home_box, home_nav, app_settings) = home::home_view(app_settings);
-    stack.add_titled(&home_box, Some("Home"), "Home").set_icon_name(Some("home"));
+    stack
+        .add_titled(&home_box, Some("Home"), "Home")
+        .set_icon_name(Some("go-home-symbolic"));
 
     let (wallet_box, app_settings) = wallets::wallet_view(app_settings);
-    stack.add_titled(&wallet_box, Some("Wallets"), "Wallets").set_icon_name(Some("wallet"));
+    stack
+        .add_titled(&wallet_box, Some("Wallets"), "Wallets")
+        .set_icon_name(Some("system-users-symbolic"));
 
     let (asset_box, asset_nav, app_settings) = assets::asset_view(app_settings);
-    stack.add_titled(&asset_box, Some("Assets"), "Assets").set_icon_name(Some("assets"));
+    stack
+        .add_titled(&asset_box, Some("Assets"), "Assets")
+        .set_icon_name(Some("view-grid-symbolic"));
 
     let activity_box = activity::activity_view(app_settings.clone());
     stack
@@ -37,13 +43,18 @@ pub fn stack_view(window: &ApplicationWindow, app_settings_orig: ApplicationSett
 
     let clamp = adw::Clamp::new();
     clamp.set_maximum_size(520);
+    clamp.set_vexpand(true);
     clamp.set_child(Some(&stack));
 
     container.append(&header_bar);
     container.append(&clamp);
     container.append(&stack_bar);
 
-    window.set_content(Some(&container));
+    // Toasts need to overlay the whole shell, so the overlay wraps the container rather
+    // than any single page. Registering it here lets copy buttons anywhere below confirm
+    // themselves without plumbing a handle through every constructor.
+    let overlay = ui::with_toasts(&container);
+    window.set_content(Some(&overlay));
 
     stack.connect_visible_child_notify(clone!(
         #[strong] home_nav,

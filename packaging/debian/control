@@ -7,7 +7,7 @@ Build-Depends: debhelper-compat (= 13),
                rustc (>= 1.85),
                pkg-config,
                libgtk-4-dev,
-               libadwaita-1-dev,
+               libadwaita-1-dev (>= 1.2),
                libssl-dev,
                libclang-dev
 Standards-Version: 4.7.0

@@ -1,18 +1,173 @@
+/* Block Wallet theme.
+ *
+ * Built on libadwaita's named colours (@card_bg_color, @accent_bg_color, …) rather than
+ * literal hex, so light mode, dark mode and the user's accent colour all follow the system
+ * without a second stylesheet. Only chain brand colours are hardcoded, because those are
+ * fixed brand identities and must not shift with the system accent.
+ */
+
+/* ---------------------------------------------------------------- foundations */
+
 #stack_bar {
-    min-height: 48px;
+    min-height: 52px;
 }
 
-.currency-row {
-    min-height: 56px;
-}
-
+/* Touch targets. The Librem 5 needs ~44px minimum; these are the floor, not the target. */
 .standard_button,
 .transaction_button {
     min-height: 44px;
     min-width: 44px;
-    margin-top: 4px;
-    margin-bottom: 4px;
+    border-radius: 10px;
 }
+
+button.pill-button {
+    min-height: 46px;
+    border-radius: 23px;
+    font-weight: bold;
+}
+
+/* ------------------------------------------------------------------- surfaces */
+
+.section-card {
+    background-color: @card_bg_color;
+    border-radius: 14px;
+    padding: 14px;
+}
+
+/* The balance panel at the top of Home and each currency page. A flat accent wash rather
+ * than a gradient: gradients band badly on the Librem 5's panel at low brightness. */
+.hero-card {
+    background-color: alpha(@accent_bg_color, 0.12);
+    border: 1px solid alpha(@accent_bg_color, 0.22);
+    border-radius: 18px;
+    padding: 18px 16px;
+}
+
+.hero-label {
+    font-size: 0.8rem;
+    font-weight: bold;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.65;
+}
+
+.balance-hero {
+    font-size: 2.1rem;
+    font-weight: 300;
+    letter-spacing: -0.02em;
+}
+
+.balance-hero-sub {
+    font-size: 1rem;
+    opacity: 0.7;
+}
+
+/* ---------------------------------------------------------------- asset rows */
+
+.currency-row {
+    min-height: 64px;
+    border-radius: 12px;
+    padding: 6px 10px;
+    transition: background-color 120ms ease-out;
+}
+
+/* Rows on Home/Assets are clickable via a GestureClick, not a real GtkButton, so they get
+ * no hover/active feedback for free. Without this they read as dead text. */
+.currency-row:hover {
+    background-color: alpha(@view_fg_color, 0.06);
+}
+
+.currency-row:active {
+    background-color: alpha(@view_fg_color, 0.11);
+}
+
+.currency-name {
+    font-weight: bold;
+    font-size: 1.05rem;
+}
+
+.currency-ticker {
+    opacity: 0.6;
+    font-size: 0.85rem;
+    letter-spacing: 0.03em;
+}
+
+.currency-price {
+    font-size: 1.05rem;
+    font-weight: bold;
+}
+
+.currency-price-sub {
+    font-size: 0.85rem;
+    opacity: 0.6;
+}
+
+/* Fallback coin mark for tokens with no bundled PNG (LTC and every add-by-contract token).
+ * Without this those rows render GTK's broken-image glyph. */
+.coin-monogram {
+    font-weight: bold;
+    font-size: 0.95rem;
+    color: #ffffff;
+    border-radius: 20px;
+    min-width: 40px;
+    min-height: 40px;
+    background-color: shade(@accent_bg_color, 1.0);
+}
+
+.chain-btc   { background-color: #f7931a; }
+.chain-eth   { background-color: #627eea; }
+.chain-sol   { background-color: #9945ff; }
+.chain-ltc   { background-color: #345d9d; }
+
+/* Small chain tag next to a token name, so an ERC-20 USDC and an SPL USDC are tellable
+ * apart at a glance — they are otherwise identical rows. */
+.chain-tag {
+    font-size: 0.7rem;
+    font-weight: bold;
+    letter-spacing: 0.06em;
+    padding: 1px 7px;
+    border-radius: 7px;
+    background-color: alpha(@view_fg_color, 0.1);
+    opacity: 0.8;
+}
+
+/* ------------------------------------------------------------------- banners */
+
+.info-banner {
+    font-size: 0.85rem;
+    padding: 9px 12px;
+    border-radius: 10px;
+    background-color: alpha(@view_fg_color, 0.05);
+    opacity: 0.85;
+}
+
+.info-banner.warning {
+    background-color: alpha(@warning_color, 0.16);
+    color: @warning_color;
+    opacity: 1;
+}
+
+/* Network chip in the header: makes "am I on testnet?" answerable without opening
+ * Settings, which matters a lot when the answer decides whether a send is real money. */
+.net-chip {
+    font-size: 0.72rem;
+    font-weight: bold;
+    letter-spacing: 0.05em;
+    padding: 2px 9px;
+    border-radius: 9px;
+}
+
+.net-chip.test {
+    background-color: alpha(@success_color, 0.2);
+    color: @success_color;
+}
+
+.net-chip.live {
+    background-color: alpha(@warning_color, 0.2);
+    color: @warning_color;
+}
+
+/* -------------------------------------------------------------------- labels */
 
 .label-error {
     color: @error_color;
@@ -25,53 +180,131 @@
     font-size: 0.9rem;
 }
 
-.currency-name {
+.field-label {
+    font-size: 0.8rem;
     font-weight: bold;
-    font-size: 1rem;
-}
-
-.currency-ticker {
-    opacity: 0.7;
-    font-size: 0.85rem;
-}
-
-.currency-price {
-    font-size: 0.9rem;
+    opacity: 0.6;
+    letter-spacing: 0.03em;
 }
 
 .btc-wallet-details,
-.eth-wallet-details {
-    font-weight: bold;
-    font-size: 0.85rem;
+.eth-wallet-details,
+.address-mono {
+    font-family: monospace;
+    font-size: 0.82rem;
 }
 
 .wallet-expander {
     font-weight: bold;
-    font-size: 0.9rem;
-    min-height: 44px;
+    min-height: 48px;
 }
+
+/* ------------------------------------------------------------- transactions */
 
 .transaction-positive {
     color: @success_color;
     font-weight: bold;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
 }
 
 .transaction-negative {
-    color: @error_color;
     font-weight: bold;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
 }
 
-.receiver-box {
-    background-color: alpha(@view_fg_color, 0.06);
-    border-radius: 8px;
-    padding: 8px;
+.tx-row {
+    min-height: 52px;
+    padding: 4px 2px;
 }
+
+.tx-meta {
+    font-size: 0.78rem;
+    opacity: 0.55;
+    font-family: monospace;
+}
+
+.tx-icon-in,
+.tx-icon-out {
+    min-width: 32px;
+    min-height: 32px;
+    border-radius: 16px;
+}
+
+.tx-icon-in {
+    background-color: alpha(@success_color, 0.16);
+    color: @success_color;
+}
+
+.tx-icon-out {
+    background-color: alpha(@view_fg_color, 0.09);
+}
+
+/* ------------------------------------------------------------------ receive */
+
+.receiver-box {
+    background-color: @card_bg_color;
+    border-radius: 14px;
+    padding: 14px;
+}
+
+/* A QR is dark modules on a light field. On a transparent or dark background it will not
+ * scan, so the frame is deliberately white in both themes rather than theme-following. */
+.qr-frame {
+    background-color: #ffffff;
+    border-radius: 12px;
+    padding: 12px;
+}
+
+/* --------------------------------------------------------------------- send */
+
+.review-card {
+    background-color: @card_bg_color;
+    border: 1px solid alpha(@accent_bg_color, 0.35);
+    border-radius: 14px;
+    padding: 14px;
+}
+
+.review-summary {
+    font-family: monospace;
+    font-size: 0.85rem;
+}
+
+.spend-warning {
+    background-color: alpha(@warning_color, 0.16);
+    color: @warning_color;
+    font-weight: bold;
+    font-size: 0.85rem;
+    border-radius: 10px;
+    padding: 9px 12px;
+}
+
+.testnet-note {
+    background-color: alpha(@success_color, 0.14);
+    color: @success_color;
+    font-weight: bold;
+    font-size: 0.85rem;
+    border-radius: 10px;
+    padding: 9px 12px;
+}
+
+/* ----------------------------------------------------------------- recovery */
 
 .seed-word {
     font-family: monospace;
     font-size: 0.95rem;
+}
+
+.seed-chip {
+    font-family: monospace;
+    font-size: 0.92rem;
+    background-color: alpha(@view_fg_color, 0.07);
+    border-radius: 9px;
+    padding: 8px 10px;
+}
+
+.seed-index {
+    font-size: 0.75rem;
+    opacity: 0.5;
 }
 
 .seed-warning {
@@ -79,7 +312,29 @@
 }
 
 .seed-grid {
-    background-color: alpha(@view_fg_color, 0.06);
-    border-radius: 8px;
-    padding: 8px;
+    background-color: @card_bg_color;
+    border-radius: 14px;
+    padding: 12px;
+}
+
+/* Recovery phrase and private key are the one thing on screen worth shouting about. */
+.danger-note {
+    background-color: alpha(@error_color, 0.14);
+    color: @error_color;
+    font-weight: bold;
+    font-size: 0.85rem;
+    border-radius: 10px;
+    padding: 9px 12px;
+}
+
+/* ------------------------------------------------------------------ onboard */
+
+.onboard-title {
+    font-size: 1.6rem;
+    font-weight: bold;
+}
+
+.onboard-subtitle {
+    font-size: 0.95rem;
+    opacity: 0.7;
 }

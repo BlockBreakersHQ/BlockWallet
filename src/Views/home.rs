@@ -1,6 +1,6 @@
 use adw::prelude::*;
 use glib::{clone, ControlFlow};
-use gtk::{Align, Image, Orientation};
+use gtk::{Align, Orientation};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -9,25 +9,54 @@ use crate::currencies::eth_chain;
 use crate::currencies::tokens::Token;
 use crate::views::currency::currency_view;
 use crate::views::nav::{self, Nav};
+use crate::views::ui;
 use crate::ApplicationSettings;
 
+/// What the balance worker hands the UI thread for one asset row.
+#[derive(Clone)]
+pub struct RowItem {
+    pub token: Token,
+    /// Amount plus unit, e.g. "0.00042 BTC" — or a status word like "Syncing…".
+    pub amount: String,
+    /// Fiat conversion, when prices are enabled and a quote was available.
+    pub fiat: Option<String>,
+}
+
 pub fn home_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, Nav, Arc<Mutex<ApplicationSettings>>) {
-    let list = gtk::Box::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(4)
+    let list = ui::page_body(14);
+
+    // ---- hero: portfolio total, or a plain prompt when prices are off ----
+    let hero = ui::vbox(2);
+    hero.add_css_class("hero-card");
+    let hero_caption = gtk::Label::builder()
+        .label("Total balance")
+        .halign(Align::Start)
+        .css_classes(["hero-label"])
         .build();
-    let banner = nav::banner("Balances come from your Bitcoin and Ethereum nodes.");
-    let rows = gtk::Box::builder()
-        .orientation(Orientation::Vertical)
+    let hero_total = gtk::Label::builder()
+        .label("—")
+        .halign(Align::Start)
+        .ellipsize(pango::EllipsizeMode::End)
+        .css_classes(["balance-hero"])
         .build();
+    let hero_sub = gtk::Label::builder()
+        .label("Across all chains")
+        .halign(Align::Start)
+        .wrap(true)
+        .css_classes(["balance-hero-sub"])
+        .build();
+    hero.append(&hero_caption);
+    hero.append(&hero_total);
+    hero.append(&hero_sub);
+
+    let banner = ui::notice("Balances come straight from the nodes you configured.");
+    let rows = ui::vbox(2);
+
+    list.append(&hero);
     list.append(&banner);
     list.append(&rows);
 
-    let scroll = gtk::ScrolledWindow::builder()
-        .vexpand(true)
-        .child(&list)
-        .build();
-
+    let scroll = ui::scroller(&list);
     let nav = Nav::new(&scroll);
     let page = nav.clone().wrap();
 
@@ -41,7 +70,7 @@ pub fn home_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, Na
             let units = snapshot.btc_units.clone();
             let show_prices = snapshot.show_prices;
             let fiat = snapshot.fiat.clone();
-            let mut items: Vec<(Token, String, bool)> = Vec::new();
+            let mut items: Vec<RowItem> = Vec::new();
             let mut offline = false;
             let mut syncing = false;
 
@@ -60,7 +89,7 @@ pub fn home_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, Na
                 } else {
                     display = nav::format_btc_units(&display, &units);
                 }
-                items.push((token, display, false));
+                items.push(RowItem { token, amount: display, fiat: None });
             }
             let eth_native = snapshot
                 .tokens
@@ -82,7 +111,7 @@ pub fn home_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, Na
                     syncing = true;
                     display = "Syncing…".into();
                 }
-                items.push((token, display, false));
+                items.push(RowItem { token, amount: display, fiat: None });
             }
             if let Some(token) = snapshot.tokens.eth_tokens.get("sol:SOL").cloned() {
                 let mut display = snapshot
@@ -97,7 +126,7 @@ pub fn home_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, Na
                     syncing = true;
                     display = "Syncing…".into();
                 }
-                items.push((token, display, false));
+                items.push(RowItem { token, amount: display, fiat: None });
             }
             if let Some(token) = snapshot.tokens.eth_tokens.get("ltc:LTC").cloned() {
                 let mut display = snapshot
@@ -112,9 +141,13 @@ pub fn home_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, Na
                     syncing = true;
                     display = "Syncing…".into();
                 }
-                items.push((token, display, false));
+                items.push(RowItem { token, amount: display, fiat: None });
             }
 
+            // Fiat is optional and off by default, so the total is only meaningful when
+            // every row has a quote. `total` stays None otherwise rather than showing a
+            // number that silently omits chains.
+            let mut total: Option<f64> = None;
             if show_prices && !fiat.is_empty() {
                 if price_ticks == 0 {
                     if let Ok(prices) = crate::currencies::prices::fetch_prices(&["BTC", "ETH", "SOL", "LTC"], &fiat) {
@@ -122,20 +155,29 @@ pub fn home_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, Na
                     }
                 }
                 price_ticks = (price_ticks + 1) % 15;
-                for (token, display, _) in items.iter_mut() {
-                    if let Some(price) = price_cache.get(&token.symbol) {
-                        let qty = nav::parse_leading_amount(display);
-                        if qty > 0.0 {
-                            *display = format!(
-                                "{display}  ·  {}",
-                                crate::currencies::prices::format_fiat(qty * price, &fiat)
-                            );
+                let mut running = 0.0;
+                let mut priced_all = !items.is_empty();
+                for item in items.iter_mut() {
+                    match price_cache.get(&item.token.symbol) {
+                        Some(price) => {
+                            let qty = nav::parse_leading_amount(&item.amount);
+                            let value = qty * price;
+                            running += value;
+                            item.fiat = Some(crate::currencies::prices::format_fiat(value, &fiat));
                         }
+                        None => priced_all = false,
                     }
+                }
+                if priced_all {
+                    total = Some(running);
                 }
             }
 
-            if sender.send_blocking((items, offline, syncing, snapshot)).is_err() {
+            let total_display = total.map(|value| crate::currencies::prices::format_fiat(value, &fiat));
+            if sender
+                .send_blocking((items, offline, syncing, total_display, snapshot))
+                .is_err()
+            {
                 break;
             }
             thread::sleep(Duration::from_secs(4));
@@ -147,39 +189,148 @@ pub fn home_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, Na
         clone!(
             #[weak] rows,
             #[weak] banner,
+            #[weak] hero_total,
+            #[weak] hero_sub,
             #[strong] nav,
             #[upgrade_or]
             ControlFlow::Break,
-            move |(items, offline, syncing, snapshot): (Vec<(Token, String, bool)>, bool, bool, ApplicationSettings)| {
+            move |(items, offline, syncing, total, snapshot): (Vec<RowItem>, bool, bool, Option<String>, ApplicationSettings)| {
                 while let Some(child) = rows.first_child() {
                     rows.remove(&child);
                 }
+
+                match (&total, syncing) {
+                    (Some(value), _) => {
+                        hero_total.set_label(value);
+                        hero_sub.set_label(&format!("{} assets across 4 chains", items.len()));
+                    }
+                    (None, true) => {
+                        hero_total.set_label("Syncing…");
+                        hero_sub.set_label("Reading balances from your nodes");
+                    }
+                    (None, false) => {
+                        // No fiat total available. Show the chain count instead of a
+                        // fabricated figure, and say why in the subtitle.
+                        hero_total.set_label(&format!("{} assets", items.len()));
+                        hero_sub.set_label(if snapshot.show_prices {
+                            "Fiat total unavailable right now"
+                        } else {
+                            "Turn on fiat prices in Settings for a total"
+                        });
+                    }
+                }
+
+                let offline_text = "A node is unreachable. Receiving still works offline.";
                 banner.set_label(if offline {
-                    "A node is unreachable. Receive still works offline."
+                    offline_text
                 } else if syncing {
                     "Syncing balances from your nodes…"
                 } else {
-                    "Balances come from your Bitcoin and Ethereum nodes."
+                    "Balances come straight from the nodes you configured."
                 });
-                for (token, display, _) in items {
-                    let row = generate_currency_box_static(&token, &display);
+                ui::set_notice_warning(&banner, offline);
+
+                let group = ui::group("Assets");
+                for item in items {
+                    let row = currency_row(&item);
                     let gesture = gtk::GestureClick::new();
                     let nav = nav.clone();
-                    let token_c = token.clone();
+                    let token_c = item.token.clone();
                     let settings = snapshot.clone();
                     gesture.connect_released(move |gesture, _, _, _| {
                         gesture.set_state(gtk::EventSequenceState::Claimed);
                         nav.push("detail", &currency_view(token_c.clone(), settings.clone(), Some(nav.clone())));
                     });
                     row.add_controller(gesture);
-                    rows.append(&row);
+                    group.add(&row);
                 }
+                rows.append(&group);
                 ControlFlow::Continue
             }
         ),
     );
 
     (page, nav, app_settings)
+}
+
+/// One tappable asset row: coin mark, name + chain tag, amount + fiat.
+pub fn currency_row(item: &RowItem) -> gtk::Box {
+    let row = gtk::Box::new(Orientation::Horizontal, 12);
+    row.add_css_class("currency-row");
+
+    row.append(&ui::coin_mark(
+        &item.token.logo,
+        &item.token.symbol,
+        &item.token.chain,
+        40,
+    ));
+
+    let name_box = gtk::Box::new(Orientation::Vertical, 1);
+    name_box.set_hexpand(true);
+    name_box.set_valign(Align::Center);
+    name_box.append(
+        &gtk::Label::builder()
+            .label(&item.token.name)
+            .halign(Align::Start)
+            .ellipsize(pango::EllipsizeMode::End)
+            .css_classes(["currency-name"])
+            .build(),
+    );
+
+    // Symbol plus, where it disambiguates, a chain tag. USDC exists as both an ERC-20 and
+    // an SPL token, and without the tag those two rows are indistinguishable.
+    let ticker_box = gtk::Box::new(Orientation::Horizontal, 6);
+    ticker_box.append(
+        &gtk::Label::builder()
+            .label(&item.token.symbol)
+            .halign(Align::Start)
+            .css_classes(["currency-ticker"])
+            .build(),
+    );
+    if ui::needs_chain_tag(&item.token.name, &item.token.chain) {
+        ticker_box.append(
+            &gtk::Label::builder()
+                .label(ui::chain_display_name(&item.token.chain))
+                .valign(Align::Center)
+                .css_classes(["chain-tag"])
+                .build(),
+        );
+    }
+    name_box.append(&ticker_box);
+
+    let value_box = gtk::Box::new(Orientation::Vertical, 1);
+    value_box.set_valign(Align::Center);
+    value_box.append(
+        &gtk::Label::builder()
+            .label(&item.amount)
+            .halign(Align::End)
+            .ellipsize(pango::EllipsizeMode::End)
+            .max_width_chars(16)
+            .css_classes(["currency-price"])
+            .build(),
+    );
+    if let Some(fiat) = &item.fiat {
+        value_box.append(
+            &gtk::Label::builder()
+                .label(fiat)
+                .halign(Align::End)
+                .css_classes(["currency-price-sub"])
+                .build(),
+        );
+    }
+
+    row.append(&name_box);
+    row.append(&value_box);
+    row
+}
+
+/// Back-compat shim for callers that only have a token and a rendered amount string.
+pub fn generate_currency_box_static(token: &Token, display: &str) -> gtk::Box {
+    currency_row(&RowItem {
+        token: token.clone(),
+        amount: display.to_string(),
+        fiat: None,
+    })
 }
 
 pub fn generate_currency_box(element: (Token, Arc<Mutex<String>>)) -> gtk::Box {
@@ -200,7 +351,7 @@ pub fn generate_currency_box(element: (Token, Arc<Mutex<String>>)) -> gtk::Box {
             #[weak] row,
             #[upgrade_or]
             ControlFlow::Break,
-            move |price_text| {
+            move |price_text: String| {
                 if let Some(label) = row.last_child().and_then(|w| w.first_child()) {
                     if let Ok(label) = label.downcast::<gtk::Label>() {
                         if price_text != "Uninitialized" {
@@ -213,50 +364,4 @@ pub fn generate_currency_box(element: (Token, Arc<Mutex<String>>)) -> gtk::Box {
         ),
     );
     row
-}
-
-pub fn generate_currency_box_static(token: &Token, display: &str) -> gtk::Box {
-    let currency_box = gtk::Box::new(Orientation::Horizontal, 8);
-    currency_box.set_css_classes(&["currency-row"]);
-    currency_box.set_margin_start(4);
-    currency_box.set_margin_end(4);
-
-    let icon = Image::from_file(&token.logo);
-    icon.set_pixel_size(40);
-    icon.set_margin_start(8);
-    icon.set_margin_top(8);
-    icon.set_margin_bottom(8);
-
-    let name_box = gtk::Box::new(Orientation::Vertical, 0);
-    name_box.set_hexpand(true);
-    name_box.append(
-        &gtk::Label::builder()
-            .label(&token.name)
-            .halign(Align::Start)
-            .css_classes(["currency-name"])
-            .build(),
-    );
-    name_box.append(
-        &gtk::Label::builder()
-            .label(&token.symbol)
-            .halign(Align::Start)
-            .css_classes(["currency-ticker"])
-            .build(),
-    );
-
-    let price_box = gtk::Box::new(Orientation::Vertical, 0);
-    price_box.append(
-        &gtk::Label::builder()
-            .label(display)
-            .halign(Align::End)
-            .wrap(true)
-            .max_width_chars(18)
-            .css_classes(["currency-price"])
-            .build(),
-    );
-
-    currency_box.append(&icon);
-    currency_box.append(&name_box);
-    currency_box.append(&price_box);
-    currency_box
 }

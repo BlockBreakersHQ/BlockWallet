@@ -1,6 +1,6 @@
 # Roadmap
 
-Self-custody GTK4/libadwaita wallet for the Librem 5. MVP is **BTC + ETH L1 send/receive/lock**, packaged, then QA on the phone. Solana (native + SPL, Phase 6), EVM L2s/sidechains (Phase 7), and Litecoin (Phase 8) all landed ahead of the original post-MVP schedule.
+Self-custody GTK4/libadwaita wallet for the Librem 5. MVP is **BTC + ETH L1 send/receive/lock**, packaged, then QA on the phone. Solana (native + SPL, Phase 6), EVM L2s/sidechains (Phase 7), and Litecoin (Phase 8) all landed ahead of the original post-MVP schedule. Phase 9 rebuilt the UI on libadwaita's own patterns.
 
 ## Run
 
@@ -127,6 +127,59 @@ Desktop GTK send path is implemented. **Librem 5 testnet send** is still the dev
 - Single reused address per wallet (mirrors how `BitcoinWallet` already behaves in practice — `peek_address(...,0)` is deterministic, no cross-session rotation), simple largest-first coin selection, exact vsize via `Transaction::vsize()` rather than an approximation formula
 - Native LTC send/receive/lock, balance sync, Activity history; mainnet send gated behind the same "I understand this spends real…" checkbox as BTC/ETH/SOL
 - Not yet added: RBF, an Electrum-protocol backend option (Esplora-only, unlike BTC's Esplora-or-Electrum choice), any fungible/token concept on Litecoin
+
+### Phase 9 — Visual design pass — **done** (desktop; not yet tapped on the L5)
+
+The screens worked but were built from bare `GtkBox`/`GtkLabel`/`GtkEntry` stacks, so the app
+read as assembled rather than designed. This pass rebuilt the presentation layer on
+libadwaita's own patterns without changing any wallet, signing or network behaviour.
+
+- New `src/Views/ui.rs`: single source of truth for gutters, buttons, labels, chain
+  identity and toasts, so spacing no longer drifts per screen
+- `src/style.css` rewritten as a design system on libadwaita's named colours
+  (`@card_bg_color`, `@accent_bg_color`, …), so light mode, dark mode and the user's accent
+  colour all follow the system with no second stylesheet
+- Home: portfolio hero card, chain-grouped asset rows with press feedback and fiat
+  sublines; Assets grouped per chain; Activity rows split into direction badge, amount and
+  monospace metadata instead of one run-on string
+- Settings rebuilt as an `AdwPreferencesPage`: every control now has a title and a
+  subtitle. Previously it was an unlabelled column of dropdowns and entries whose only
+  clue was placeholder text that vanished on first keystroke
+- Send screens share one chrome (`SendChrome`) so the four chains cannot drift apart, with
+  labelled `AdwEntryRow`s and a review card whose network strip is green for testnet and
+  amber for real value
+- Wallets shows all four chains at once in titled groups instead of hiding every account
+  behind a per-chain toggle button
+- Onboarding and unlock: centred lockups, step headers, seed words as numbered chips,
+  `AdwPasswordEntryRow` throughout
+- Toasts (`AdwToastOverlay`) confirm copies, saves and broadcasts — these were previously
+  silent, with no way to tell whether a tap had registered
+
+Fixed along the way:
+
+- **Tab bar and account icons were broken glyphs.** `"home"`, `"wallet"`, `"assets"` and
+  `"BTC"`/`"ETH"` were passed as icon-theme names; none of them resolve. All icon names are
+  now checked against the shipped Adwaita theme.
+- **Missing token logos rendered GTK's broken-image icon.** LTC has no bundled PNG, and
+  add-by-contract tokens never will. `ui::coin_mark` falls back to a chain-coloured monogram.
+- **QR codes could not scan in dark mode.** A QR is dark modules on a light field; on a dark
+  background it had no quiet zone. It now sits on a deliberately white `.qr-frame` in both themes.
+- **Enter did not submit the unlock password.** `connect_activate` on an `AdwPasswordEntryRow`
+  compiles but binds `GtkListBoxRow`'s own activate signal, not the text field's;
+  `connect_entry_activated` is the correct one.
+- **Same-symbol tokens on different chains looked identical.** Rows now carry a chain tag,
+  suppressed where it would only repeat the coin's own name.
+
+Dependency: `libadwaita` gains the `v1_2` feature, for `AdwEntryRow`/`AdwPasswordEntryRow`.
+Deliberately not higher — the only API above that this design wanted was `AdwSwitchRow`
+(1.4), and `ui::add_switch_row` hand-builds the same thing from `AdwActionRow` +
+`GtkSwitch` (including `set_activatable_widget`, so the whole row stays a hit target).
+That keeps Debian bookworm (libadwaita 1.2) buildable; `packaging/debian/control` carries
+the matching `>= 1.2` floor.
+
+Not done: a bundled LTC/BNB/AVAX icon asset (the monogram covers it), an `AdwNavigationView`
+migration for the in-tab stacks, and any on-device tap-through — that stays owed to
+[LIBREM5.md](LIBREM5.md).
 
 ---
 

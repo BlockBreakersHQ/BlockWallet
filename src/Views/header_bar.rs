@@ -1,34 +1,35 @@
 use adw::prelude::*;
 use adw::{ApplicationWindow, HeaderBar};
 use glib::clone;
-use gtk::prelude::*;
-use gtk::{Button, Image};
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use crate::configuration::application_settings::*;
+use crate::views::ui;
 use crate::views::{login, settings};
 
 pub fn header_bar_view(window: ApplicationWindow, app_settings: Arc<Mutex<ApplicationSettings>>) -> adw::HeaderBar {
-    let settings_icon_path = match ApplicationSettings::find_images_path() {
-        Ok(mut path) => {
-            path.push("cog.png");
-            path
-        }
-        Err(_) => PathBuf::new(),
-    };
-
     let header_bar = HeaderBar::new();
-    let settings_button = Button::new();
-    let settings_icon = Image::from_file(settings_icon_path);
-    settings_icon.set_pixel_size(25);
-    settings_button.set_child(Some(&settings_icon));
-    settings_button.set_tooltip_text(Some("Settings"));
 
-    let lock_button = Button::builder().label("Lock").build();
-    lock_button.add_css_class("standard_button");
-    lock_button.set_valign(gtk::Align::Center);
-    lock_button.set_tooltip_text(Some("Lock wallet"));
+    // Title block: app name plus the live/test chip. Which network you are on decides
+    // whether a send moves real money, so it is worth a permanent slot rather than a trip
+    // into Settings to check.
+    let title_box = ui::vbox(0);
+    title_box.set_halign(gtk::Align::Center);
+    title_box.append(
+        &gtk::Label::builder()
+            .label("Block Wallet")
+            .css_classes(["title-4"])
+            .build(),
+    );
+
+    let is_test = app_settings.lock().unwrap().is_test_mode();
+    let chip = ui::network_chip(if is_test { "TEST NETWORKS" } else { "LIVE" }, is_test);
+    chip.set_halign(gtk::Align::Center);
+    title_box.append(&chip);
+    header_bar.set_title_widget(Some(&title_box));
+
+    let settings_button = ui::flat_icon_button("preferences-system-symbolic", "Settings");
+    let lock_button = ui::flat_icon_button("changes-prevent-symbolic", "Lock wallet");
 
     header_bar.pack_end(&settings_button);
     header_bar.pack_end(&lock_button);

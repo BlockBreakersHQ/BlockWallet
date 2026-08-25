@@ -16,7 +16,11 @@ categories = ["gui"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-adw = { version = "0.8", package = "libadwaita" }
+# v1_2 for AdwEntryRow/AdwPasswordEntryRow, which the settings and send forms are built
+# on. Deliberately not higher: v1_4 would buy only AdwSwitchRow, and `ui::add_switch_row`
+# hand-builds that from AdwActionRow + GtkSwitch instead, so the .deb path still builds on
+# Debian bookworm (libadwaita 1.2). packaging/debian/control carries the matching floor.
+adw = { version = "0.8", package = "libadwaita", features = ["v1_2"] }
 async-channel = "2"
 alloy = { version = "1", default-features = false, features = ["std", "providers", "reqwest", "rpc-types", "signer-local", "signer-mnemonic", "network"] }
 argon2 = { version = "0.5", features = ["std"] }

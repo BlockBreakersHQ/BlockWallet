@@ -1,16 +1,14 @@
 use adw::prelude::*;
-use adw::{ApplicationWindow, HeaderBar};
+use adw::ApplicationWindow;
 use glib::{clone, ControlFlow};
-use gtk::prelude::*;
-use gtk::{Button, Orientation};
 use std::sync::{Arc, Mutex};
 use std::thread;
 
 use crate::configuration::application_settings::*;
 use crate::configuration::wallet_store::CustomTokenRecord;
 use crate::currencies::eth_chain;
-use crate::currencies::ltc_chain;
 use crate::currencies::sol_chain;
+use crate::views::ui;
 use crate::views::{login, stack};
 
 // Index 1 ("sepolia") is load-bearing: the "Use test networks" toggle hardcodes
@@ -19,136 +17,130 @@ const ETH_NETWORKS: [&str; 8] = [
     "mainnet", "sepolia", "arbitrum", "base", "optimism", "polygon", "bsc", "avalanche",
 ];
 
-fn section_label(text: &str) -> gtk::Label {
-    gtk::Label::builder()
-        .label(text)
-        .halign(gtk::Align::Start)
-        .margin_start(16)
-        .margin_end(16)
-        .margin_top(16)
-        .margin_bottom(4)
-        .css_classes(["currency-name"])
-        .build()
+/// Friendly names for the network dropdown. Same order and length as `ETH_NETWORKS`, so
+/// index 1 still means Sepolia and the test-networks toggle keeps working.
+const ETH_NETWORK_LABELS: [&str; 8] = [
+    "Ethereum Mainnet",
+    "Sepolia (testnet)",
+    "Arbitrum One",
+    "Base",
+    "Optimism",
+    "Polygon PoS",
+    "BNB Smart Chain",
+    "Avalanche C-Chain",
+];
+
+const TIMEOUT_LABELS: [&str; 4] = ["Off", "1 minute", "2 minutes", "5 minutes"];
+const TIMEOUT_VALUES: [u32; 4] = [0, 60, 120, 300];
+
+/// An "add token by address" control: an entry row with an inline Add button and a status
+/// line underneath.
+struct AddTokenControls {
+    entry: adw::EntryRow,
+    add: gtk::Button,
+    status: gtk::Label,
+}
+
+fn add_token_controls(group: &adw::PreferencesGroup, title: &str, placeholder: &str) -> AddTokenControls {
+    let entry = adw::EntryRow::builder().title(title).build();
+    let add = gtk::Button::from_icon_name("list-add-symbolic");
+    add.set_tooltip_text(Some("Add token"));
+    add.set_valign(gtk::Align::Center);
+    add.add_css_class("flat");
+    entry.add_suffix(&add);
+    group.add(&entry);
+
+    let status = gtk::Label::builder()
+        .wrap(true)
+        .xalign(0.0)
+        .visible(false)
+        .margin_top(4)
+        .css_classes(["info-banner"])
+        .build();
+    group.add(&status);
+
+    let _ = placeholder;
+    AddTokenControls { entry, add, status }
 }
 
 pub fn settings_view(window: ApplicationWindow, app_settings: Arc<Mutex<ApplicationSettings>>) {
-    let header_bar = HeaderBar::new();
-    header_bar.set_title_widget(Some(&gtk::Label::new(Some("Settings"))));
-    let back = Button::from_icon_name("go-previous-symbolic");
-    back.set_tooltip_text(Some("Back"));
-    back.add_css_class("standard_button");
+    let header_bar = adw::HeaderBar::new();
+    header_bar.set_title_widget(Some(
+        &gtk::Label::builder()
+            .label("Settings")
+            .css_classes(["title-4"])
+            .build(),
+    ));
+    let back = ui::flat_icon_button("go-previous-symbolic", "Back");
     header_bar.pack_start(&back);
 
-    let page = gtk::Box::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(4)
-        .margin_bottom(16)
-        .build();
+    // AdwPreferencesPage gives grouped, titled, boxed-list sections with correct phone
+    // margins for free. The previous screen was a bare column of unlabelled dropdowns and
+    // entries, where the only clue to a field's purpose was placeholder text that
+    // disappeared as soon as you typed in it.
+    let page = adw::PreferencesPage::new();
 
-    page.append(&section_label("Security"));
-    let timeout_labels = ["Off", "1 minute", "2 minutes", "5 minutes"];
-    let timeout_values = [0_u32, 60, 120, 300];
-    let timeout = gtk::DropDown::from_strings(&timeout_labels);
+    // ------------------------------------------------------------------ security
+    let security = ui::group("Security");
+    let timeout = ui::combo_row("Auto-lock", &TIMEOUT_LABELS);
+    timeout.set_subtitle("Lock the wallet after this much idle time");
     let current_timeout = app_settings.lock().unwrap().lock_timeout_secs;
-    let selected = timeout_values
-        .iter()
-        .position(|v| *v == current_timeout)
-        .unwrap_or(2);
-    timeout.set_selected(selected as u32);
-    timeout.set_margin_start(12);
-    timeout.set_margin_end(12);
-    page.append(
-        &gtk::Label::builder()
-            .label("Auto-lock")
-            .halign(gtk::Align::Start)
-            .margin_start(16)
-            .css_classes(["currency-ticker"])
-            .build(),
+    timeout.set_selected(
+        TIMEOUT_VALUES
+            .iter()
+            .position(|v| *v == current_timeout)
+            .unwrap_or(2) as u32,
     );
-    page.append(&timeout);
+    security.add(&timeout);
+    page.add(&security);
 
-    page.append(&section_label("Display"));
-    let prices = gtk::Switch::builder()
-        .active(app_settings.lock().unwrap().show_prices)
-        .halign(gtk::Align::End)
-        .margin_start(16)
-        .margin_end(16)
-        .valign(gtk::Align::Center)
-        .build();
-    let prices_row = gtk::Box::builder()
-        .orientation(Orientation::Horizontal)
-        .margin_start(16)
-        .margin_end(16)
-        .margin_top(6)
-        .build();
-    prices_row.append(
-        &gtk::Label::builder()
-            .label("Show fiat prices (CoinGecko)")
-            .wrap(true)
-            .hexpand(true)
-            .halign(gtk::Align::Start)
-            .build(),
+    // ------------------------------------------------------------------- display
+    let display = ui::group("Display");
+    // `add_switch_row` adds its row on the spot, so it has to come before the rows that
+    // should sit under it.
+    let prices = ui::add_switch_row(
+        &display,
+        "Fiat prices",
+        "Fetches quotes from CoinGecko. Off by default.",
+        app_settings.lock().unwrap().show_prices,
     );
-    prices_row.append(&prices);
-    page.append(&prices_row);
-
-    let fiat = gtk::DropDown::from_strings(&["usd", "eur"]);
+    let fiat = ui::combo_row("Currency", &["US dollar", "Euro"]);
     if app_settings.lock().unwrap().fiat.eq_ignore_ascii_case("eur") {
         fiat.set_selected(1);
     }
-    fiat.set_margin_start(12);
-    fiat.set_margin_end(12);
-    page.append(&fiat);
-
-    let units = gtk::DropDown::from_strings(&["btc", "sats"]);
+    let units = ui::combo_row("Bitcoin units", &["BTC", "Satoshis"]);
     if app_settings.lock().unwrap().btc_units.eq_ignore_ascii_case("sats") {
         units.set_selected(1);
     }
-    units.set_margin_start(12);
-    units.set_margin_end(12);
-    page.append(&units);
+    display.add(&fiat);
+    display.add(&units);
+    page.add(&display);
 
-    page.append(&section_label("Network"));
-    let network_settings_box = network_settings_box(app_settings.clone());
-    network_settings_box.set_visible(true);
-    page.append(&network_settings_box);
+    let save_display = ui::primary_button("Save display and security");
+    let save_display_group = adw::PreferencesGroup::new();
+    save_display_group.add(&save_display);
+    page.add(&save_display_group);
 
-    let save_display = Button::builder()
-        .label("Save display and security")
-        .margin_start(12)
-        .margin_end(12)
-        .margin_top(8)
-        .build();
-    save_display.add_css_class("standard_button");
-    page.append(&save_display);
+    // ------------------------------------------------------------------ networks
+    let network = network_settings(&page, app_settings.clone());
 
-    let logout_button = Button::builder()
-        .label("Lock wallet")
-        .margin_top(12)
-        .margin_bottom(12)
-        .margin_start(12)
-        .margin_end(12)
-        .build();
-    logout_button.add_css_class("standard_button");
+    // -------------------------------------------------------------------- danger
+    let session = ui::group("Session");
+    let logout_button = ui::button("Lock wallet");
+    logout_button.add_css_class("destructive-action");
+    logout_button.add_css_class("pill-button");
+    session.add(&logout_button);
     if app_settings.lock().unwrap().is_unlocked() {
-        page.append(&logout_button);
+        page.add(&session);
     }
 
-    let clamp = adw::Clamp::new();
-    clamp.set_maximum_size(480);
-    clamp.set_child(Some(&page));
-    let scroll = gtk::ScrolledWindow::builder()
-        .vexpand(true)
-        .hscrollbar_policy(gtk::PolicyType::Never)
-        .child(&clamp)
-        .build();
-
-    let setting_box = gtk::Box::builder()
-        .orientation(Orientation::Vertical)
-        .build();
+    let scroll = ui::scroller(&page);
+    let setting_box = ui::vbox(0);
     setting_box.append(&header_bar);
     setting_box.append(&scroll);
-    window.set_content(Some(&setting_box));
+
+    let overlay = ui::with_toasts(&setting_box);
+    window.set_content(Some(&overlay));
     window.present();
 
     save_display.connect_clicked(clone!(
@@ -158,7 +150,7 @@ pub fn settings_view(window: ApplicationWindow, app_settings: Arc<Mutex<Applicat
         #[weak] fiat,
         #[weak] units,
         move |_| {
-            let secs = timeout_values
+            let secs = TIMEOUT_VALUES
                 .get(timeout.selected() as usize)
                 .copied()
                 .unwrap_or(120);
@@ -168,6 +160,8 @@ pub fn settings_view(window: ApplicationWindow, app_settings: Arc<Mutex<Applicat
             settings.fiat = if fiat.selected() == 1 { "eur".into() } else { "usd".into() };
             settings.btc_units = if units.selected() == 1 { "sats".into() } else { "btc".into() };
             let _ = settings.write_config();
+            drop(settings);
+            ui::toast("Display and security settings saved.");
         }
     ));
 
@@ -190,228 +184,134 @@ pub fn settings_view(window: ApplicationWindow, app_settings: Arc<Mutex<Applicat
             }
         }
     ));
+
+    // Keep the network widgets alive for as long as the page is on screen.
+    let _ = network;
 }
 
-pub fn network_settings_box(app_settings: Arc<Mutex<ApplicationSettings>>) -> gtk::Box {
-    let network_settings_box = gtk::Box::new(Orientation::Vertical, 0);
-    network_settings_box.set_visible(false);
+/// Widgets the network section needs to keep referenced after construction.
+struct NetworkWidgets {
+    _keep: (),
+}
 
-    let testnet_row = gtk::Box::builder()
-        .orientation(Orientation::Horizontal)
-        .margin_start(16)
-        .margin_end(16)
-        .margin_top(8)
-        .build();
-    testnet_row.append(
-        &gtk::Label::builder()
-            .label("Use test networks (BTC testnet + ETH Sepolia + SOL devnet + LTC testnet)")
-            .wrap(true)
-            .hexpand(true)
-            .halign(gtk::Align::Start)
-            .build(),
+fn network_settings(page: &adw::PreferencesPage, app_settings: Arc<Mutex<ApplicationSettings>>) -> NetworkWidgets {
+    // ---- master test-network switch ----
+    let networks = ui::group_with_description(
+        "Networks",
+        "Test networks use worthless coins. Layer 2 networks are real value and are chosen per chain below.",
     );
-    let testnet = gtk::Switch::builder()
-        .active(app_settings.lock().unwrap().is_test_mode())
-        .valign(gtk::Align::Center)
-        .build();
-    testnet_row.append(&testnet);
+    let testnet = ui::add_switch_row(
+        &networks,
+        "Use test networks",
+        "Bitcoin testnet, Ethereum Sepolia, Solana devnet, Litecoin testnet",
+        app_settings.lock().unwrap().is_test_mode(),
+    );
+    page.add(&networks);
 
-    let etherscan_api_key = gtk::Entry::builder()
-        .placeholder_text("Etherscan Api Key")
-        .margin_top(12)
-        .margin_bottom(3)
-        .margin_start(12)
-        .margin_end(12)
+    // ---- Bitcoin ----
+    let btc_group = ui::group("Bitcoin");
+    let btc_network = ui::combo_row("Network", &["Mainnet", "Testnet"]);
+    if app_settings.lock().unwrap().btc_network.to_ascii_lowercase() == "testnet" {
+        btc_network.set_selected(1);
+    }
+    let btc_node = adw::EntryRow::builder().title("Node URL").build();
+    btc_node.set_text(&app_settings.lock().unwrap().btc_node);
+    let btc_hint = adw::ActionRow::builder()
+        .title("Accepted formats")
+        .subtitle("Esplora https://… or Electrum ssl://host:port. Leave empty for the default.")
         .build();
+    btc_hint.add_prefix(&gtk::Image::from_icon_name("network-wired-symbolic"));
+    let btc_incorrect_format = ui::error_label(
+        "Bitcoin node should be an https Esplora URL or an ssl://host:port Electrum server.",
+    );
+    btc_group.add(&btc_network);
+    btc_group.add(&btc_node);
+    btc_group.add(&btc_hint);
+    btc_group.add(&btc_incorrect_format);
+    page.add(&btc_group);
 
-    let infura_key = gtk::Entry::builder()
-        .placeholder_text("Infura API Key")
-        .margin_top(3)
-        .margin_bottom(3)
-        .margin_start(12)
-        .margin_end(12)
-        .build();
-    
-    let eth_network = gtk::DropDown::from_strings(&ETH_NETWORKS);
+    // ---- Ethereum and its L2s ----
+    let eth_group = ui::group_with_description(
+        "Ethereum and layer 2",
+        "One address works across every network here. Layer 2 networks spend real value.",
+    );
+    let eth_network = ui::combo_row("Network", &ETH_NETWORK_LABELS);
     let current_eth = app_settings.lock().unwrap().eth_network.to_ascii_lowercase();
     if let Some(index) = ETH_NETWORKS.iter().position(|n| *n == current_eth) {
         eth_network.set_selected(index as u32);
     }
-    eth_network.set_margin_start(12);
-    eth_network.set_margin_end(12);
-    eth_network.set_margin_top(3);
-    eth_network.set_margin_bottom(3);
+    let ethereum_node = adw::EntryRow::builder().title("RPC URL").build();
+    ethereum_node.set_text(&app_settings.lock().unwrap().eth_node);
+    let eth_hint = adw::ActionRow::builder()
+        .title("Leave empty")
+        .subtitle("Uses a public default for the selected network. Public nodes can see your address.")
+        .build();
+    eth_hint.add_prefix(&gtk::Image::from_icon_name("network-wired-symbolic"));
+    let infura_key = adw::PasswordEntryRow::builder().title("Infura API key").build();
+    let etherscan_api_key = adw::PasswordEntryRow::builder().title("Etherscan API key").build();
+    let eth_incorrect_format =
+        ui::error_label("Ethereum RPC should be http:// or https://, or empty for the network default.");
+    eth_group.add(&eth_network);
+    eth_group.add(&ethereum_node);
+    eth_group.add(&eth_hint);
+    eth_group.add(&infura_key);
+    eth_group.add(&etherscan_api_key);
+    eth_group.add(&eth_incorrect_format);
+    page.add(&eth_group);
 
-    let ethereum_node = gtk::Entry::builder()
-        .placeholder_text("ETH RPC https://… (empty = default for network)")
-        .margin_top(3)
-        .margin_bottom(3)
-        .margin_start(12)
-        .margin_end(12)
-        .text(&app_settings.lock().unwrap().eth_node)
-        .build();
-    
-    let eth_incorrect_format = gtk::Label::builder()
-        .label("ETH RPC should be http:// or https://, or empty for the network default.")
-        .visible(false)
-        .wrap(true)
-        .css_classes(["label-error"])
-        .build();
+    let erc20_group = ui::group_with_description(
+        "ERC-20 tokens",
+        "Add a token by its contract address. Name and decimals are read from the chain.",
+    );
+    let erc20 = add_token_controls(&erc20_group, "Contract address (0x…)", "0x…");
+    page.add(&erc20_group);
 
-    let token_contract = gtk::Entry::builder()
-        .placeholder_text("Add ERC-20 contract (0x…)")
-        .margin_top(3)
-        .margin_bottom(3)
-        .margin_start(12)
-        .margin_end(12)
-        .build();
-    let add_token = Button::builder()
-        .label("Add token")
-        .margin_start(12)
-        .margin_end(12)
-        .margin_bottom(3)
-        .build();
-    add_token.add_css_class("standard_button");
-    let token_status = gtk::Label::builder()
-        .wrap(true)
-        .visible(false)
-        .margin_start(12)
-        .margin_end(12)
-        .css_classes(["label-standard"])
-        .build();
-
-    let sol_network = gtk::DropDown::from_strings(&["mainnet", "devnet"]);
+    // ---- Solana ----
+    let sol_group = ui::group("Solana");
+    let sol_network = ui::combo_row("Network", &["Mainnet", "Devnet"]);
     if app_settings.lock().unwrap().sol_network.to_ascii_lowercase() == "devnet" {
         sol_network.set_selected(1);
     }
-    sol_network.set_margin_start(12);
-    sol_network.set_margin_end(12);
-    sol_network.set_margin_top(3);
-    sol_network.set_margin_bottom(3);
+    let solana_node = adw::EntryRow::builder().title("RPC URL").build();
+    solana_node.set_text(&app_settings.lock().unwrap().sol_node);
+    let sol_incorrect_format =
+        ui::error_label("Solana RPC should be http:// or https://, or empty for the network default.");
+    sol_group.add(&sol_network);
+    sol_group.add(&solana_node);
+    sol_group.add(&sol_incorrect_format);
+    page.add(&sol_group);
 
-    let solana_node = gtk::Entry::builder()
-        .placeholder_text("SOL RPC https://… (empty = default for network)")
-        .margin_top(3)
-        .margin_bottom(3)
-        .margin_start(12)
-        .margin_end(12)
-        .text(&app_settings.lock().unwrap().sol_node)
-        .build();
+    let spl_group = ui::group_with_description(
+        "SPL tokens",
+        "Add a Solana token by its mint address.",
+    );
+    let spl = add_token_controls(&spl_group, "Mint address", "base58");
+    page.add(&spl_group);
 
-    let sol_incorrect_format = gtk::Label::builder()
-        .label("SOL RPC should be http:// or https://, or empty for the network default.")
-        .visible(false)
-        .wrap(true)
-        .css_classes(["label-error"])
-        .build();
-
-    let spl_mint = gtk::Entry::builder()
-        .placeholder_text("Add SPL token by mint address")
-        .margin_top(3)
-        .margin_bottom(3)
-        .margin_start(12)
-        .margin_end(12)
-        .build();
-    let add_spl_token = Button::builder()
-        .label("Add token")
-        .margin_start(12)
-        .margin_end(12)
-        .margin_bottom(3)
-        .build();
-    add_spl_token.add_css_class("standard_button");
-    let spl_status = gtk::Label::builder()
-        .wrap(true)
-        .visible(false)
-        .margin_start(12)
-        .margin_end(12)
-        .css_classes(["label-standard"])
-        .build();
-
-    let btc_network = gtk::DropDown::from_strings(&["bitcoin", "testnet"]);
-    if app_settings.lock().unwrap().btc_network.to_ascii_lowercase() == "testnet" {
-        btc_network.set_selected(1);
-    }
-    btc_network.set_margin_start(12);
-    btc_network.set_margin_end(12);
-    btc_network.set_margin_top(3);
-    btc_network.set_margin_bottom(3);
-
-    let btc_node = gtk::Entry::builder()
-        .placeholder_text("Esplora https://… or Electrum ssl://host:port (empty = default)")
-        .margin_top(3)
-        .margin_bottom(3)
-        .margin_start(12)
-        .margin_end(12)
-        .text(&app_settings.lock().unwrap().btc_node)
-        .build();
-
-    let btc_incorrect_format = gtk::Label::builder()
-        .label("BTC node should be an https Esplora URL or ssl://host:port Electrum server.")
-        .visible(false)
-        .wrap(true)
-        .css_classes(["label-error"])
-        .build();
-
-    let ltc_network = gtk::DropDown::from_strings(&["litecoin", "testnet"]);
+    // ---- Litecoin ----
+    let ltc_group = ui::group("Litecoin");
+    let ltc_network = ui::combo_row("Network", &["Mainnet", "Testnet"]);
     if app_settings.lock().unwrap().ltc_network.to_ascii_lowercase() == "testnet" {
         ltc_network.set_selected(1);
     }
-    ltc_network.set_margin_start(12);
-    ltc_network.set_margin_end(12);
-    ltc_network.set_margin_top(3);
-    ltc_network.set_margin_bottom(3);
+    let litecoin_node = adw::EntryRow::builder().title("Esplora URL").build();
+    litecoin_node.set_text(&app_settings.lock().unwrap().ltc_node);
+    let ltc_incorrect_format =
+        ui::error_label("Litecoin node should be an https Esplora URL, or empty for the network default.");
+    ltc_group.add(&ltc_network);
+    ltc_group.add(&litecoin_node);
+    ltc_group.add(&ltc_incorrect_format);
+    page.add(&ltc_group);
 
-    let litecoin_node = gtk::Entry::builder()
-        .placeholder_text("LTC Esplora https://… (empty = default for network)")
-        .margin_top(3)
-        .margin_bottom(3)
-        .margin_start(12)
-        .margin_end(12)
-        .text(&app_settings.lock().unwrap().ltc_node)
-        .build();
+    let save_group = adw::PreferencesGroup::new();
+    let save_button = ui::primary_button("Save network settings");
+    save_group.add(&save_button);
+    page.add(&save_group);
 
-    let ltc_incorrect_format = gtk::Label::builder()
-        .label("LTC node should be an https Esplora URL, or empty for the network default.")
-        .visible(false)
-        .wrap(true)
-        .css_classes(["label-error"])
-        .build();
-
-    let save_button = Button::builder()
-        .label("Save Settings")
-        .margin_top(3)
-        .margin_bottom(12)
-        .margin_start(12)
-        .margin_end(12)
-        .build();
-    
-    network_settings_box.append(&testnet_row);
-    network_settings_box.append(&etherscan_api_key);
-    network_settings_box.append(&infura_key);
-    network_settings_box.append(&eth_network);
-    network_settings_box.append(&ethereum_node);
-    network_settings_box.append(&eth_incorrect_format);
-    network_settings_box.append(&token_contract);
-    network_settings_box.append(&add_token);
-    network_settings_box.append(&token_status);
-    network_settings_box.append(&btc_network);
-    network_settings_box.append(&btc_node);
-    network_settings_box.append(&btc_incorrect_format);
-    network_settings_box.append(&sol_network);
-    network_settings_box.append(&solana_node);
-    network_settings_box.append(&sol_incorrect_format);
-    network_settings_box.append(&spl_mint);
-    network_settings_box.append(&add_spl_token);
-    network_settings_box.append(&spl_status);
-    network_settings_box.append(&ltc_network);
-    network_settings_box.append(&litecoin_node);
-    network_settings_box.append(&ltc_incorrect_format);
-    network_settings_box.append(&save_button);
-
-    add_token.connect_clicked(clone!(
+    erc20.add.connect_clicked(clone!(
         #[strong] app_settings,
-        #[weak] token_contract,
-        #[weak] token_status,
+        #[weak(rename_to = token_contract)] erc20.entry,
+        #[weak(rename_to = token_status)] erc20.status,
         move |_| {
             let contract = token_contract.text().to_string();
             if eth_chain::validate_address(&contract).is_err() {
@@ -452,6 +352,7 @@ pub fn network_settings_box(app_settings: Arc<Mutex<ApplicationSettings>>) -> gt
                                 let _ = app_settings.lock().unwrap().write_config();
                                 token_status.set_label(&format!("Added {} ({})", token.symbol, token.address));
                                 token_contract.set_text("");
+                                ui::toast(&format!("Added {}", token.symbol));
                             }
                             Err(_) => {
                                 token_status.set_label("Could not read that contract. Check the address and Ethereum RPC.");
@@ -465,10 +366,10 @@ pub fn network_settings_box(app_settings: Arc<Mutex<ApplicationSettings>>) -> gt
         }
     ));
 
-    add_spl_token.connect_clicked(clone!(
+    spl.add.connect_clicked(clone!(
         #[strong] app_settings,
-        #[weak] spl_mint,
-        #[weak] spl_status,
+        #[weak(rename_to = spl_mint)] spl.entry,
+        #[weak(rename_to = spl_status)] spl.status,
         move |_| {
             let mint = spl_mint.text().to_string();
             if sol_chain::validate_address(&mint).is_err() {
@@ -508,6 +409,7 @@ pub fn network_settings_box(app_settings: Arc<Mutex<ApplicationSettings>>) -> gt
                                 let _ = app_settings.lock().unwrap().write_config();
                                 spl_status.set_label(&format!("Added {} ({})", token.symbol, token.address));
                                 spl_mint.set_text("");
+                                ui::toast(&format!("Added {}", token.symbol));
                             }
                             Err(_) => {
                                 spl_status.set_label("Could not read that mint. Check the address and Solana RPC.");
@@ -526,6 +428,7 @@ pub fn network_settings_box(app_settings: Arc<Mutex<ApplicationSettings>>) -> gt
         btc_incorrect_format.set_visible(false);
         sol_incorrect_format.set_visible(false);
         ltc_incorrect_format.set_visible(false);
+        let mut all_valid = true;
         if !etherscan_api_key.text().is_empty() {
             app_settings.lock().unwrap().etherscan_key = etherscan_api_key.text().to_string();
         }
@@ -537,6 +440,7 @@ pub fn network_settings_box(app_settings: Arc<Mutex<ApplicationSettings>>) -> gt
             app_settings.lock().unwrap().eth_node = eth_text;
         } else {
             eth_incorrect_format.set_visible(true);
+            all_valid = false;
         }
         if testnet.is_active() {
             app_settings.lock().unwrap().apply_test_networks(true);
@@ -575,6 +479,7 @@ pub fn network_settings_box(app_settings: Arc<Mutex<ApplicationSettings>>) -> gt
             app_settings.lock().unwrap().btc_node = btc_text;
         } else {
             btc_incorrect_format.set_visible(true);
+            all_valid = false;
         }
         let sol_text = solana_node.text().to_string();
         if sol_text.is_empty()
@@ -584,6 +489,7 @@ pub fn network_settings_box(app_settings: Arc<Mutex<ApplicationSettings>>) -> gt
             app_settings.lock().unwrap().sol_node = sol_text;
         } else {
             sol_incorrect_format.set_visible(true);
+            all_valid = false;
         }
         let ltc_text = litecoin_node.text().to_string();
         if ltc_text.is_empty()
@@ -593,12 +499,20 @@ pub fn network_settings_box(app_settings: Arc<Mutex<ApplicationSettings>>) -> gt
             app_settings.lock().unwrap().ltc_node = ltc_text;
         } else {
             ltc_incorrect_format.set_visible(true);
+            all_valid = false;
         }
         if !infura_key.text().is_empty() {
             app_settings.lock().unwrap().infura_key = infura_key.text().to_string();
         }
         let _ = app_settings.lock().unwrap().write_config();
+        // Saving used to be completely silent, so there was no way to tell whether the
+        // tap registered — or that one field had been rejected while the rest went through.
+        ui::toast(if all_valid {
+            "Network settings saved."
+        } else {
+            "Saved, but some fields were rejected. See the messages above."
+        });
     });
-    
-    return network_settings_box;
+
+    NetworkWidgets { _keep: () }
 }

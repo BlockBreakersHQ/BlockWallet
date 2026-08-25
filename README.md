@@ -8,7 +8,7 @@ Application ID: `org.BlockBreakers.Wallet`
 
 ## What works today
 
-- GTK4 / libadwaita phone-sized window (360×720) with Home / Wallets / Assets / Activity
+- GTK4 / libadwaita phone-sized window (360×720) with Home / Wallets / Assets / Activity, built from libadwaita's own patterns (preference groups, boxed lists, toasts, status pages) and following the system light/dark theme and accent colour
 - Password-gated encrypted store (XDG data dir)
 - Bitcoin BIP84 native SegWit (`bc1q…`) via BDK 1.x (Electrum/Esplora)
 - Ethereum BIP44 HD via Alloy: ETH and ERC-20 send/receive against a user RPC — mainnet, Sepolia, or an L2/sidechain (Arbitrum One, Base, Optimism, Polygon PoS, BNB Smart Chain, Avalanche C-Chain), same address across all of them
@@ -35,10 +35,10 @@ Already built: `target/debug/block_wallet` or `target/debug/block_wallet.exe`.
 
 ## Build
 
-Needs Rust 1.85+, GTK 4, and libadwaita development packages.
+Needs Rust 1.85+, GTK 4, and libadwaita **1.2+** development packages.
 
 ```sh
-# Debian / PureOS
+# Debian / PureOS (libadwaita 1.2+, so bookworm and later are fine)
 sudo apt install build-essential pkg-config libgtk-4-dev libadwaita-1-dev
 
 cargo build

@@ -1,5 +1,6 @@
 pub mod activity;
 pub mod nav;
+pub mod ui;
 pub mod trade;
 pub mod stack;
 pub mod wallets;

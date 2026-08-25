@@ -1,6 +1,5 @@
+use adw::prelude::*;
 use glib::{clone, ControlFlow};
-use gtk::prelude::*;
-use gtk::Orientation;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -8,36 +7,28 @@ use std::time::Duration;
 use crate::currencies::eth_chain;
 use crate::currencies::tokens::Token;
 use crate::views::currency::currency_view;
-use crate::views::home::generate_currency_box_static;
+use crate::views::home::{currency_row, generate_currency_box_static, RowItem};
 use crate::views::nav::{self, Nav};
+use crate::views::ui;
 use crate::ApplicationSettings;
 
 pub fn asset_view(
     app_settings: Arc<Mutex<ApplicationSettings>>,
 ) -> (gtk::Box, Nav, Arc<Mutex<ApplicationSettings>>) {
-    let list = gtk::Box::builder()
-        .orientation(Orientation::Vertical)
-        .spacing(4)
-        .build();
-    let banner = nav::banner("Tap an asset to send or receive. Zero balances stay listed so you can receive.");
-    let empty = gtk::Label::builder()
-        .label("Unlock a wallet to see assets. Receive still works offline.")
-        .wrap(true)
-        .css_classes(["currency-name"])
-        .margin_top(16)
-        .visible(false)
-        .build();
-    let rows = gtk::Box::builder()
-        .orientation(Orientation::Vertical)
-        .build();
+    let list = ui::page_body(12);
+    let banner = ui::notice("Tap an asset to send or receive. Zero balances stay listed so you can still receive.");
+    let empty = ui::empty_state(
+        "No assets yet",
+        "Unlock a wallet to see your assets. Receiving works even offline.",
+        "view-grid-symbolic",
+    );
+    empty.set_visible(false);
+    let rows = ui::vbox(2);
     list.append(&banner);
     list.append(&empty);
     list.append(&rows);
 
-    let scroll = gtk::ScrolledWindow::builder()
-        .vexpand(true)
-        .child(&list)
-        .build();
+    let scroll = ui::scroller(&list);
     let nav = Nav::new(&scroll);
     let page = nav.clone().wrap();
 
@@ -191,23 +182,41 @@ pub fn asset_view(
                 banner.set_label(if offline {
                     "A node is unreachable. You can still open an asset to receive."
                 } else {
-                    "Tap an asset to send or receive. Zero balances stay listed so you can receive."
+                    "Tap an asset to send or receive. Zero balances stay listed so you can still receive."
                 });
-                for (token, display) in items {
-                    let row = generate_currency_box_static(&token, &display);
-                    let gesture = gtk::GestureClick::new();
-                    let nav = nav.clone();
-                    let token_c = token.clone();
-                    let settings = snapshot.clone();
-                    gesture.connect_released(move |gesture, _, _, _| {
-                        gesture.set_state(gtk::EventSequenceState::Claimed);
-                        nav.push(
-                            "detail",
-                            &currency_view(token_c.clone(), settings.clone(), Some(nav.clone())),
-                        );
-                    });
-                    row.add_controller(gesture);
-                    rows.append(&row);
+                ui::set_notice_warning(&banner, offline);
+
+                // One boxed-list group per chain. A flat list of 4 chains' tokens reads as
+                // an undifferentiated pile once ERC-20s and SPL tokens are in it, and the
+                // chain is the thing that decides where a send actually goes.
+                for chain in ["btc", "eth", "sol", "ltc"] {
+                    let chain_items: Vec<&(Token, String)> =
+                        items.iter().filter(|(token, _)| token.chain == chain).collect();
+                    if chain_items.is_empty() {
+                        continue;
+                    }
+                    let group = ui::group(ui::chain_display_name(chain));
+                    for (token, display) in chain_items {
+                        let row = currency_row(&RowItem {
+                            token: token.clone(),
+                            amount: display.clone(),
+                            fiat: None,
+                        });
+                        let gesture = gtk::GestureClick::new();
+                        let nav = nav.clone();
+                        let token_c = token.clone();
+                        let settings = snapshot.clone();
+                        gesture.connect_released(move |gesture, _, _, _| {
+                            gesture.set_state(gtk::EventSequenceState::Claimed);
+                            nav.push(
+                                "detail",
+                                &currency_view(token_c.clone(), settings.clone(), Some(nav.clone())),
+                            );
+                        });
+                        row.add_controller(gesture);
+                        group.add(&row);
+                    }
+                    rows.append(&group);
                 }
                 ControlFlow::Continue
             }
