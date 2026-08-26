@@ -44,6 +44,7 @@
                 "sed -i -e 's|^Name=.*|Name=Block Wallet (Devel)|' -e 's|^Icon=.*|Icon=io.github.BlockBreakersHQ.BlockWallet.Devel|' -e 's|^StartupWMClass=.*|StartupWMClass=io.github.BlockBreakersHQ.BlockWallet.Devel|' /app/share/applications/io.github.BlockBreakersHQ.BlockWallet.Devel.desktop",
                 "sed -i -e 's|<id>.*</id>|<id>io.github.BlockBreakersHQ.BlockWallet.Devel</id>|' -e 's|<launchable type=\"desktop-id\">.*</launchable>|<launchable type=\"desktop-id\">io.github.BlockBreakersHQ.BlockWallet.Devel.desktop</launchable>|' -e 's|<icon type=\"stock\">.*</icon>|<icon type=\"stock\">io.github.BlockBreakersHQ.BlockWallet.Devel</icon>|' /app/share/metainfo/io.github.BlockBreakersHQ.BlockWallet.Devel.metainfo.xml",
                 "mkdir -p /app/share/blockwallet",
+                "install -Dm644 LICENSE /app/share/licenses/$FLATPAK_ID/LICENSE",
                 "cp -a Images /app/share/blockwallet/Images"
             ],
             "sources": [
