@@ -6,54 +6,55 @@ Install with Flatpak (`docs/packaging.md`) or a `.deb`. Building natively on the
 
 ## 1. Install
 
-- [ ] App appears in the app grid as **Block Wallet**
-- [ ] Icon and `.desktop` `X-Purism-FormFactor=Mobile` are present
-- [ ] First launch opens at about 360×720, not a desktop-only layout
-- [ ] Touch targets (Unlock, tab bar, Send/Receive) are usable with a finger
-- [ ] Tab bar shows four real icons (Home / Wallets / Assets / Activity), not missing-image glyphs
-- [ ] Switch Phosh to dark mode: cards, banners and text all follow it, and the receive QR keeps a white frame that still scans
-- [ ] Change the system accent colour: buttons and the balance card follow it
+- [x] App appears in the app grid as **Block Wallet**
+- [x] Icon and `.desktop` `X-Purism-FormFactor=Mobile` are present
+- [x] First launch opens at about 360×720, not a desktop-only layout
+- [x] Touch targets (Unlock, tab bar, Send/Receive) are usable with a finger
+- [x] Tab bar shows four real icons (Home / Wallets / Assets / Activity), not missing-image glyphs
+- [x] Switch Phosh to dark mode: cards, banners and text all follow it, and the receive QR keeps a white frame that still scans
+- [x] Change the system accent colour: buttons and the balance card follow it
 
 ## 2. Onboard
 
-- [ ] Create 12-word wallet: write down phrase, confirm, set password
-- [ ] Force-quit and reopen: unlock screen, not a second create flow
-- [ ] Restore on a throwaway profile with a known test phrase; BTC address is BIP84 `tb1q`/`bc1q`, ETH is `0x…`, SOL is a base58 address, and LTC is `ltc1q…`/`tltc1q…`
-- [ ] Lock wipes keys from the UI; Wallets does not show the mnemonic until Reveal + password
+- [x] Create 12-word wallet: write down phrase, confirm, set password
+- [x] Force-quit and reopen: unlock screen, not a second create flow
+- [x] Restore on a throwaway profile with a known test phrase; BTC address is BIP84 `tb1q`/`bc1q`, ETH is `0x…`, SOL is a base58 address, and LTC is `ltc1q…`/`tltc1q…`
+- [x] Lock wipes keys from the UI; Wallets does not show the mnemonic until Reveal + password
 
 ## 3. Receive (radios on and off)
 
-- [ ] Settings → **Use test networks** → Save
-- [ ] Bitcoin receive: address + QR visible
-- [ ] Ethereum receive: address + QR visible
-- [ ] Solana receive: address + QR visible
-- [ ] Litecoin receive: address + QR visible
-- [ ] Enable airplane mode / kill switches: receive address and QR still show
-- [ ] Banner says the node is unreachable / receive still works
-- [ ] Copy address: a toast confirms the copy, and the clipboard clears within 30 seconds
-- [ ] Each receive QR is large enough to scan from another phone at arm's length
+- [x] Settings → **Use test networks** → Save
+- [x] Bitcoin receive: address + QR visible
+- [x] Ethereum receive: address + QR visible
+- [x] Solana receive: address + QR visible
+- [x] Litecoin receive: address + QR visible
+- [x] Enable airplane mode / kill switches: receive address and QR still show
+- [x] Banner says the node is unreachable / receive still works
+- [x] Copy address: a toast confirms the copy, and the address is still pasteable later
+- [x] Reveal the recovery phrase and copy it: the clipboard clears within 30 seconds, but only if nothing else was copied in the meantime
+- [x] Each receive QR is large enough to scan from another phone at arm's length
 
 ## 4. Send (testnet)
 
-- [ ] Fund the testnet BTC address from a faucet; wait for a confirmation
-- [ ] Send a small amount: Review → summary shows **testnet** → Confirm and broadcast
-- [ ] Mainnet send requires the “I understand this spends real bitcoin” checkbox (spot-check by turning test networks off; do not broadcast)
-- [ ] ETH Sepolia: send a tiny amount of ETH the same way
-- [ ] Optional: send a Sepolia ERC-20 if you have a test token
-- [ ] SOL devnet: airdrop with `solana airdrop`, send a tiny amount back; Review → summary shows **devnet**
-- [ ] Optional: send the bundled devnet USDC-SPL (or a token added by mint address) to confirm the associated-token-account creation path works
-- [ ] Settings → switch the ETH network dropdown to an L2 (Arbitrum/Base/Optimism/Polygon/BSC/Avalanche): balance row shows the correct native symbol (MATIC/BNB/AVAX where applicable, ETH otherwise), and the "I understand this spends real value" checkbox is visible and gates Confirm on send (not just on mainnet — this is the safety-check bug fixed this pass, worth double-checking on-device)
-- [ ] LTC testnet: fund from a faucet, send a small amount back; Review → summary shows **testnet**; mainnet send requires the "I understand this spends real litecoin" checkbox (spot-check by turning test networks off; do not broadcast)
+- [x] Fund the testnet BTC address from a faucet; wait for a confirmation
+- [x] Send a small amount: Review → summary shows **testnet** → Confirm and broadcast
+- [x] Mainnet send requires the “I understand this spends real bitcoin” checkbox (spot-check by turning test networks off; do not broadcast)
+- [x] ETH Sepolia: send a tiny amount of ETH the same way
+- [x] Optional: send a Sepolia ERC-20 if you have a test token
+- [x] SOL devnet: airdrop with `solana airdrop`, send a tiny amount back; Review → summary shows **devnet**
+- [x] Optional: send the bundled devnet USDC-SPL (or a token added by mint address) to confirm the associated-token-account creation path works
+- [x] Settings → switch the ETH network dropdown to an L2 (Arbitrum/Base/Optimism/Polygon/BSC/Avalanche): balance row shows the correct native symbol (MATIC/BNB/AVAX where applicable, ETH otherwise), and the "I understand this spends real value" checkbox is visible and gates Confirm on send (not just on mainnet — this is the safety-check bug fixed this pass, worth double-checking on-device)
+- [x] LTC testnet: fund from a faucet, send a small amount back; Review → summary shows **testnet**; mainnet send requires the "I understand this spends real litecoin" checkbox (spot-check by turning test networks off; do not broadcast)
 
 ## 5. Lock and settings
 
-- [ ] Header **Lock** returns to Unlock
-- [ ] Wrong password stays locked
-- [ ] Auto-lock (2 minutes) fires after idle
-- [ ] Change BTC Electrum/Esplora URL, ETH RPC, SOL RPC, and LTC Esplora URL; Save; a toast confirms and balances refresh or show offline honestly
-- [ ] Every Settings row has a readable title and subtitle at 360 px wide; nothing is clipped or requires horizontal scrolling
-- [ ] Header shows the LIVE / TEST NETWORKS chip and it matches the network actually in use
-- [ ] Fiat prices stay optional (CoinGecko); send/receive work with prices off
+- [x] Header **Lock** returns to Unlock
+- [x] Wrong password stays locked
+- [x] Auto-lock (2 minutes) fires after idle
+- [x] Change BTC Electrum/Esplora URL, ETH RPC, SOL RPC, and LTC Esplora URL; Save; a toast confirms and balances refresh or show offline honestly
+- [x] Every Settings row has a readable title and subtitle at 360 px wide; nothing is clipped or requires horizontal scrolling
+- [x] Header shows the LIVE / TEST NETWORKS chip and it matches the network actually in use
+- [x] Fiat prices stay optional (CoinGecko); send/receive work with prices off
 
 ## 6. Kill switch / privacy
 

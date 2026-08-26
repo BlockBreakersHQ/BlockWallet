@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use crate::configuration::application_settings::*;
 use crate::views::ui;
-use crate::views::{activity, assets, header_bar, home, login, wallets};
+use crate::views::{activity, assets, header_bar, home, login, trade, wallets};
 
 pub fn stack_view(window: &ApplicationWindow, app_settings_orig: ApplicationSettings) {
     let app_settings = Arc::new(Mutex::new(app_settings_orig));
@@ -30,6 +30,11 @@ pub fn stack_view(window: &ApplicationWindow, app_settings_orig: ApplicationSett
     stack
         .add_titled(&asset_box, Some("Assets"), "Assets")
         .set_icon_name(Some("view-grid-symbolic"));
+
+    let (trade_box, app_settings) = trade::trade_view(app_settings);
+    stack
+        .add_titled(&trade_box, Some("Swap"), "Swap")
+        .set_icon_name(Some("object-flip-horizontal-symbolic"));
 
     let activity_box = activity::activity_view(app_settings.clone());
     stack
@@ -71,24 +76,24 @@ pub fn stack_view(window: &ApplicationWindow, app_settings_orig: ApplicationSett
     ));
 
     let last_input = Arc::new(Mutex::new(Instant::now()));
-    let motion = gtk::EventControllerMotion::new();
-    motion.connect_motion(clone!(
-        #[strong] last_input,
-        move |_, _, _| {
-            *last_input.lock().unwrap() = Instant::now();
-        }
-    ));
-    window.add_controller(motion);
 
-    let keys = gtk::EventControllerKey::new();
-    keys.connect_key_pressed(clone!(
+    // Every input event counts as activity, not just pointer motion and key presses.
+    //
+    // This is a phone. Tapping the screen produces touch events, and there is no physical
+    // keyboard, so the previous motion+key controllers saw nothing at all during normal use
+    // and the wallet locked itself while it was actively being used. `EventControllerLegacy`
+    // sees the raw event stream, and the capture phase means a child widget consuming the
+    // event (a button, an entry) does not hide it from the idle timer.
+    let activity = gtk::EventControllerLegacy::new();
+    activity.set_propagation_phase(gtk::PropagationPhase::Capture);
+    activity.connect_event(clone!(
         #[strong] last_input,
-        move |_, _, _, _| {
+        move |_, _| {
             *last_input.lock().unwrap() = Instant::now();
             glib::Propagation::Proceed
         }
     ));
-    window.add_controller(keys);
+    window.add_controller(activity);
 
     glib::timeout_add_seconds_local(
         15,

@@ -13,10 +13,24 @@ use crate::views::ui;
 pub fn lock_and_show(window: ApplicationWindow, app_settings: Arc<Mutex<ApplicationSettings>>) {
     app_settings.lock().unwrap().lock_store();
     let snapshot = app_settings.lock().unwrap().clone();
-    login_view(window, snapshot);
+    // Auto-lock must not steal focus. If the user is in another app when the timer fires,
+    // swapping in the lock screen is right but raising the window over what they are doing is
+    // not: the wallet would jump to the front unprompted. The content is replaced either way,
+    // so the lock screen is what they find when they come back.
+    let was_active = window.is_active();
+    build_login_view(window, snapshot, was_active);
 }
 
+/// Show the unlock screen and bring the window forward.
+///
+/// For the paths where the user is asking for it: app start, and finishing onboarding.
 pub fn login_view(window: ApplicationWindow, app_settings: ApplicationSettings) {
+    build_login_view(window, app_settings, true);
+}
+
+/// `present` is false when the lock screen is being installed behind the user's back, i.e. by
+/// the idle timer while they are in another app.
+fn build_login_view(window: ApplicationWindow, app_settings: ApplicationSettings, present: bool) {
     let header = adw::HeaderBar::new();
     header.add_css_class("flat");
     header.set_title_widget(Some(&gtk::Label::new(None)));
@@ -93,9 +107,13 @@ pub fn login_view(window: ApplicationWindow, app_settings: ApplicationSettings) 
     login_box.append(&ui::scroller(&clamp));
 
     window.set_content(Some(&ui::with_toasts(&login_box)));
-    window.present();
-    // Focus the field so unlocking is type-and-Enter, not tap-then-type.
-    input.grab_focus();
+    if present {
+        window.present();
+        // Focus the field so unlocking is type-and-Enter, not tap-then-type. Skipped when the
+        // window is not being raised, since grabbing focus there would summon the on-screen
+        // keyboard over whatever the user is actually doing.
+        input.grab_focus();
+    }
     let app_settings = Arc::new(Mutex::new(app_settings));
 
     button.connect_clicked(clone!(

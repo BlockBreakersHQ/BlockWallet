@@ -779,8 +779,13 @@ fn eth_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
                 return;
             };
             let to = receive_address.text().to_string();
-            if let Err(_) = eth_chain::validate_address(&to) {
-                error.set_label("Recipient must be a 0x Ethereum address. ENS is not supported yet.");
+            // Only a syntactic check here. An ENS name cannot be validated without a network
+            // call, and the UI thread must not block on one, so resolution happens in the
+            // worker below and the real verdict comes back with the quote.
+            if eth_chain::validate_address(&to).is_err()
+                && !crate::currencies::ens::looks_like_name(&to)
+            {
+                error.set_label("Recipient must be a 0x Ethereum address or an ENS name.");
                 error.set_visible(true);
                 return;
             }
@@ -800,16 +805,22 @@ fn eth_send_view(app_settings: ApplicationSettings, token: Token) -> gtk::Box {
             let token = (*token).clone();
             let (sender, receiver) = crate::configuration::ui_channel::unbounded();
             thread::spawn(move || {
-                let result = eth_chain::prepare_send(
-                    &from,
-                    &to,
-                    &amount_text,
-                    &token,
-                    &node,
-                    &network_name,
-                    &infura_key,
-                    &fee_label,
-                );
+                // Resolve first, then quote against the resolved address. The plan therefore
+                // carries the 0x address, and the review card shows that rather than the name,
+                // so the user confirms what will actually be signed.
+                let result = eth_chain::resolve_recipient(&to, &node, &network_name, &infura_key)
+                    .and_then(|(address, _name)| {
+                        eth_chain::prepare_send(
+                            &from,
+                            &format!("{address:?}"),
+                            &amount_text,
+                            &token,
+                            &node,
+                            &network_name,
+                            &infura_key,
+                            &fee_label,
+                        )
+                    });
                 let _ = sender.send_blocking(result);
             });
             crate::configuration::ui_channel::attach(

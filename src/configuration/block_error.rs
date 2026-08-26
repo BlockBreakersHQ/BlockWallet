@@ -60,3 +60,48 @@ impl Error {
         Error::New(format!("ERROR: {:?}.", error))
     }
 }
+
+/// Human-readable rendering, for text that reaches the user.
+///
+/// `Debug` stays as it was, because the log format and several existing views depend on the
+/// `ERROR: "...".` shape that `new` produces. `Display` is the clean form: no prefix, no
+/// wrapping quotes, no trailing full stop. Views that currently strip those by hand can use
+/// this instead.
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::IOError(error) => write!(f, "{error}"),
+            Error::GlibError(error) => write!(f, "{error}"),
+            Error::UTF8Error(error) => write!(f, "{error}"),
+            Error::Crate(which, message) => write!(f, "{which}: {message}"),
+            Error::New(message) => {
+                let trimmed = message
+                    .trim_start_matches("ERROR: ")
+                    .trim_end_matches('.')
+                    .trim_matches('"');
+                write!(f, "{trimmed}")
+            }
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn display_strips_the_debug_wrapping_that_new_adds() {
+        let error = Error::new("something went wrong".to_string());
+        assert_eq!(format!("{error}"), "something went wrong");
+        // Debug keeps its existing shape, which the log format and older views rely on.
+        assert!(format!("{error:?}").contains("ERROR: "));
+    }
+
+    #[test]
+    fn display_of_a_wrapped_crate_error_names_the_crate() {
+        let error = Error::Crate("serde_json", "trailing comma".to_string());
+        assert_eq!(format!("{error}"), "serde_json: trailing comma");
+    }
+}

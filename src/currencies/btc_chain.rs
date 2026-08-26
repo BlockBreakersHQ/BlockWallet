@@ -18,7 +18,13 @@ use bdk_wallet::{KeychainKind, SignOptions, Wallet};
 use crate::configuration::block_error;
 use crate::currencies::fees::{check_fee_is_sane, clamp_fee_rate};
 
-const STOP_GAP: usize = 20;
+/// Consecutive unused addresses BDK scans past before concluding the wallet ends there.
+///
+/// Lowered from 20. Every extra gap slot is more HTTP requests per scan, and this wallet only
+/// ever derives index 0 of each keychain, so a deep gap search buys nothing and was a large
+/// part of what pushed the sync over Blockstream's rate limit. Five still tolerates a store
+/// restored from elsewhere having used a few addresses.
+const STOP_GAP: usize = 5;
 const PARALLEL_REQUESTS: usize = 1;
 /// Matches the ceiling the shared HTTP client applies to every other chain. BDK builds its
 /// own transports, so without this the Bitcoin backends would be the one path with no
@@ -111,6 +117,11 @@ pub struct PreparedSend {
     pub fee_sats: u64,
     pub fee_rate_sat_vb: f32,
     pub total_sats: u64,
+    /// THORChain routing instruction, carried as an `OP_RETURN` output.
+    ///
+    /// `None` for an ordinary send. When present this is what the network actually obeys,
+    /// so it is fee-accounted by the builder and re-checked in `swap::safety` before signing.
+    pub memo: Option<String>,
 }
 
 impl PreparedSend {
@@ -349,12 +360,21 @@ fn finish_psbt(
     script: ScriptBuf,
     amount_sats: u64,
     fee_rate_sat_vb: f32,
+    memo: Option<&str>,
 ) -> Result<(Psbt, u64), block_error::Error> {
     let fee_rate = FeeRate::from_sat_per_vb(fee_rate_sat_vb.ceil() as u64).ok_or_else(|| {
         block_error::Error::new("invalid fee rate".to_string())
     })?;
     let mut builder = wallet.build_tx();
     builder.add_recipient(script, Amount::from_sat(amount_sats));
+    if let Some(memo) = memo {
+        // THORChain routing instruction. Relay policy caps OP_RETURN at 80 bytes, and a
+        // transaction over that is simply never relayed, so it is refused here rather than
+        // broadcast into silence.
+        let bytes = bdk_wallet::bitcoin::script::PushBytesBuf::try_from(memo.as_bytes().to_vec())
+            .map_err(|_| block_error::Error::new("memo is too long for an OP_RETURN output".to_string()))?;
+        builder.add_data(&bytes);
+    }
     builder.fee_rate(fee_rate);
     builder.nlocktime(LockTime::ZERO);
     let psbt = builder
@@ -376,6 +396,25 @@ pub fn prepare_send(
     amount_sats: u64,
     fee_rate_sat_vb: f32,
 ) -> Result<PreparedSend, block_error::Error> {
+    prepare_send_with_memo(mnemonic, passphrase, network_name, btc_node, to, amount_sats, fee_rate_sat_vb, None)
+}
+
+/// Build a payment that may carry a THORChain memo.
+///
+/// A swap on this chain is an ordinary send to the protocol vault with the routing
+/// instruction attached, so it shares coin selection, the fee ceiling and change handling
+/// rather than getting a parallel implementation that could drift.
+#[allow(clippy::too_many_arguments)]
+pub fn prepare_send_with_memo(
+    mnemonic: &str,
+    passphrase: &str,
+    network_name: &str,
+    btc_node: &str,
+    to: &str,
+    amount_sats: u64,
+    fee_rate_sat_vb: f32,
+    memo: Option<&str>,
+) -> Result<PreparedSend, block_error::Error> {
     if amount_sats == 0 {
         return Err(block_error::Error::new("amount must be greater than 0".to_string()));
     }
@@ -393,6 +432,7 @@ pub fn prepare_send(
         address.script_pubkey(),
         amount_sats,
         fee_rate_sat_vb,
+        memo,
     )?;
     check_fee_is_sane(fee, amount_sats)?;
     Ok(PreparedSend {
@@ -402,6 +442,7 @@ pub fn prepare_send(
         fee_sats: fee,
         fee_rate_sat_vb,
         total_sats: amount_sats.saturating_add(fee),
+        memo: memo.map(str::to_string),
     })
 }
 
@@ -431,6 +472,7 @@ pub fn sign_and_broadcast(
         address.script_pubkey(),
         plan.amount_sats,
         plan.fee_rate_sat_vb,
+        plan.memo.as_deref(),
     )?;
     // Re-checked here, not just at prepare time: the fee is rebuilt from a fresh sync, so a
     // node that inflated its estimate between review and confirm would otherwise slip past.
@@ -524,6 +566,7 @@ mod tests {
             fee_sats: 250,
             fee_rate_sat_vb: 2.0,
             total_sats: 100_250,
+            memo: None,
         };
         let text = prepared.summary();
         assert!(text.contains("0.00100000 BTC"));

@@ -33,8 +33,8 @@ that is the whole backup.
 **Your keys never leave the device.** The store is a single encrypted file — Argon2id at
 64 MiB for the password, ChaCha20-Poly1305 for the contents — written owner-only under your
 XDG data directory, and replaced atomically so an interrupted save cannot corrupt it.
-Passwords must be at least 12 characters, because anyone who copies the file can attack it
-offline at their own pace. Every copy of your keys is wiped from memory when it goes out of
+Anyone who copies that file can attack it offline at their own pace, so how strong a password
+you pick is what protects it. Every copy of your keys is wiped from memory when it goes out of
 scope, not just the one the lock button reaches. The Flatpak sandbox is *not* granted access
 to your home directory, so even the packaged build can only see its own data. Logs are short
 context strings that never contain a phrase, key or password.
@@ -92,14 +92,56 @@ stablecoin), and you can add any ERC-20 by contract or any SPL token by mint add
 
 Import from a mnemonic, a WIF, a raw private key, or an existing encrypted `.dic`.
 
-Swapping is **not** in this release.
+## Swaps
+
+Swaps are non-custodial. No company ever holds your coins, and every transaction is signed on
+the device.
+
+Several venues are asked at once and their offers ranked by what you actually receive:
+
+| Venue | Covers | Custody |
+| --- | --- | --- |
+| **LI.FI** | Same-chain swaps on Ethereum and every supported L2 | Settles in one transaction |
+| **Jupiter** | Same-chain swaps on Solana, SOL and SPL tokens | Settles in one transaction |
+| **THORChain** | Cross-chain: BTC, LTC and ETH-family assets | A protocol vault holds the inbound side until the outbound side settles |
+
+Bitcoin and Litecoin have no on-chain DEX, so THORChain is the only route for them. That means
+the funds are briefly out of your control between the two legs, which the app says plainly on
+the offer and again on the review screen before you can confirm.
+
+What the wallet checks before it will sign, on every offer:
+
+- the proceeds are addressed to your own wallet, verified against the THORChain memo itself
+  rather than the provider's claim about it;
+- a minimum output exists and implies no more slippage than you allowed;
+- the amount clears the provider's own minimum, since THORChain forfeits rather than refunds
+  anything below it;
+- the quote has not expired;
+- ERC-20 approvals are for exactly the swap amount and only to the contract being called, so
+  no standing allowance is left behind;
+- a Solana transaction built elsewhere is payable only by your own account.
+
+Providers that decline say why rather than quietly disappearing. THORChain in particular
+refuses while the network is halted, which it currently is.
+
+Swap quotes go through a THORNode endpoint you can set in **Settings -> Swaps**.
 
 ## Install
 
-### Flatpak (recommended, and the only option on PureOS Byzantium)
+### Flatpak (recommended)
 
-Byzantium is Debian bullseye-based and has no GTK4 or libadwaita, so a native build cannot
-work there — the Flatpak brings its own runtime.
+The Flatpak carries its own GNOME 50 runtime, so it does not depend on what the distribution
+ships and behaves the same on every PureOS release.
+
+| PureOS | Base | Native GTK4 / libadwaita | Native build |
+| --- | --- | --- | --- |
+| Byzantium | Debian bullseye | none | not possible |
+| **Crimson** | Debian bookworm | GTK 4.8.3, libadwaita 1.2.2 | possible, but see [From source](#from-source) |
+
+Verified on a Librem 5 running **PureOS 11 (Crimson)**, kernel 6.12.0-1-librem5: the aarch64
+bundle installs, appears in the Phosh app grid, and runs with no errors on stderr and a flat
+57 MB resident. Note that this exercises the runtime's GTK 4.22, not Crimson's own 4.8.3.
+Those are separate code paths, and only the Flatpak one has been run on hardware.
 
 From a built bundle:
 
@@ -129,6 +171,19 @@ sudo apt install build-essential pkg-config libgtk-4-dev libadwaita-1-dev libssl
 cargo build --release
 cargo test
 ```
+
+**On PureOS Crimson the distribution's Rust is too old.** Crimson's `rustc` is 1.63 and this
+crate needs 1.85, so install a toolchain from [rustup](https://rustup.rs) rather than
+`apt install rustc cargo`. The GTK side is fine: Crimson's GTK 4.8.3 and libadwaita 1.2.2
+both clear the floor, and `libgtk-4-dev` / `libadwaita-1-dev` are in its repositories.
+
+That libadwaita floor is deliberate. `Cargo.toml` pins the `v1_2` feature and
+`ui::add_switch_row` hand-builds what `AdwSwitchRow` would give, precisely so this still
+compiles against the 1.2.2 that Crimson ships. Raising it to `v1_4` would break the native
+build on the device this app targets.
+
+Building on the phone itself is slow: 4 cores and 3 GB of RAM against roughly 580 crates.
+Prefer building on a faster machine and copying the result over.
 
 Windows (MSYS2 mingw64 + GNU rustc) — plain `cargo run` uses MSVC and has no
 `pkg-config`/GTK, so use the wrapper:

@@ -29,8 +29,10 @@ impl OnboardingError {
     pub fn as_label(&self) -> &'static str {
         match self {
             Self::EmptyPassword => "Password must not be empty.",
+            // Unreachable while `wallet_store::MIN_PASSWORD_LEN` is 1, since an empty password
+            // is caught above. Kept wired up so restoring a floor is a one-constant change.
             Self::PasswordTooShort => {
-                "Password must be at least 12 characters. A short one can be guessed offline by anyone who copies the wallet file."
+                "Password is too short. A short one can be guessed offline by anyone who copies the wallet file."
             }
             Self::PasswordMismatch => "Passwords do not match.",
             Self::PhraseMismatch => "Recovery phrase does not match.",
@@ -81,6 +83,7 @@ pub fn validate_password(password: &str, repeat: &str) -> Result<(), OnboardingE
     }
     Ok(())
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -146,9 +149,11 @@ mod tests {
 
     #[test]
     fn password_must_survive_an_offline_guessing_attack() {
-        // A PIN is the case worth naming: the store file can be copied off a seized phone
-        // and attacked without any rate limit this app could impose.
-        assert_eq!(validate_password("1234", "1234"), Err(OnboardingError::PasswordTooShort));
-        assert_eq!(validate_password("secret", "secret"), Err(OnboardingError::PasswordTooShort));
+        // No length floor is enforced: `wallet_store::MIN_PASSWORD_LEN` is 1 so that throwaway
+        // test wallets are quick to make. Short passwords are accepted deliberately.
+        assert!(validate_password("1234", "1234").is_ok());
+        assert!(validate_password("secret", "secret").is_ok());
+        // An empty password is still refused, which is the one rule that always applies.
+        assert_eq!(validate_password("", ""), Err(OnboardingError::EmptyPassword));
     }
 }

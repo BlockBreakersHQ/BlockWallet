@@ -37,11 +37,15 @@ const MAX_ACCEPTED_P: u32 = 4;
 
 /// Shortest password `create` will accept.
 ///
-/// Argon2id makes each guess expensive, not impossible. A four-digit PIN is ~10^4 guesses;
-/// at even 100 ms per guess that is under twenty minutes on the phone itself, and far less
-/// on a GPU rig holding a copy of the file. Twelve characters is the point where the KDF's
-/// cost per guess actually starts to matter.
-pub const MIN_PASSWORD_LEN: usize = 12;
+/// Set to 1, i.e. only an empty password is refused, at the maintainer's request so that
+/// throwaway test wallets are quick to create.
+///
+/// The trade-off, recorded here rather than lost: the store file can be copied off the device
+/// and attacked offline with no rate limit this app can impose, so the password is the only
+/// thing between a stolen file and the keys. Argon2id at 64 MiB makes each guess expensive,
+/// but a four-digit PIN is only ~10^4 guesses and stays cheap regardless. Raise this to 12 if
+/// the build is ever aimed at people holding real funds.
+pub const MIN_PASSWORD_LEN: usize = 1;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct KdfParams {
@@ -86,6 +90,9 @@ pub struct StoreSettings {
     pub sol_node: String,
     #[serde(default)]
     pub ltc_node: String,
+    /// THORNode endpoint for swap quotes. Empty means the built-in public default.
+    #[serde(default)]
+    pub thornode_url: String,
     #[serde(default)]
     pub btc_network: String,
     #[serde(default)]
@@ -193,6 +200,7 @@ impl Default for PayloadV1 {
                 eth_node: String::new(),
                 sol_node: String::new(),
                 ltc_node: String::new(),
+                thornode_url: String::new(),
                 btc_network: String::new(),
                 eth_network: String::new(),
                 sol_network: String::new(),
@@ -471,6 +479,7 @@ mod tests {
                 eth_node: "https://example.invalid".to_string(),
                 sol_node: "https://sol.example.invalid".to_string(),
                 ltc_node: "https://ltc.example.invalid".to_string(),
+                thornode_url: "https://thornode.example.invalid".to_string(),
                 btc_network: "bitcoin".to_string(),
                 eth_network: "sepolia".to_string(),
                 sol_network: "devnet".to_string(),
@@ -553,20 +562,26 @@ mod tests {
     }
 
     #[test]
-    fn short_password_rejected() {
+    fn short_passwords_are_accepted_at_the_current_floor() {
+        // `MIN_PASSWORD_LEN` is 1 by choice, so throwaway test wallets are quick to make.
+        // This test tracks that decision rather than asserting a rule; if the floor is ever
+        // raised back to 12 it should fail loudly and be updated alongside it.
         let path = temp_path();
-        // A PIN is the case this exists for.
-        assert!(StoreSession::create(&path, "1234", &PayloadV1::new()).is_err());
-        assert!(StoreSession::create(&path, "hunter2", &PayloadV1::new()).is_err());
-        assert!(check_password_strength("just-long-enough").is_ok());
+        assert_eq!(MIN_PASSWORD_LEN, 1);
+        assert!(check_password_strength("1234").is_ok());
+        assert!(check_password_strength("hunter2").is_ok());
+        assert!(StoreSession::create(&path, "1234", &PayloadV1::new()).is_ok());
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
     fn password_length_counts_characters_not_bytes() {
-        // 12 characters, 36 bytes in UTF-8. Must be accepted.
-        assert!(check_password_strength("パスワードパスワードパス").is_ok());
-        // 11 characters must not be.
-        assert!(check_password_strength("パスワードパスワードパ").is_err());
+        // Multi-byte input must be measured in characters, not bytes, so a non-Latin
+        // passphrase is never held to a longer standard than the same length of ASCII.
+        // Matters again the moment the floor is raised above 1.
+        assert_eq!("パスワードパ".chars().count(), 6);
+        assert_eq!("パスワードパ".len(), 18);
+        assert!(check_password_strength("パスワードパ").is_ok());
     }
 
     #[test]

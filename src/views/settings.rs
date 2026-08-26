@@ -97,6 +97,16 @@ pub fn settings_view(window: ApplicationWindow, app_settings: Arc<Mutex<Applicat
 
     // ------------------------------------------------------------------- display
     let display = ui::group("Display");
+    let theme = ui::combo_row("Appearance", &["Follow system", "Light", "Dark"]);
+    theme.set_selected(crate::configuration::theme::load() as u32);
+    // Applied and saved the moment it is picked, rather than waiting for the Save button. A
+    // theme choice you cannot see the result of until you press something else is a guess.
+    theme.connect_selected_notify(move |row| {
+        let choice = crate::configuration::theme::Appearance::from_index(row.selected());
+        choice.apply();
+        crate::configuration::theme::save(choice);
+    });
+    display.add(&theme);
     // `add_switch_row` adds its row on the spot, so it has to come before the rows that
     // should sit under it.
     let prices = ui::add_switch_row(
@@ -289,6 +299,20 @@ fn network_settings(page: &adw::PreferencesPage, app_settings: Arc<Mutex<Applica
     let spl = add_token_controls(&spl_group, "Mint address", "base58");
     page.add(&spl_group);
 
+    // ---- Swaps ----
+    let swap_group = ui::group_with_description(
+        "Swaps",
+        "Cross-chain swaps route through THORChain. Same-chain swaps use a DEX aggregator and need no endpoint here.",
+    );
+    let thornode = adw::EntryRow::builder().title("THORNode URL").build();
+    thornode.set_text(&app_settings.lock().unwrap().thornode_url);
+    let thornode_incorrect_format = ui::error_label(
+        "THORNode must be an https URL, or empty for the public default. Plaintext http:// is only accepted for a node on this device.",
+    );
+    swap_group.add(&thornode);
+    swap_group.add(&thornode_incorrect_format);
+    page.add(&swap_group);
+
     // ---- Litecoin ----
     let ltc_group = ui::group("Litecoin");
     let ltc_network = ui::combo_row("Network", &["Mainnet", "Testnet"]);
@@ -429,6 +453,7 @@ fn network_settings(page: &adw::PreferencesPage, app_settings: Arc<Mutex<Applica
         btc_incorrect_format.set_visible(false);
         sol_incorrect_format.set_visible(false);
         ltc_incorrect_format.set_visible(false);
+        thornode_incorrect_format.set_visible(false);
         let mut all_valid = true;
         if !etherscan_api_key.text().is_empty() {
             app_settings.lock().unwrap().etherscan_key = etherscan_api_key.text().to_string();
@@ -479,6 +504,13 @@ fn network_settings(page: &adw::PreferencesPage, app_settings: Arc<Mutex<Applica
             app_settings.lock().unwrap().sol_node = sol_text;
         } else {
             sol_incorrect_format.set_visible(true);
+            all_valid = false;
+        }
+        let thornode_text = thornode.text().to_string();
+        if endpoint::validate(&thornode_text, false).is_ok() {
+            app_settings.lock().unwrap().thornode_url = thornode_text;
+        } else {
+            thornode_incorrect_format.set_visible(true);
             all_valid = false;
         }
         let ltc_text = litecoin_node.text().to_string();

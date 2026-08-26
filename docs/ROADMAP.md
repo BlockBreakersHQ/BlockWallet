@@ -203,12 +203,19 @@ L2s shipped ahead of schedule — see Phase 7 above. Solana shipped ahead of sch
 
 L2s (see Phase 7) and Solana (see Phase 6) already shipped. Still open: Lightning (unless BTC-only users demand it first), BIP86 Taproot, WalletConnect v2, watch-only, and an in-app bridging UI for the L2s (deliberately not built yet — Phase 7 is send/receive only, no bridge).
 
-### P3 — swap / DeFi, no KYC
+### P3 — swap / DeFi, no KYC — **done**
 
-- Trade as **local-signed** swap (user RPC + a router that is not 1inch portal KYC)
-- Only tokens the user holds, on the selected chain
-- SOL swaps only after SOL send/receive
-- Do **not** restore `api.1inch.io/v5.0`
+Shipped as local-signed swaps across three venues, compared side by side: LI.FI for same-chain
+EVM, Jupiter for Solana, THORChain for cross-chain BTC/LTC/ETH. All non-custodial, none
+requiring an API key, and `api.1inch.io/v5.0` was deleted rather than restored.
+
+Still open here:
+
+- No end-to-end run against a live THORChain: the network's global `HALTTRADING` is set, so the
+  vault-payment path is unit-tested but has never moved real coins.
+- Streaming swaps are quoted with THORChain's defaults rather than tuned.
+- No in-app tracking of a cross-chain swap after broadcast; the outbound leg has to be checked
+  on a block explorer.
 
 ### P4 — hardware / platform
 

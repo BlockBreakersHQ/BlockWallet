@@ -84,6 +84,12 @@ pub fn wallet_store_path() -> io::Result<PathBuf> {
     Ok(data_dir()?.join("Config.dic"))
 }
 
+/// Light/dark preference. Plaintext and outside the encrypted store, because it has to be
+/// readable before the user unlocks in order to theme the unlock screen itself.
+pub fn appearance_path() -> io::Result<PathBuf> {
+    Ok(config_dir()?.join("appearance"))
+}
+
 pub fn network_config_path() -> io::Result<PathBuf> {
     Ok(config_dir()?.join("network.yml"))
 }

@@ -952,3 +952,23 @@ mod tests {
         assert!(text.contains("creates one"));
     }
 }
+
+/// Broadcast an already-signed transaction.
+///
+/// Used by the swap path, where the transaction was built by an aggregator and signed by
+/// `swap::solana_tx` rather than assembled here. Kept separate from `sign_and_broadcast` so
+/// that function keeps its guarantee of only ever sending transactions this wallet built.
+pub fn broadcast_signed(
+    signed_tx: &[u8],
+    sol_node: &str,
+    network_name: &str,
+) -> Result<String, block_error::Error> {
+    let network = parse_network(network_name);
+    let rpc = resolve_rpc(sol_node, network);
+    let encoded = bs58::encode(signed_tx).into_string();
+    let result = rpc_call(&rpc, "sendTransaction", json!([encoded]))?;
+    result
+        .as_str()
+        .map(str::to_string)
+        .ok_or_else(|| block_error::Error::new("unexpected sendTransaction response".into()))
+}

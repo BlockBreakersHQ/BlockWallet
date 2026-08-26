@@ -53,6 +53,10 @@ fn load_css() {
 }
 
 pub fn build_ui(app: &Application) {
+    // Before any window exists, so the unlock screen already has the chosen colours rather
+    // than flashing the system theme and correcting itself after login.
+    block_wallet::configuration::theme::apply_saved();
+
     let tokens = initialization::load_tokens();
 
     let window = ApplicationWindow::builder()

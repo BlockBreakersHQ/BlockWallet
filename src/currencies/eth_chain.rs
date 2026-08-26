@@ -196,14 +196,24 @@ pub fn chain_id(network: EthNetwork) -> u64 {
     }
 }
 
+/// Public endpoints used when the user has not supplied their own.
+///
+/// Health-checked with `eth_chainId` against each chain's declared id. Two were replaced after
+/// going dead: `eth.llamarpc.com` returns HTTP 521, and `polygon-rpc.com` now answers 401 and
+/// requires a key. Both had made their networks completely non-functional (no balance, no
+/// history, no sending, no ENS) while looking like ordinary connectivity failures. publicnode
+/// serves both and was already the Sepolia default.
+///
+/// Worth re-checking periodically: a dead default is indistinguishable from being offline
+/// unless someone looks.
 pub fn default_rpc(network: EthNetwork) -> &'static str {
     match network {
-        EthNetwork::Mainnet => "https://eth.llamarpc.com",
+        EthNetwork::Mainnet => "https://ethereum-rpc.publicnode.com",
         EthNetwork::Sepolia => "https://ethereum-sepolia-rpc.publicnode.com",
         EthNetwork::ArbitrumOne => "https://arb1.arbitrum.io/rpc",
         EthNetwork::Base => "https://mainnet.base.org",
         EthNetwork::Optimism => "https://mainnet.optimism.io",
-        EthNetwork::PolygonPos => "https://polygon-rpc.com",
+        EthNetwork::PolygonPos => "https://polygon-bor-rpc.publicnode.com",
         EthNetwork::BnbSmartChain => "https://bsc-dataseed.binance.org",
         EthNetwork::AvalancheCChain => "https://api.avax.network/ext/bc/C/rpc",
     }
@@ -574,10 +584,23 @@ async fn sync_account_async(
         }
     }
 
+    // Native transfers move no tokens, so they emit no logs and `erc20_history` cannot see
+    // them. They need an indexer. Etherscan is used when a key is configured; otherwise
+    // Blockscout, which serves the same Etherscan-compatible shape without one.
+    //
+    // This used to be gated on the key alone, so a wallet with no Etherscan key simply had no
+    // native history at all — the Activity list stayed empty however much ETH arrived or was
+    // sent, which read as a bug in sending rather than a missing data source.
     let mut history = erc20_history(&provider, account, &tokens).await;
-    if !etherscan_key.trim().is_empty() {
-        if let Ok(native) = native_history_etherscan(account, chain_id(network), &etherscan_key, &symbol) {
-            history.extend(native);
+    let native = if !etherscan_key.trim().is_empty() {
+        native_history_etherscan(account, chain_id(network), &etherscan_key, &symbol)
+    } else {
+        native_history_blockscout(account, network, &symbol)
+    };
+    match native {
+        Ok(rows) => history.extend(rows),
+        Err(why) => {
+            crate::configuration::logging::warn(&format!("native history unavailable: {why}"))
         }
     }
     history.sort_by(|a, b| b.confirmations.cmp(&a.confirmations).then(b.txid.cmp(&a.txid)));
@@ -650,6 +673,43 @@ async fn erc20_history<P: Provider>(
     items
 }
 
+/// Blockscout instance serving each network's Etherscan-compatible `txlist` API.
+///
+/// Used when no Etherscan key is configured. Blockscout answers unauthenticated and returns
+/// the same JSON shape, so the parser below is shared. `None` where no public instance is
+/// known, in which case native history is simply unavailable and says so.
+pub fn blockscout_base(network: EthNetwork) -> Option<&'static str> {
+    match network {
+        EthNetwork::Mainnet => Some("https://eth.blockscout.com"),
+        EthNetwork::Sepolia => Some("https://eth-sepolia.blockscout.com"),
+        EthNetwork::ArbitrumOne => Some("https://arbitrum.blockscout.com"),
+        EthNetwork::Base => Some("https://base.blockscout.com"),
+        EthNetwork::Optimism => Some("https://optimism.blockscout.com"),
+        EthNetwork::PolygonPos => Some("https://polygon.blockscout.com"),
+        // Blockscout has no public instance this wallet can rely on for these two.
+        EthNetwork::BnbSmartChain | EthNetwork::AvalancheCChain => None,
+    }
+}
+
+fn native_history_blockscout(
+    account: Address,
+    network: EthNetwork,
+    native_symbol: &str,
+) -> Result<Vec<EthHistoryItem>, block_error::Error> {
+    let base = blockscout_base(network).ok_or_else(|| {
+        block_error::Error::new(
+            "no keyless history source for this network; add an Etherscan API key in Settings"
+                .to_string(),
+        )
+    })?;
+    let url = format!(
+        "{base}/api?module=account&action=txlist&address={account:?}&page=1&offset=20&sort=desc"
+    );
+    let text = crate::configuration::http::get_text(&url)?;
+    let json: serde_json::Value = serde_json::from_str(&text)?;
+    Ok(parse_txlist(&json, account, native_symbol))
+}
+
 fn native_history_etherscan(
     account: Address,
     chain_id: u64,
@@ -661,8 +721,17 @@ fn native_history_etherscan(
     );
     let text = crate::configuration::http::get_text(&url)?;
     let json: serde_json::Value = serde_json::from_str(&text)?;
+    Ok(parse_txlist(&json, account, native_symbol))
+}
+
+/// Parse the Etherscan-compatible `txlist` response shared by Etherscan and Blockscout.
+fn parse_txlist(
+    json: &serde_json::Value,
+    account: Address,
+    native_symbol: &str,
+) -> Vec<EthHistoryItem> {
     let Some(rows) = json.get("result").and_then(|value| value.as_array()) else {
-        return Ok(Vec::new());
+        return Vec::new();
     };
     let account_lower = format!("{account:?}").to_ascii_lowercase();
     let mut items = Vec::new();
@@ -694,7 +763,7 @@ fn native_history_etherscan(
             confirmations,
         });
     }
-    Ok(items)
+    items
 }
 
 pub fn fetch_fee_tiers(eth_node: &str, network_name: &str, infura_key: &str) -> FeeTiers {
@@ -912,6 +981,211 @@ async fn sign_and_broadcast_async(
     Ok(format!("{:#x}", pending.tx_hash()))
 }
 
+/// Resolve an ENS name to an address.
+///
+/// Always queried against the chain that actually hosts the registry, which for every network
+/// except Sepolia is mainnet, regardless of where the wallet is currently pointed. The result
+/// is a plain address and is valid on any EVM chain.
+pub fn resolve_ens(
+    name: &str,
+    eth_node: &str,
+    network_name: &str,
+    infura_key: &str,
+) -> Result<Address, block_error::Error> {
+    use crate::currencies::ens;
+
+    let normalized = ens::normalize(name)?;
+    let node = ens::namehash(&normalized);
+
+    let wallet_network = parse_network(network_name);
+    let registry_network = ens::registry_network(wallet_network);
+    // A user-supplied RPC is only reused when it is already pointed at the chain the registry
+    // lives on. Otherwise the built-in endpoint for that chain is used, since querying a Base
+    // RPC for a mainnet registry entry would simply find nothing.
+    let rpc = if registry_network == wallet_network {
+        resolve_rpc(eth_node, wallet_network, infura_key)
+    } else {
+        default_rpc(registry_network).to_string()
+    };
+
+    let registry = Address::from_str(ens::ENS_REGISTRY)
+        .map_err(|_| block_error::Error::new("bad ENS registry address".to_string()))?;
+
+    match block_on(async move {
+        let provider = http_provider(&rpc)?;
+
+        let resolver_raw = eth_call(&provider, registry, Bytes::from(ens::encode_resolver_call(node))).await?;
+        let resolver = ens::decode_address_word(resolver_raw.as_ref()).ok_or_else(|| {
+            block_error::Error::new(format!("{normalized} has no ENS resolver"))
+        })?;
+
+        let addr_raw = eth_call(&provider, resolver, Bytes::from(ens::encode_addr_call(node))).await?;
+        ens::decode_address_word(addr_raw.as_ref()).ok_or_else(|| {
+            block_error::Error::new(format!("{normalized} does not resolve to an address"))
+        })
+    }) {
+        Ok(Ok(address)) => Ok(address),
+        Ok(Err(err)) => Err(err),
+        Err(err) => Err(err),
+    }
+}
+
+/// Turn whatever was typed into a recipient address.
+///
+/// Accepts a raw `0x…` address unchanged, or resolves an ENS name. Returned alongside the
+/// resolved address is the name it came from, when there was one, so the UI can show the user
+/// what a name actually resolved to before they confirm.
+pub fn resolve_recipient(
+    input: &str,
+    eth_node: &str,
+    network_name: &str,
+    infura_key: &str,
+) -> Result<(Address, Option<String>), block_error::Error> {
+    use crate::currencies::ens;
+
+    if ens::looks_like_name(input) {
+        let address = resolve_ens(input, eth_node, network_name, infura_key)?;
+        Ok((address, Some(input.trim().to_ascii_lowercase())))
+    } else {
+        Ok((validate_address(input)?, None))
+    }
+}
+
+/// ABI-encode `approve(address,uint256)`.
+///
+/// Selector is asserted against its own keccak hash in the tests, rather than trusted from
+/// memory, because an approval sent to the wrong function signature either reverts or does
+/// something unintended with the user's token balance.
+pub fn encode_approve(spender: Address, amount: U256) -> Bytes {
+    const SELECTOR_APPROVE: [u8; 4] = [0x09, 0x5e, 0xa7, 0xb3];
+    let mut data = Vec::with_capacity(4 + 64);
+    data.extend_from_slice(&SELECTOR_APPROVE);
+    data.extend_from_slice(&B256::left_padding_from(spender.as_slice())[..]);
+    data.extend_from_slice(&amount.to_be_bytes::<32>());
+    Bytes::from(data)
+}
+
+/// Read the current ERC-20 allowance from `owner` to `spender`.
+pub fn fetch_allowance(
+    token: &str,
+    owner: &str,
+    spender: &str,
+    eth_node: &str,
+    network_name: &str,
+    infura_key: &str,
+) -> Result<U256, block_error::Error> {
+    const SELECTOR_ALLOWANCE: [u8; 4] = [0xdd, 0x62, 0xed, 0x3e];
+    let network = parse_network(network_name);
+    let rpc = resolve_rpc(eth_node, network, infura_key);
+    let contract = Address::from_str(token.trim())
+        .map_err(|e| block_error::Error::new(format!("invalid token contract: {e}")))?;
+    let owner = validate_address(owner)?;
+    let spender = validate_address(spender)?;
+
+    let mut data = Vec::with_capacity(4 + 64);
+    data.extend_from_slice(&SELECTOR_ALLOWANCE);
+    data.extend_from_slice(&B256::left_padding_from(owner.as_slice())[..]);
+    data.extend_from_slice(&B256::left_padding_from(spender.as_slice())[..]);
+
+    match block_on(async move {
+        let provider = http_provider(&rpc)?;
+        let raw = eth_call(&provider, contract, Bytes::from(data)).await?;
+        Ok::<U256, block_error::Error>(decode_u256(raw.as_ref()))
+    }) {
+        Ok(Ok(value)) => Ok(value),
+        Ok(Err(err)) => Err(err),
+        Err(err) => Err(err),
+    }
+}
+
+/// Send an arbitrary contract call, signed locally.
+///
+/// This is what executes a swap: an aggregator or the THORChain router hands back calldata
+/// this wallet cannot read, and the protections around it are the checks in
+/// `swap::safety` plus the caller's own gas ceiling, not any inspection of `data`.
+///
+/// `chain_id` is taken from the plan rather than the current network setting, so a
+/// transaction built for one chain can never be replayed onto another.
+#[allow(clippy::too_many_arguments)]
+pub fn send_contract_call(
+    private_key: &str,
+    to: &str,
+    data: &str,
+    value: U256,
+    gas_limit: u64,
+    chain_id: u64,
+    eth_node: &str,
+    network_name: &str,
+    infura_key: &str,
+) -> Result<String, block_error::Error> {
+    let network = parse_network(network_name);
+    if chain_id != self::chain_id(network) {
+        return Err(block_error::Error::new(
+            "this transaction was built for a different network than the wallet is on"
+                .to_string(),
+        ));
+    }
+    let rpc = resolve_rpc(eth_node, network, infura_key);
+    let signer = signer_from_key(private_key)?;
+    let target = validate_address(to)?;
+    let payload = decode_hex_payload(data)?;
+
+    match block_on(send_contract_call_async(
+        signer, target, payload, value, gas_limit, chain_id, rpc,
+    )) {
+        Ok(Ok(hash)) => Ok(hash),
+        Ok(Err(err)) => Err(err),
+        Err(err) => Err(err),
+    }
+}
+
+fn decode_hex_payload(data: &str) -> Result<Bytes, block_error::Error> {
+    let text = data.trim();
+    let stripped = text.strip_prefix("0x").or_else(|| text.strip_prefix("0X")).unwrap_or(text);
+    if stripped.is_empty() {
+        return Ok(Bytes::new());
+    }
+    let bytes = hex::decode(stripped)
+        .map_err(|_| block_error::Error::new("provider returned unreadable calldata".to_string()))?;
+    Ok(Bytes::from(bytes))
+}
+
+async fn send_contract_call_async(
+    signer: PrivateKeySigner,
+    to: Address,
+    data: Bytes,
+    value: U256,
+    gas_limit: u64,
+    chain_id: u64,
+    rpc: String,
+) -> Result<String, block_error::Error> {
+    let from = signer.address();
+    let provider = signed_provider(&rpc, signer)?;
+    let nonce = provider
+        .get_transaction_count(from)
+        .await
+        .map_err(|e| block_error::Error::new(format!("could not read nonce: {e}")))?;
+    let tiers = fetch_fee_tiers_async(rpc.clone()).await.unwrap_or_default();
+    let (max_fee_per_gas, max_priority_fee_per_gas) = fee_from_tier(&tiers, "medium");
+
+    let tx = TransactionRequest::default()
+        .with_from(from)
+        .with_to(to)
+        .with_chain_id(chain_id)
+        .with_nonce(nonce)
+        .with_gas_limit(gas_limit)
+        .with_max_fee_per_gas(max_fee_per_gas)
+        .with_max_priority_fee_per_gas(max_priority_fee_per_gas)
+        .with_value(value)
+        .with_input(data);
+
+    let pending = provider
+        .send_transaction(tx)
+        .await
+        .map_err(|e| block_error::Error::new(format!("broadcast failed: {e}")))?;
+    Ok(format!("{:#x}", pending.tx_hash()))
+}
+
 pub fn fetch_token_metadata(
     contract: &str,
     eth_node: &str,
@@ -982,7 +1256,12 @@ mod tests {
         assert_eq!(parse_network("sepolia"), EthNetwork::Sepolia);
         assert_eq!(parse_network(""), EthNetwork::Mainnet);
         assert_eq!(chain_id(EthNetwork::Sepolia), 11155111);
-        assert!(resolve_rpc("", EthNetwork::Mainnet, "").contains("llama"));
+        // Asserts the shape rather than one vendor's hostname; the previous version pinned
+        // "llama" and so had to be edited when that endpoint died.
+        for network in [EthNetwork::Mainnet, EthNetwork::Sepolia] {
+            let rpc = resolve_rpc("", network, "");
+            assert!(rpc.starts_with("https://"), "{network:?} default is not https: {rpc}");
+        }
         assert!(resolve_rpc("", EthNetwork::Sepolia, "").contains("sepolia"));
         assert_eq!(
             resolve_rpc("https://my.node", EthNetwork::Mainnet, "abc"),

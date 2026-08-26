@@ -263,6 +263,11 @@ pub struct PreparedSend {
     pub total_sats: u64,
     pub change_sats: u64,
     pub utxos: Vec<SelectedUtxo>,
+    /// THORChain routing instruction, carried as an `OP_RETURN` output.
+    ///
+    /// `None` for an ordinary send. When present this is what the network actually obeys,
+    /// so it is fee-accounted here and re-checked in `swap::safety` before signing.
+    pub memo: Option<String>,
 }
 
 impl PreparedSend {
@@ -471,7 +476,7 @@ pub fn sync_account(address: &str, ltc_node: &str, network_name: &str) -> Result
     Ok(LtcSyncState { confirmed_sats, pending_sats, receive_address: address.to_string(), history, offline: false })
 }
 
-fn placeholder_tx(num_inputs: usize, num_outputs: usize) -> Transaction {
+fn placeholder_tx(num_inputs: usize, num_outputs: usize, memo_len: Option<usize>) -> Transaction {
     let mut inputs = Vec::with_capacity(num_inputs);
     for _ in 0..num_inputs {
         let mut witness = Witness::new();
@@ -489,11 +494,29 @@ fn placeholder_tx(num_inputs: usize, num_outputs: usize) -> Transaction {
     for _ in 0..num_outputs {
         outputs.push(TxOut { value: Amount::ZERO, script_pubkey: ScriptBuf::new_p2wpkh(&placeholder_hash) });
     }
+    if let Some(len) = memo_len {
+        // An OP_RETURN output carries no value but does occupy vsize, so a swap that did
+        // not price it here would build an underpaid transaction that never confirms.
+        outputs.push(TxOut { value: Amount::ZERO, script_pubkey: op_return_script(&vec![0u8; len]) });
+    }
     Transaction { version: Version::TWO, lock_time: LockTime::ZERO, input: inputs, output: outputs }
 }
 
-fn estimate_fee(num_inputs: usize, num_outputs: usize, fee_rate_sat_vb: f32) -> u64 {
-    let vsize = placeholder_tx(num_inputs, num_outputs).vsize();
+/// Build the `OP_RETURN` output that carries a THORChain memo.
+///
+/// Bitcoin and Litecoin relay policy caps this at 80 bytes, which THORChain's own quote
+/// response also states. Over that the transaction is simply not relayed, which for a swap
+/// means the inbound payment never arrives.
+fn op_return_script(memo: &[u8]) -> ScriptBuf {
+    let mut bytes = Vec::with_capacity(memo.len() + 2);
+    bytes.push(0x6a); // OP_RETURN
+    bytes.push(memo.len() as u8); // direct push, valid for the <= 75 byte range we allow
+    bytes.extend_from_slice(memo);
+    ScriptBuf::from(bytes)
+}
+
+fn estimate_fee(num_inputs: usize, num_outputs: usize, fee_rate_sat_vb: f32, memo_len: Option<usize>) -> u64 {
+    let vsize = placeholder_tx(num_inputs, num_outputs, memo_len).vsize();
     (vsize as f32 * fee_rate_sat_vb).ceil() as u64
 }
 
@@ -505,9 +528,34 @@ pub fn prepare_send(
     network_name: &str,
     fee_label: &str,
 ) -> Result<PreparedSend, block_error::Error> {
+    prepare_send_with_memo(from, to, amount_text, ltc_node, network_name, fee_label, None)
+}
+
+/// Build a payment that may carry a THORChain memo.
+///
+/// A swap on this chain is exactly an ordinary send to the protocol vault with the routing
+/// instruction attached as `OP_RETURN`, so it shares the coin selection, fee ceiling and
+/// change handling rather than getting a parallel implementation that could drift.
+pub fn prepare_send_with_memo(
+    from: &str,
+    to: &str,
+    amount_text: &str,
+    ltc_node: &str,
+    network_name: &str,
+    fee_label: &str,
+    memo: Option<&str>,
+) -> Result<PreparedSend, block_error::Error> {
     let network = parse_network(network_name);
     validate_address(from, network)?;
     validate_address(to, network)?;
+    if let Some(memo) = memo {
+        if memo.len() > 80 {
+            return Err(block_error::Error::new(
+                "memo is too long to fit in an OP_RETURN output".to_string(),
+            ));
+        }
+    }
+    let memo_len = memo.map(str::len);
     let amount_sats = ltc_to_sats(amount_text)?;
     if amount_sats == 0 {
         return Err(block_error::Error::new("amount must be greater than 0".into()));
@@ -521,12 +569,12 @@ pub fn prepare_send(
     // number of inputs selected turns out higher than assumed, retry with the corrected,
     // larger target. Strictly increasing target over a finite UTXO set guarantees this
     // terminates (either it converges, or selection eventually fails with "not enough funds").
-    let mut target = amount_sats.saturating_add(estimate_fee(1, 2, fee_rate));
+    let mut target = amount_sats.saturating_add(estimate_fee(1, 2, fee_rate, memo_len));
     let (selected, total_in, fee_sats) = loop {
         let Some((sel, total)) = select_utxos_largest_first(&candidates, target) else {
             return Err(block_error::Error::new("not enough LTC to cover the amount and fee".into()));
         };
-        let fee = estimate_fee(sel.len(), 2, fee_rate);
+        let fee = estimate_fee(sel.len(), 2, fee_rate, memo_len);
         let needed = amount_sats.saturating_add(fee);
         if total >= needed {
             break (sel, total, fee);
@@ -555,6 +603,7 @@ pub fn prepare_send(
             .into_iter()
             .map(|u| SelectedUtxo { txid: u.txid, vout: u.vout, value_sats: u.value_sats })
             .collect(),
+        memo: memo.map(str::to_string),
     })
 }
 
@@ -609,9 +658,22 @@ pub fn sign_and_broadcast(
         prevout_amounts.push(Amount::from_sat(u.value_sats));
     }
 
+    // Output order follows THORChain's own instruction: the vault first, change back to self
+    // second, the memo's OP_RETURN last. An ordinary send simply has no third output.
     let mut outputs = vec![TxOut { value: Amount::from_sat(plan.amount_sats), script_pubkey: to_script }];
     if plan.change_sats > 0 {
         outputs.push(TxOut { value: Amount::from_sat(plan.change_sats), script_pubkey: from_script.clone() });
+    }
+    if let Some(memo) = &plan.memo {
+        if memo.len() > 80 {
+            return Err(block_error::Error::new(
+                "memo is too long to fit in an OP_RETURN output".to_string(),
+            ));
+        }
+        outputs.push(TxOut {
+            value: Amount::ZERO,
+            script_pubkey: op_return_script(memo.as_bytes()),
+        });
     }
 
     let mut tx = Transaction { version: Version::TWO, lock_time: LockTime::ZERO, input: inputs, output: outputs };
@@ -740,9 +802,9 @@ mod tests {
 
     #[test]
     fn vsize_grows_with_input_and_output_count() {
-        let one_in = placeholder_tx(1, 2).vsize();
-        let two_in = placeholder_tx(2, 2).vsize();
-        let two_in_one_out = placeholder_tx(2, 1).vsize();
+        let one_in = placeholder_tx(1, 2, None).vsize();
+        let two_in = placeholder_tx(2, 2, None).vsize();
+        let two_in_one_out = placeholder_tx(2, 1, None).vsize();
         assert!(two_in > one_in, "{two_in} vs {one_in}");
         assert!(two_in > two_in_one_out, "{two_in} vs {two_in_one_out}");
         // A single P2WPKH-in/P2WPKH-out(x2) transaction should land in a realistic byte range.
@@ -811,6 +873,7 @@ mod tests {
             fee_rate_sat_vb: 2.0,
             total_sats: 100_250,
             change_sats: 0,
+            memo: None,
             utxos: vec![SelectedUtxo {
                 txid: "0000000000000000000000000000000000000000000000000000000000000001".to_string(),
                 vout: 0,

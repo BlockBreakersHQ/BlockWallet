@@ -25,7 +25,18 @@ async-channel = "2"
 alloy = { version = "1", default-features = false, features = ["std", "providers", "reqwest", "rpc-types", "signer-local", "signer-mnemonic", "network"] }
 argon2 = { version = "0.5", features = ["std"] }
 bdk_wallet = { version = "1", features = ["keys-bip39"] }
-bdk_esplora = { version = "0.20", default-features = false, features = ["blocking"] }
+# Must be an https-capable feature, not plain `blocking`. The bare `blocking` feature builds
+# the minreq backend with no TLS at all, so every request to an https Esplora server failed
+# immediately with `HttpsFeatureNotEnabled`. The balance loop reported that as "offline",
+# which made a build-time misconfiguration look exactly like a network outage. Every default
+# Esplora endpoint this wallet ships is https, so Bitcoin sync could never have worked.
+#
+# `-native` rather than `-rustls` here, despite the rustls preference for bdk_electrum below.
+# esplora-client's rustls feature pins rustls 0.21, an end-of-life line that no longer gets
+# security fixes, and a wallet should not be handling node connections over one. native-tls
+# is already in the tree via reqwest, so this adds no crate at all and introduces no third
+# TLS stack.
+bdk_esplora = { version = "0.20", default-features = false, features = ["blocking-https-native"] }
 # `ring` rather than the default `aws-lc-rs` rustls provider. aws-lc-rs drags in
 # aws-lc-sys, which needs cmake and builds a large C library — a real problem on the
 # Librem 5 (4 slow cores, 3 GB RAM) and an extra build-dep for the .deb. `use-rustls-ring`

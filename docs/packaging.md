@@ -13,8 +13,24 @@ so this check only matters for a `.deb` / native install. On the phone:
 pkg-config --modversion gtk4 libadwaita-1
 ```
 
-PureOS **Crimson** satisfies this. PureOS **Byzantium** is Debian bullseye-based and
-predates libadwaita, so a native build there is not expected to work — use Flatpak.
+PureOS **Byzantium** is Debian bullseye-based and predates libadwaita, so a native build
+there cannot work. Use Flatpak.
+
+PureOS **Crimson** satisfies the GTK side. Measured on a Librem 5 running Crimson
+(`/etc/debian_version` 12.0, so bookworm-based rather than trixie):
+
+| | Crimson ships | Needed |
+| --- | --- | --- |
+| GTK4 | 4.8.3 | 4.6+ |
+| libadwaita | 1.2.2 | 1.2+ |
+| rustc | **1.63** | **1.85** |
+
+The Rust version is the blocker, not the GTK stack. A native or `.deb` build on Crimson needs
+a rustup toolchain; `apt install rustc cargo` is 22 minor versions short.
+
+Note also that libadwaita is exactly 1.2.2, i.e. the floor. The `v1_2` feature pin in
+`Cargo.toml` is what keeps the native path buildable there, and raising it would break this
+device.
 
 ## Build cost
 

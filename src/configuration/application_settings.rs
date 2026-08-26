@@ -22,6 +22,16 @@ use crate::configuration::wallet_store::{
     BtcRecord, CustomTokenRecord, EthRecord, LtcRecord, PayloadV1, SolRecord, StoreSession, StoreSettings,
 };
 
+/// How often the Bitcoin balance is refreshed.
+///
+/// Much longer than the other chains on purpose. A Bitcoin refresh is a BDK `full_scan`, which
+/// is tens of HTTP requests rather than the one or two an Ethereum or Solana poll costs. At the
+/// old 30-second cadence that came to thousands of requests an hour, and Blockstream's public
+/// Esplora allows 700 per hour per IP: the wallet rate-limited itself within minutes, showed
+/// "offline", and looked like a connectivity fault. Three minutes keeps a single wallet
+/// comfortably inside the budget while still feeling live for a chain with ten-minute blocks.
+const BTC_SYNC_INTERVAL_SECS: u64 = 180;
+
 #[derive(Clone)]
 pub struct ApplicationSettings {
     pub config_path         : PathBuf,
@@ -44,6 +54,7 @@ pub struct ApplicationSettings {
     pub btc_node            : String,
     pub sol_node            : String,
     pub ltc_node            : String,
+    pub thornode_url        : String,
     pub btc_network         : String,
     pub eth_network         : String,
     pub sol_network         : String,
@@ -227,6 +238,7 @@ impl ApplicationSettings {
             btc_node            : String::new(),
             sol_node            : String::new(),
             ltc_node            : String::new(),
+            thornode_url        : String::new(),
             btc_network         : String::from("bitcoin"),
             eth_network         : String::from("mainnet"),
             sol_network         : String::from("mainnet"),
@@ -672,6 +684,7 @@ impl ApplicationSettings {
                 eth_node: self.eth_node.clone(),
                 sol_node: self.sol_node.clone(),
                 ltc_node: self.ltc_node.clone(),
+                thornode_url: self.thornode_url.clone(),
                 btc_network: self.btc_network.clone(),
                 eth_network: self.eth_network.clone(),
                 sol_network: self.sol_network.clone(),
@@ -748,6 +761,9 @@ impl ApplicationSettings {
         }
         if !payload.settings.sol_node.is_empty() {
             self.sol_node = payload.settings.sol_node;
+        }
+        if !payload.settings.thornode_url.is_empty() {
+            self.thornode_url = payload.settings.thornode_url;
         }
         if !payload.settings.ltc_node.is_empty() {
             self.ltc_node = payload.settings.ltc_node;
@@ -962,6 +978,7 @@ impl ApplicationSettings {
             let (sender, receiver) = crate::configuration::ui_channel::unbounded();
     
             thread::spawn(move || {
+                let mut last_good: Option<String> = None;
                 loop {
                     if epoch.load(Ordering::SeqCst) != start_epoch {
                         break;
@@ -971,7 +988,7 @@ impl ApplicationSettings {
                         run_before = true;
                     }
                     else {
-                        thread::sleep(Duration::from_secs(30));
+                        thread::sleep(Duration::from_secs(BTC_SYNC_INTERVAL_SECS));
                     }
                     if mnemonic.is_empty() {
                         if sender.send_blocking(String::from("Uninitialized")).is_err() {
@@ -987,9 +1004,24 @@ impl ApplicationSettings {
                     ) {
                         Ok(state) => {
                             *history_arc.lock().unwrap() = state.history.clone();
-                            state.balance_display()
+                            let display = state.balance_display();
+                            last_good = Some(display.clone());
+                            display
                         }
-                        Err(_) => String::from("offline"),
+                        Err(why) => {
+                            // Logged rather than discarded. A build-time misconfiguration, a rate
+                            // limit and a genuinely unreachable node all end up as the same word
+                            // on screen, so without this there is nothing to tell them apart.
+                            // Chain errors carry endpoints and status codes, never key material.
+                            crate::configuration::logging::warn(&format!("balance sync failed: {why}"));
+                            // Keep showing the last figure that was actually confirmed, marked
+                            // stale, rather than replacing it with the word "offline". A single
+                            // rate-limited poll should not make a real balance vanish.
+                            match &last_good {
+                                Some(previous) => format!("{previous} (offline)"),
+                                None => String::from("offline"),
+                            }
+                        }
                     };
                     if sender.send_blocking(label).is_err() {
                         break;
@@ -1069,7 +1101,14 @@ impl ApplicationSettings {
                             }
                             state.balance_display()
                         }
-                        Err(_) => String::from("offline"),
+                        Err(why) => {
+                            // Logged rather than discarded. A build-time misconfiguration, a rate
+                            // limit and a genuinely unreachable node all end up as the same word
+                            // on screen, so without this there is nothing to tell them apart.
+                            // Chain errors carry endpoints and status codes, never key material.
+                            crate::configuration::logging::warn(&format!("balance sync failed: {why}"));
+                            String::from("offline")
+                        }
                     };
                     if sender.send_blocking(label).is_err() {
                         break;
@@ -1145,7 +1184,14 @@ impl ApplicationSettings {
                             }
                             state.balance_display()
                         }
-                        Err(_) => String::from("offline"),
+                        Err(why) => {
+                            // Logged rather than discarded. A build-time misconfiguration, a rate
+                            // limit and a genuinely unreachable node all end up as the same word
+                            // on screen, so without this there is nothing to tell them apart.
+                            // Chain errors carry endpoints and status codes, never key material.
+                            crate::configuration::logging::warn(&format!("balance sync failed: {why}"));
+                            String::from("offline")
+                        }
                     };
                     if sender.send_blocking(label).is_err() {
                         break;
@@ -1211,7 +1257,14 @@ impl ApplicationSettings {
                             *history_arc.lock().unwrap() = state.history.clone();
                             state.balance_display()
                         }
-                        Err(_) => String::from("offline"),
+                        Err(why) => {
+                            // Logged rather than discarded. A build-time misconfiguration, a rate
+                            // limit and a genuinely unreachable node all end up as the same word
+                            // on screen, so without this there is nothing to tell them apart.
+                            // Chain errors carry endpoints and status codes, never key material.
+                            crate::configuration::logging::warn(&format!("balance sync failed: {why}"));
+                            String::from("offline")
+                        }
                     };
                     if sender.send_blocking(label).is_err() {
                         break;
