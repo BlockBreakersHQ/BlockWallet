@@ -1,6 +1,6 @@
 # Roadmap
 
-Self-custody GTK4/libadwaita wallet for the Librem 5. MVP is **BTC + ETH L1 send/receive/lock**, packaged, then QA on the phone. Solana (native + SPL, Phase 6), EVM L2s/sidechains (Phase 7), and Litecoin (Phase 8) all landed ahead of the original post-MVP schedule. Phase 9 rebuilt the UI on libadwaita's own patterns.
+Self-custody GTK4/libadwaita wallet for the Librem 5. MVP is **BTC + ETH L1 send/receive/lock**, packaged, then QA on the phone. Solana (native + SPL, Phase 6), EVM L2s/sidechains (Phase 7), and Litecoin (Phase 8) all landed ahead of the original post-MVP schedule. Phase 9 rebuilt the UI on libadwaita's own patterns. Phase 10 was a security review of the send path and key storage; Phase 11 collects the bugs that on-device testing found afterwards.
 
 ## Run
 
@@ -56,18 +56,18 @@ Override wallet files with `BLOCKWALLET_HOME`. Flatpak: `flatpak run io.github.B
 - History from the wallet, not `blockchain.info/getreceivedbyaddress`
 - Review → confirm send UI; settings persist `btc_network` and `btc_node`
 
-Desktop GTK send path is implemented. **Librem 5 testnet send** is still the device QA item in Phase 5.
+Desktop GTK send path is implemented, and Librem 5 testnet send was exercised on hardware during the v0.1.0 checklist run.
 
 ### Phase 3 — Ethereum — **done**
 
 - Alloy HTTP provider against user RPC (Infura optional; public default if empty)
 - Native ETH transfer signed locally; ERC-20 `balanceOf` / `transfer` (not Etherscan `tokentx`)
 - Bundled list: ETH, USDC, USDT, DAI, WBTC; Sepolia USDC; add-by-contract
-- History via `eth_getLogs` Transfer events; optional Etherscan v2 if a key is set
+- History via `eth_getLogs` Transfer events for ERC-20s. Native transfers emit no logs, so they come from an indexer: Etherscan v2 when a key is set, otherwise Blockscout, which needs none
 - Wallet address is never overwritten
 - Review → confirm send with fee and token symbol; `eth_network` + RPC persist
 
-### Phase 4 — UI and settings — **done** (layout sized at 360×720; not yet tapped on the L5)
+### Phase 4 — UI and settings — **done** (verified on a Librem 5 running PureOS 11 Crimson, Aug 2026)
 
 - Named list → detail → send stacks (no widget-tree walking)
 - Home/Assets from node balances, not 1inch quotes
@@ -77,7 +77,7 @@ Desktop GTK send path is implemented. **Librem 5 testnet send** is still the dev
 - Offline / node-unreachable banners; receive still works
 - Touch-sized rows and tab bar; content clamp for a docked window
 
-### Phase 5 — Package and harden — **done** (installable in tree; **not** tagged until phone QA)
+### Phase 5 — Package and harden — **done** (checklist passed on hardware; not yet git-tagged)
 
 - Flatpak manifest: network for RPC, no `--filesystem=home`
 - Debian/PureOS sketch under `packaging/debian/`
@@ -87,11 +87,13 @@ Desktop GTK send path is implemented. **Librem 5 testnet send** is still the dev
 - Settings: **Use test networks** (BTC testnet + ETH Sepolia)
 - Checklist: [LIBREM5.md](LIBREM5.md)
 - Images resolved from `/app/share/blockwallet` and `/usr/share/blockwallet` when installed
-- Crate version **0.1.0**; tag after the phone checklist
+- Crate version **0.1.0**. The phone checklist has passed; the git tag is still outstanding
 
-**MVP leftover (hard gate):** run [LIBREM5.md](LIBREM5.md) on the real Librem 5, then `git tag v0.1.0`.
+**MVP gate: met.** [LIBREM5.md](LIBREM5.md) passed in full on a Librem 5 running PureOS 11
+(Crimson) in August 2026. `git tag v0.1.0` is the one step still outstanding, and the tree has
+moved on since that run — see Phases 10 and 11.
 
-### Phase 6 — Solana (native + SPL) — **done** (desktop; not yet tapped on the L5)
+### Phase 6 — Solana (native + SPL) — **done** (verified on a Librem 5 running PureOS 11 Crimson, Aug 2026)
 
 - One BIP39 mnemonic also derives Solana via SLIP-0010 ed25519, hardened-only `m/44'/501'/0'/0'`
 - Key material: `ed25519-dalek` + `slip10_ed25519`, addresses/keys in base58 (`bs58`) — no `solana-sdk` dependency
@@ -105,9 +107,9 @@ Desktop GTK send path is implemented. **Librem 5 testnet send** is still the dev
 - Extra accounts increment the hardened account index (`m/44'/501'/n'/0'`), matching Phantom/Solflare
 - Token registry keys became chain-namespaced (`"eth:USDC"`, `"sol:USDC"`, …) so same-symbol tokens on different chains (e.g. USDC as ERC-20 vs SPL) don't collide in the token map — `Token.chain` is now the dispatch key used across Views instead of bare symbol matching
 - Not yet added: fiat pricing for SPL tokens beyond native SOL, an SPL history parser for tokens outside the configured registry, a bundled SOL icon asset
-- Librem 5 device QA (create/restore, receive, devnet send of SOL and the bundled SPL token) is a new checklist section in [LIBREM5.md](LIBREM5.md), same gate as BTC/ETH
+- Librem 5 device QA (create/restore, receive, devnet send of SOL and the bundled SPL token) passed on hardware in the v0.1.0 checklist run
 
-### Phase 7 — EVM L2s/sidechains — **done** (desktop; not yet tapped on the L5)
+### Phase 7 — EVM L2s/sidechains — **done** (verified on a Librem 5 running PureOS 11 Crimson, Aug 2026)
 
 - Same ETH key/address (`m/44'/60'/0'/0/0`), same Alloy provider code — added as more `eth_network` values: Arbitrum One, Base, Optimism, Polygon PoS, BNB Smart Chain, Avalanche C-Chain (chain IDs and RPCs verified against each network's own docs)
 - Native gas token generalized: `eth_chain::native_symbol(network)` (ETH / MATIC / BNB / AVAX) now drives balance, fee, and history display instead of a hardcoded `"ETH"`
@@ -117,7 +119,7 @@ Desktop GTK send path is implemented. **Librem 5 testnet send** is still the dev
 - Settings: network dropdown extended to all eight networks; "Use test networks" still only touches BTC testnet / ETH Sepolia / SOL devnet — L2s are a separate, explicit choice since they're real-value networks, not test networks
 - Not yet added: bridging UI (deliberately out of scope, per the original P2 note), per-L2 fiat pricing beyond ETH/BTC/SOL, Etherscan-v2-history verified end-to-end for each new chain (URL is chain-id-parameterized and should work, not independently confirmed per chain)
 
-### Phase 8 — Litecoin — **done** (desktop; not yet tapped on the L5)
+### Phase 8 — Litecoin — **done** (verified on a Librem 5 running PureOS 11 Crimson, Aug 2026)
 
 - Hand-rolled, not BDK-backed: `bitcoin`/`bdk_wallet` (this project's BTC dependency) has no Litecoin variant in its `Network` enum, and the only BDK-quality alternative — LitecoinDevKit's fork — isn't on crates.io (git-only, pinned-commit). Chose to hand-roll rather than take this project's first non-released dependency.
 - Reuses `bitcoin`'s network-agnostic pieces directly: BIP32 derivation (`m/84'/2'/0'/0/0` mainnet, `m/84'/1'/0'/0/0` testnet — SLIP-44 coin type 2, testnet convention 1), `Transaction`/`TxIn`/`TxOut`/`Witness` wire types, BIP143 sighash, secp256k1 signing — none of these depend on the `Network` enum for byte-level correctness, only address/WIF *text encoding* do
@@ -128,7 +130,7 @@ Desktop GTK send path is implemented. **Librem 5 testnet send** is still the dev
 - Native LTC send/receive/lock, balance sync, Activity history; mainnet send gated behind the same "I understand this spends real…" checkbox as BTC/ETH/SOL
 - Not yet added: RBF, an Electrum-protocol backend option (Esplora-only, unlike BTC's Esplora-or-Electrum choice), any fungible/token concept on Litecoin
 
-### Phase 9 — Visual design pass — **done** (desktop; not yet tapped on the L5)
+### Phase 9 — Visual design pass — **done** (verified on a Librem 5 running PureOS 11 Crimson, Aug 2026)
 
 The screens worked but were built from bare `GtkBox`/`GtkLabel`/`GtkEntry` stacks, so the app
 read as assembled rather than designed. This pass rebuilt the presentation layer on
@@ -177,9 +179,65 @@ Deliberately not higher — the only API above that this design wanted was `AdwS
 That keeps Debian bookworm (libadwaita 1.2) buildable; `packaging/debian/control` carries
 the matching `>= 1.2` floor.
 
-Not done: a bundled LTC/BNB/AVAX icon asset (the monogram covers it), an `AdwNavigationView`
-migration for the in-tab stacks, and any on-device tap-through — that stays owed to
-[LIBREM5.md](LIBREM5.md).
+Not done: a bundled LTC/BNB/AVAX icon asset (the monogram covers it), and an
+`AdwNavigationView` migration for the in-tab stacks.
+
+### Phase 10 — security review and hardening — **done**
+
+A review of the send path, key storage and network handling, followed by the fixes. Nothing
+here was speculative; each item was a defect that existed in shipped code.
+
+Fund-safety defects in the send flow:
+
+- A reviewed plan survived changes to its own inputs. Editing the recipient after tapping
+  Review left Confirm wired to the previous plan, so it sent to the old address while the
+  summary the user had read said otherwise. Every input now tears the review card down
+- The real-value acknowledgement was never reset, so only the first send in a visit was gated
+- Plans carried no account binding. On Ethereum a plan quoted for one account could be signed
+  by another whose next nonce happened to match, silently debiting the wrong wallet. Every
+  chain's `PreparedSend` now names its account and signing refuses any other key
+
+Everything a node says is now bounded: fee rates are capped, a fee larger than the amount is
+refused, ERC-20 approvals are for exactly the swap amount and only to the contract being
+called, and HTTP has timeouts and a response-size ceiling it previously lacked entirely.
+
+Storage: Argon2id raised to 64 MiB, KDF parameters from disk bounded before they drive an
+allocation, owner-only file permissions, and atomic writes so an interrupted save cannot
+corrupt the store. Keys are wiped on `Drop` rather than only where `lock_store` reaches.
+
+Remote endpoints must use TLS unless they point at localhost, and amount parsing refuses
+ambiguous separators rather than risking a tenfold misread in comma-decimal locales.
+
+### Phase 11 — post-QA bug fixes — **done**
+
+Found by hardware testing after v0.1.0 passed its checklist. Recorded because each one is a
+gap the checklist did not cover at the time.
+
+- **Bitcoin never worked over Esplora.** `bdk_esplora` was built with the bare `blocking`
+  feature, which compiles minreq without TLS, so every https request failed instantly with
+  `HttpsFeatureNotEnabled`. The balance loop reported that as "offline", making a build-time
+  misconfiguration look like a network outage for the entire life of the project
+- **Bitcoin then rate-limited itself.** A full scan every 30 seconds against Blockstream's
+  700-per-hour limit meant it went offline within minutes. Now 180 seconds with a smaller gap
+  limit, and a failed poll keeps the last confirmed balance rather than blanking it
+- **Ethereum history was silently key-gated.** Native transfers need an indexer and the code
+  only called one when an Etherscan key was set, so Activity stayed empty however much ETH
+  arrived or was sent. Blockscout is now the keyless fallback
+- **Two default RPC endpoints were dead** (`eth.llamarpc.com` 521, `polygon-rpc.com` 401),
+  which had made those networks entirely non-functional
+- **Auto-lock fired during use.** The idle timer watched pointer motion and key presses, which
+  a touchscreen with no keyboard never produces. It also raised the window over whatever the
+  user was doing when it fired
+- **The clipboard wiped addresses copied elsewhere.** Copying an address armed a timer that
+  cleared whatever was on the clipboard 30 seconds later, which is why pasting a recipient
+  appeared broken. Only secrets auto-clear now, and only if still present
+- **The swap screen hung the app.** Clearing the offers list walked `first_child` on an
+  `AdwPreferencesGroup`, whose first child is its own internal box and cannot be removed that
+  way, so the loop never terminated. It ran before the empty check, so it froze on exactly the
+  case where no provider quoted — which is every testnet
+
+All errors that previously vanished into `Err(_)` are now logged with their cause. That is
+what made several of these diagnosable at all.
 
 ---
 

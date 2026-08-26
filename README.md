@@ -14,8 +14,15 @@
   <img src="docs/screenshots/home-dark.png" alt="Home screen in dark mode" width="230">
 </p>
 
-**Status:** v0.1.0 packaged snapshot. Do not put mainnet funds in it until the
-[Librem 5 checklist](docs/LIBREM5.md) is complete.
+**Status:** v0.1.0 completed its [Librem 5 checklist](docs/LIBREM5.md) on PureOS 11 (Crimson)
+in August 2026: all 41 checks passed on real hardware. Development has continued since, so the
+current tree is ahead of that verified point and is being re-tested against an expanded
+checklist.
+
+Known unproven areas, stated plainly rather than buried: THORChain swaps have never moved real
+coins, because the network's global trading halt has been in force throughout; swap quoting is
+only exercisable on mainnet, since no testnet has aggregator liquidity; and the Activity view
+was not visually confirmed during a network outage. See the checklist for the full record.
 
 Application ID: `io.github.BlockBreakersHQ.BlockWallet`
 
@@ -122,7 +129,8 @@ What the wallet checks before it will sign, on every offer:
 - a Solana transaction built elsewhere is payable only by your own account.
 
 Providers that decline say why rather than quietly disappearing. THORChain in particular
-refuses while the network is halted, which it currently is.
+refuses while the network is halted, which it has been throughout development. That means the
+THORChain path is unit-tested but has never moved real coins.
 
 Swap quotes go through a THORNode endpoint you can set in **Settings -> Swaps**.
 

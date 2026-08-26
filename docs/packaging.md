@@ -247,8 +247,15 @@ build's window tagged with the release ID and showing the wrong icon in Phosh.
 
 Files under `packaging/debian/` are a starting point, not a complete source package.
 
+Note the toolchain: `rustc` and `cargo` are deliberately **not** in the apt line below, because
+on Crimson they are 1.63 against this crate's 1.85 floor (see Preflight). Install a toolchain
+from [rustup](https://rustup.rs) instead. The GTK and libadwaita dev packages are fine.
+
 ```sh
-sudo apt install build-essential pkg-config libgtk-4-dev libadwaita-1-dev libssl-dev cargo rustc
+sudo apt install build-essential pkg-config libgtk-4-dev libadwaita-1-dev libssl-dev
+# rustup, not apt, for the compiler:
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
 cargo build --release
 sudo install -Dm755 target/release/block_wallet /usr/bin/block_wallet
 sudo install -Dm644 data/io.github.BlockBreakersHQ.BlockWallet.desktop /usr/share/applications/io.github.BlockBreakersHQ.BlockWallet.desktop

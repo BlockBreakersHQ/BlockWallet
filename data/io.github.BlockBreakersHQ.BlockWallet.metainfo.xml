@@ -25,8 +25,11 @@
       testnet, Ethereum Sepolia, Solana devnet and Litecoin testnet.
     </p>
     <p>
-      This is v0.1.0. Do not store mainnet funds until the Librem 5 checklist
-      in the project documentation is complete on your device.
+      Version 0.1.0 completed its Librem 5 hardware checklist on PureOS 11
+      (Crimson). Some areas remain unproven: cross-chain swaps through
+      THORChain have never moved real coins, because that network has been
+      halted throughout testing. Treat swap amounts as you would any first
+      use, and keep your recovery phrase written down.
     </p>
   </description>
   <launchable type="desktop-id">io.github.BlockBreakersHQ.BlockWallet.desktop</launchable>
@@ -94,7 +97,7 @@
   <releases>
     <release version="0.1.0" type="development" date="2026-08-24">
       <description>
-        <p>First packaged release: Bitcoin, Ethereum (plus L2s), Solana and Litecoin send/receive/lock from one recovery phrase. Not for mainnet funds until Librem 5 QA is done.</p>
+        <p>First packaged release: Bitcoin, Ethereum (plus L2s), Solana and Litecoin send/receive/lock from one recovery phrase. Verified against the Librem 5 hardware checklist on PureOS 11 (Crimson).</p>
       </description>
     </release>
   </releases>
