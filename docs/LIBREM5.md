@@ -9,8 +9,9 @@ Sepolia**, **Solana devnet**, and **Litecoin testnet**. Do not use mainnet funds
 Install with Flatpak (`docs/packaging.md`) or a `.deb`. Building natively on the phone takes
 hours, and Crimson's own `rustc` is too old for this crate; see the packaging notes.
 
-**Currently under test: v0.2.0-dev** — the swap feature and the fixes that followed the v0.1.0
-run.
+**Currently under test:** the untagged tree after v0.1.0 — the swap feature, the security
+hardening, and the fixes that followed the v0.1.0 run. The crate version is still `0.1.0`;
+the next version number has not been decided.
 
 ## 1. Install
 
