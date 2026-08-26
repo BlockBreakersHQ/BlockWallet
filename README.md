@@ -19,10 +19,12 @@ in August 2026: all 41 checks passed on real hardware. Development has continued
 current tree is ahead of that verified point and is being re-tested against an expanded
 checklist.
 
-Known unproven areas, stated plainly rather than buried: THORChain swaps have never moved real
-coins, because the network's global trading halt has been in force throughout; swap quoting is
-only exercisable on mainnet, since no testnet has aggregator liquidity; and the Activity view
-was not visually confirmed during a network outage. See the checklist for the full record.
+Known unproven areas, stated plainly rather than buried: cross-chain swaps have never moved
+real coins, because THORChain's global trading halt was in force for most of development and
+its public gateways are unreachable now that it has lifted, while Maya is halted in turn; swap
+quoting is only exercisable on mainnet, since no testnet has aggregator liquidity; and the
+Activity view was not visually confirmed during a network outage. See the checklist for the
+full record.
 
 Application ID: `io.github.BlockBreakersHQ.BlockWallet`
 
@@ -94,8 +96,13 @@ Captured at 360×720, the Librem 5's logical resolution.
 | **Solana** | SLIP-0010 ed25519 `m/44'/501'/0'/0'` | mainnet, devnet | SOL and SPL tokens, hand-rolled transaction format — no `solana-sdk` dependency |
 | **Litecoin** | BIP84-style `m/84'/2'/0'/0/0` | mainnet, testnet | Hand-rolled: no Litecoin fork of `bitcoin`/`bdk_wallet` exists on crates.io, so this reuses the project's BIP32/secp256k1/BIP143 code and adds Litecoin's own bech32 and WIF encoding |
 
-Tokens: a bundled list (USDC, USDT, DAI, WBTC, SPL USDC, plus each L2's native token and a
-stablecoin), and you can add any ERC-20 by contract or any SPL token by mint address.
+Tokens: a bundled list of around forty entries across the supported networks, including USDC,
+USDT, DAI, WBTC, WETH, LINK, UNI, AAVE, LDO and CRV on Ethereum; each L2's own token (ARB, OP,
+WBNB, WAVAX) alongside its native USDC and WETH; and JUP, BONK, JTO, PYTH, RAY and WIF on
+Solana. Every contract address and mint in that list was verified on-chain before it went in,
+by calling `symbol()` and `decimals()` on the contract or reading the mint account, rather than
+being copied from a listing site. You can add any other ERC-20 by contract or any SPL token by
+mint address.
 
 Import from a mnemonic, a WIF, a raw private key, or an existing encrypted `.dic`.
 
@@ -109,12 +116,21 @@ Several venues are asked at once and their offers ranked by what you actually re
 | Venue | Covers | Custody |
 | --- | --- | --- |
 | **LI.FI** | Same-chain swaps on Ethereum and every supported L2 | Settles in one transaction |
+| **KyberSwap** | Same-chain swaps on Ethereum and every supported L2, quoted alongside LI.FI | Settles in one transaction |
 | **Jupiter** | Same-chain swaps on Solana, SOL and SPL tokens | Settles in one transaction |
 | **THORChain** | Cross-chain: BTC, LTC and ETH-family assets | A protocol vault holds the inbound side until the outbound side settles |
+| **Maya Protocol** | Cross-chain: BTC and ETH-family assets | A protocol vault holds the inbound side until the outbound side settles |
 
-Bitcoin and Litecoin have no on-chain DEX, so THORChain is the only route for them. That means
-the funds are briefly out of your control between the two legs, which the app says plainly on
-the offer and again on the review screen before you can confirm.
+Two aggregators are asked for every EVM pair rather than one, because they disagree, sometimes
+by a lot, and an outage at one no longer means "no route" for every pair. The same reasoning
+applies to running Maya alongside THORChain: they are separate networks with separate pools
+and separate halt states, so the better price genuinely varies, and one being down does not
+take cross-chain swapping with it.
+
+Bitcoin and Litecoin have no on-chain DEX, so a vault-based venue is the only route for them.
+That means the funds are briefly out of your control between the two legs, which the app says
+plainly on the offer and again on the review screen before you can confirm. Litecoin goes
+through THORChain specifically: Maya has no LTC pool, and says so before making a request.
 
 What the wallet checks before it will sign, on every offer:
 
@@ -128,11 +144,16 @@ What the wallet checks before it will sign, on every offer:
   no standing allowance is left behind;
 - a Solana transaction built elsewhere is payable only by your own account.
 
-Providers that decline say why rather than quietly disappearing. THORChain in particular
-refuses while the network is halted, which it has been throughout development. That means the
-THORChain path is unit-tested but has never moved real coins.
+Providers that decline say why rather than quietly disappearing, and the reason is worth
+reading. A vault-based venue refuses outright while its network is halted, which THORChain was
+for most of this project's development. It has since resumed, but at the time of writing every
+public THORNode gateway is unreachable from outside: the long-standing default has no DNS
+record at all, one alternative sits behind a Cloudflare challenge, and another serves an
+expired certificate. The wallet tries each in turn and then says so, rather than presenting the
+failure as your connection being down. Maya answers normally.
 
-Swap quotes go through a THORNode endpoint you can set in **Settings -> Swaps**.
+If you run your own node, set it in **Settings -> Swaps** and it is tried first. The cross-chain
+paths are unit-tested against captured responses but have not moved real coins.
 
 ## Install
 

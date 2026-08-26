@@ -129,6 +129,20 @@ pub fn resolve_rpc(sol_node: &str, network: SolNetwork) -> String {
     default_rpc(network).to_string()
 }
 
+/// Every mint below was checked on-chain with `getAccountInfo` (jsonParsed) before being
+/// bundled: the account must exist, be owned by the SPL token program, and report the
+/// decimals claimed here. A wrong mint would have the wallet display and spend the wrong
+/// asset, so no address goes in on the strength of a listing site alone.
+fn spl(symbol: &str, name: &str, mint: &str, decimals: u8) -> RegistryToken {
+    RegistryToken {
+        symbol: symbol.to_string(),
+        name: name.to_string(),
+        address: mint.to_string(),
+        decimals,
+        native: false,
+    }
+}
+
 pub fn bundled_tokens(network: SolNetwork) -> Vec<RegistryToken> {
     let mut tokens = vec![RegistryToken {
         symbol: "SOL".into(),
@@ -138,20 +152,22 @@ pub fn bundled_tokens(network: SolNetwork) -> Vec<RegistryToken> {
         native: true,
     }];
     match network {
-        SolNetwork::Mainnet => tokens.push(RegistryToken {
-            symbol: "USDC".into(),
-            name: "USD Coin".into(),
-            address: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v".into(),
-            decimals: 6,
-            native: false,
-        }),
-        SolNetwork::Devnet => tokens.push(RegistryToken {
-            symbol: "USDC".into(),
-            name: "USD Coin (devnet)".into(),
-            address: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU".into(),
-            decimals: 6,
-            native: false,
-        }),
+        SolNetwork::Mainnet => tokens.extend([
+            spl("USDC", "USD Coin", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", 6),
+            spl("USDT", "Tether USD", "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", 6),
+            spl("wSOL", "Wrapped SOL", "So11111111111111111111111111111111111111112", 9),
+            spl("JUP", "Jupiter", "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN", 6),
+            // BONK is 5 decimals, not the more common 6 or 9. Confirmed on-chain.
+            spl("BONK", "Bonk", "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", 5),
+            spl("JTO", "Jito", "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL", 9),
+            spl("PYTH", "Pyth Network", "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3", 6),
+            spl("RAY", "Raydium", "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R", 6),
+            spl("WIF", "dogwifhat", "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm", 6),
+        ]),
+        SolNetwork::Devnet => tokens.extend([
+            spl("USDC", "USD Coin (devnet)", "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU", 6),
+            spl("wSOL", "Wrapped SOL", "So11111111111111111111111111111111111111112", 9),
+        ]),
     }
     tokens
 }
@@ -329,6 +345,57 @@ fn get_token_account_balance(rpc: &str, ata: &str) -> Option<u64> {
         .as_str()?
         .parse::<u64>()
         .ok()
+}
+
+/// Every SPL balance the account holds, in one call.
+///
+/// `getTokenAccountsByOwner` returns all of the owner's token accounts at once, so the cost
+/// of syncing does not grow with the bundled token list. The per-mint
+/// `getTokenAccountBalance` this replaces meant one RPC call per listed token on every sync
+/// cycle, which puts a wallet on a free public RPC into rate limiting as soon as the list is
+/// more than a handful of entries long.
+///
+/// Keyed by mint address. A token the account has never held simply has no entry, which is
+/// the same outcome the per-mint version reached by failing its call.
+fn get_all_token_balances(rpc: &str, owner: &str) -> BTreeMap<String, u64> {
+    let mut out = BTreeMap::new();
+    let params = json!([
+        owner,
+        {"programId": TOKEN_PROGRAM_ID},
+        {"encoding": "jsonParsed"}
+    ]);
+    let Ok(result) = rpc_call(rpc, "getTokenAccountsByOwner", params) else {
+        return out;
+    };
+    let Some(entries) = result.get("value").and_then(Value::as_array) else {
+        return out;
+    };
+    for entry in entries {
+        let Some(info) = entry
+            .get("account")
+            .and_then(|a| a.get("data"))
+            .and_then(|d| d.get("parsed"))
+            .and_then(|p| p.get("info"))
+        else {
+            continue;
+        };
+        let Some(mint) = info.get("mint").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(amount) = info
+            .get("tokenAmount")
+            .and_then(|t| t.get("amount"))
+            .and_then(Value::as_str)
+            .and_then(|a| a.parse::<u64>().ok())
+        else {
+            continue;
+        };
+        // An owner can hold several accounts for one mint. The wallet spends from the
+        // associated account, but the balance shown should be everything it holds, so they
+        // are summed rather than the last one winning.
+        *out.entry(mint.to_string()).or_insert(0) += amount;
+    }
+    out
 }
 
 /// SHA-256 loop over bump seeds 255..=0 until an off-curve (no known private key) address is found,
@@ -522,7 +589,9 @@ fn finalize_transaction(
 pub fn sync_account(address: &str, sol_node: &str, network_name: &str, tokens: &[Token]) -> Result<SolSyncState, block_error::Error> {
     let network = parse_network(network_name);
     let rpc = resolve_rpc(sol_node, network);
-    let pubkey = validate_address(address)?;
+    // Validated up front so a malformed address fails loudly rather than reading as an
+    // account with no balance and no history.
+    validate_address(address)?;
 
     let lamports = match get_balance(&rpc, address) {
         Ok(value) => value,
@@ -537,15 +606,17 @@ pub fn sync_account(address: &str, sol_node: &str, network_name: &str, tokens: &
         }
     };
 
+    let held = get_all_token_balances(&rpc, address);
     let mut spl = BTreeMap::new();
     for token in tokens {
         if is_native_token(token) {
             continue;
         }
-        let Ok(mint) = validate_address(&token.address) else { continue };
-        let Ok((ata, _)) = find_associated_token_address(&pubkey, &mint) else { continue };
-        if let Some(amount) = get_token_account_balance(&rpc, &encode_pubkey(&ata)) {
-            spl.insert(token.symbol.clone(), format_units_trimmed(amount, token.decimals.max(0) as u8));
+        if let Some(amount) = held.get(token.address.trim()) {
+            spl.insert(
+                token.symbol.clone(),
+                format_units_trimmed(*amount, token.decimals.max(0) as u8),
+            );
         }
     }
 
@@ -819,8 +890,57 @@ pub fn fetch_token_metadata(mint: &str, sol_node: &str, network_name: &str) -> R
 mod tests {
     use super::*;
 
+    /// Same clerical guard as the ERC-20 list: a duplicate symbol silently overwrites its twin
+    /// in the registry, and a malformed mint would be dropped at sync time without saying so.
+    /// Whether each mint is the *right* one was established separately, by reading the mint
+    /// account and checking it is owned by the token program with the decimals claimed here.
+    #[test]
+    fn every_bundled_mint_is_internally_consistent() {
+        for network in [SolNetwork::Mainnet, SolNetwork::Devnet] {
+            let tokens = bundled_tokens(network);
+            let name = network_name(network);
+            assert_eq!(
+                tokens.iter().filter(|t| t.native).count(),
+                1,
+                "{name} must bundle exactly one native asset"
+            );
+
+            let mut symbols: Vec<&str> = tokens.iter().map(|t| t.symbol.as_str()).collect();
+            symbols.sort_unstable();
+            let before = symbols.len();
+            symbols.dedup();
+            assert_eq!(before, symbols.len(), "{name} bundles a duplicate symbol");
+
+            let mut mints: Vec<&str> = Vec::new();
+            for token in &tokens {
+                if token.native {
+                    continue;
+                }
+                assert!(
+                    validate_address(&token.address).is_ok(),
+                    "{name} bundles {} with an invalid mint {}",
+                    token.symbol,
+                    token.address
+                );
+                assert!(
+                    token.decimals <= 18,
+                    "{name} bundles {} with implausible decimals {}",
+                    token.symbol,
+                    token.decimals
+                );
+                assert!(
+                    !mints.contains(&token.address.as_str()),
+                    "{name} bundles two symbols at mint {}",
+                    token.address
+                );
+                mints.push(&token.address);
+            }
+        }
+    }
+
     #[test]
     fn parses_networks_and_default_rpcs() {
+
         assert_eq!(parse_network("devnet"), SolNetwork::Devnet);
         assert_eq!(parse_network(""), SolNetwork::Mainnet);
         assert!(resolve_rpc("", SolNetwork::Mainnet).contains("mainnet"));

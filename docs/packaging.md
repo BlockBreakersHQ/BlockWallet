@@ -209,21 +209,63 @@ In order. Items marked **device** need a real Librem 5; the rest can be done any
 
 ## Stores
 
-The **PureOS Store is Flatpak-based**, so the release manifest is the artefact it wants.
-Purism's publishing page says apps are curated for inclusion but does not document a
-submission channel, and community reports as of late 2025 indicate the process is
-unclear in practice. Treat a PureOS Store listing as best-effort and raise an issue on
-Purism's tracker to ask for the current route.
+Both stores want a Flatpak, both take submissions by merge request, and both build from a
+manifest plus `generated-sources.json`. They are still two separate submissions, and the
+PureOS one needs its own manifest.
 
-**Flathub** builds aarch64 by default and is the dependable path for reaching Librem 5
-users, who can add Flathub themselves. Before submitting, check:
+### Flathub
 
-- The app ID must be a domain you control, or a code-hosting ID with at least four
-  components (`io.github.BlockBreakersHQ.BlockWallet`). See "App ID" below.
-- At least one screenshot at an https URL — `data/screenshots/` must be populated and
-  pushed.
-- No network access during the build (the release manifest already complies).
-- The runtime version must still be supported at submission time.
+Reaches Librem 5 owners, who can add Flathub themselves, and every other distro with flatpak
+installed. Builds x86_64 and aarch64.
+
+Process (verified against Flathub's docs, August 2026):
+
+1. Fork `flathub/flathub` with **"Copy the master branch only" unticked**.
+2. `git clone --branch=new-pr …`, then branch from `new-pr`.
+3. Put `io.github.BlockBreakersHQ.BlockWallet.json` and `generated-sources.json` at the
+   **repository root**. Nothing else: source code and build artefacts are prohibited.
+4. Open the PR against the **`new-pr`** branch, never `master`. Title: `Add io.github.…`.
+5. After merge you are invited to a new repo under the Flathub org. The invite needs 2FA and
+   **expires after a week**.
+
+Requirements worth checking before submitting, each of which has bitten this project:
+
+- The licence must be installed to `$FLATPAK_DEST/share/licenses/$FLATPAK_ID`. All three
+  manifests do this; none of them did until it was caught during submission prep.
+- App ID must be a domain you control, or a code-hosting ID of at least four components.
+  `io.github.BlockBreakersHQ.BlockWallet` maps to `github.com/BlockBreakersHQ/BlockWallet`.
+- At least one screenshot at an https URL that actually resolves on the default branch.
+- No network during the build. The release manifest complies and this is proven, not assumed.
+- The runtime must be the latest available at submission time.
+
+Two lint errors are **expected locally** and resolved by Flathub's own pipeline:
+`appstream-external-screenshot-url` and `appstream-screenshots-not-mirrored-in-ostree`. Both
+concern mirroring screenshots to `dl.flathub.org`, which only their builders do.
+
+### PureOS Store
+
+Earlier revisions of this document said the submission channel was undocumented. **That was
+wrong.** It is documented at <https://storage.puri.sm/pureos-policy/publish.html>:
+
+1. Fork <https://source.puri.sm/flatpak-apps/submission>.
+2. Branch from the `submission` branch, named after the app ID.
+3. Commit the flatpak manifest and anything else it needs.
+4. Open a merge request against the `submission` branch.
+5. After CI passes, Purism's App Curation Team tags it for inclusion, a repo is created, and
+   it builds and distributes automatically.
+
+**Being on Flathub does not put you here**, and the manifest is not reusable as-is:
+
+- PureOS requires its **own runtime**, `sm.puri.Platform` and `sm.puri.Sdk`, not
+  `org.gnome.Platform`. That needs a separate manifest variant, built and tested against a
+  runtime this project has never used. Expect GTK/libadwaita version surprises, in the same
+  way Crimson's exactly-1.2.2 libadwaita turned out to be load-bearing.
+- Icons at **64x64 and 128x128** are required. Only 256x256 is shipped today.
+- OARS content rating is required, and is already present in the metainfo.
+- Compliance with Flathub's requirements is also required, so do Flathub first.
+
+`generated-sources.json` carries over unchanged; the Rust dependency set does not care which
+runtime it builds against.
 
 ## App ID
 

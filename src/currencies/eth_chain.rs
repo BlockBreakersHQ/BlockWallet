@@ -271,6 +271,12 @@ pub fn bundled_tokens(network: EthNetwork) -> Vec<RegistryToken> {
                 erc20("USDT", "Tether USD", "0xdac17f958d2ee523a2206206994597c13d831ec7", 6),
                 erc20("DAI", "Dai Stablecoin", "0x6b175474e89094c44da98b954eedeac495271d0f", 18),
                 erc20("WBTC", "Wrapped BTC", "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599", 8),
+                erc20("WETH", "Wrapped Ether", "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", 18),
+                erc20("LINK", "Chainlink", "0x514910771af9ca656af840dff83e8264ecf986ca", 18),
+                erc20("UNI", "Uniswap", "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984", 18),
+                erc20("AAVE", "Aave", "0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9", 18),
+                erc20("LDO", "Lido DAO", "0x5a98fcbea516cf06857215779fd812ca3bef1b32", 18),
+                erc20("CRV", "Curve DAO", "0xd533a949740bb3306d119cc777fa900ba034cd52", 18),
             ]);
         }
         EthNetwork::Sepolia => {
@@ -282,24 +288,57 @@ pub fn bundled_tokens(network: EthNetwork) -> Vec<RegistryToken> {
             ));
         }
         EthNetwork::ArbitrumOne => {
-            tokens.push(erc20("USDC", "USD Coin", "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", 6));
+            tokens.extend([
+                erc20("USDC", "USD Coin", "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", 6),
+                erc20("ARB", "Arbitrum", "0x912CE59144191C1204E64559FE8253a0e49E6548", 18),
+                erc20("WETH", "Wrapped Ether", "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", 18),
+                erc20("WBTC", "Wrapped BTC", "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f", 8),
+                // On-chain symbol is "USD{20ae}0" since Tether's omnichain rebrand; labelled
+                // USDT here because the real glyph does not render on Phosh.
+                erc20("USDT", "Tether USD (USDT0)", "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9", 6),
+            ]);
         }
         EthNetwork::Base => {
-            tokens.push(erc20("USDC", "USD Coin", "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", 6));
+            tokens.extend([
+                erc20("USDC", "USD Coin", "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", 6),
+                erc20("WETH", "Wrapped Ether", "0x4200000000000000000000000000000000000006", 18),
+                erc20("DAI", "Dai Stablecoin", "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb", 18),
+                erc20("cbBTC", "Coinbase Wrapped BTC", "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf", 8),
+            ]);
         }
         EthNetwork::Optimism => {
-            tokens.push(erc20("USDC", "USD Coin", "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", 6));
+            tokens.extend([
+                erc20("USDC", "USD Coin", "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", 6),
+                erc20("OP", "Optimism", "0x4200000000000000000000000000000000000042", 18),
+                erc20("WETH", "Wrapped Ether", "0x4200000000000000000000000000000000000006", 18),
+                erc20("USDT", "Tether USD", "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58", 6),
+            ]);
         }
         EthNetwork::PolygonPos => {
-            tokens.push(erc20("USDC", "USD Coin", "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", 6));
+            tokens.extend([
+                erc20("USDC", "USD Coin", "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", 6),
+                erc20("WETH", "Wrapped Ether", "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", 18),
+                erc20("WBTC", "Wrapped BTC", "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6", 8),
+                erc20("USDT", "Tether USD (USDT0)", "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", 6),
+            ]);
         }
         EthNetwork::BnbSmartChain => {
             // Circle does not issue native USDC on BSC; bundle Binance-Peg USDT instead.
             // BSC's USDT contract uses 18 decimals, unlike Ethereum's 6.
-            tokens.push(erc20("USDT", "Tether USD (BSC)", "0x55d398326f99059fF775485246999027B3197955", 18));
+            tokens.extend([
+                erc20("USDT", "Tether USD (BSC)", "0x55d398326f99059fF775485246999027B3197955", 18),
+                // BSC USDC is also 18 decimals, unlike Ethereum's 6.
+                erc20("USDC", "USD Coin (BSC)", "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", 18),
+                erc20("WBNB", "Wrapped BNB", "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", 18),
+            ]);
         }
         EthNetwork::AvalancheCChain => {
-            tokens.push(erc20("USDC", "USD Coin", "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E", 6));
+            tokens.extend([
+                erc20("USDC", "USD Coin", "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E", 6),
+                // On-chain symbol is "USDt" (lower-case t); labelled USDT for consistency.
+                erc20("USDT", "Tether USD", "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7", 6),
+                erc20("WAVAX", "Wrapped AVAX", "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7", 18),
+            ]);
         }
     }
     tokens
@@ -616,6 +655,15 @@ async fn sync_account_async(
     })
 }
 
+/// Token transfer history for every bundled contract, in two log queries rather than two
+/// per token.
+///
+/// The per-token loop this replaces cost `2 * tokens` `eth_getLogs` calls on every sync
+/// cycle, which is the same shape of self-inflicted rate limiting that made Bitcoin look
+/// permanently offline. `eth_getLogs` accepts a list of contract addresses in a single
+/// filter, so a wider bundled token list now costs nothing extra: incoming and outgoing stay
+/// at one call each however many tokens are listed. Logs are matched back to their token by
+/// the emitting contract address.
 async fn erc20_history<P: Provider>(
     provider: &P,
     account: Address,
@@ -625,49 +673,60 @@ async fn erc20_history<P: Provider>(
         return Vec::new();
     };
     let from_block = latest.saturating_sub(LOG_LOOKBACK);
-    let mut items = Vec::new();
+
+    let mut by_contract: BTreeMap<Address, &Token> = BTreeMap::new();
     for token in tokens {
         if is_native_token(token) {
             continue;
         }
-        let Ok(contract_addr) = Address::from_str(token.address.trim()) else {
+        if let Ok(contract_addr) = Address::from_str(token.address.trim()) {
+            by_contract.entry(contract_addr).or_insert(token);
+        }
+    }
+    if by_contract.is_empty() {
+        return Vec::new();
+    }
+    let contracts: Vec<Address> = by_contract.keys().copied().collect();
+
+    let incoming_filter = Filter::new()
+        .address(contracts.clone())
+        .event_signature(TRANSFER_TOPIC)
+        .from_block(from_block)
+        .topic2(address_topic(account));
+    let outgoing_filter = Filter::new()
+        .address(contracts)
+        .event_signature(TRANSFER_TOPIC)
+        .from_block(from_block)
+        .topic1(address_topic(account));
+
+    let mut items = Vec::new();
+    for (filter, incoming) in [(incoming_filter, true), (outgoing_filter, false)] {
+        let Ok(logs) = provider.get_logs(&filter).await else {
             continue;
         };
-        let incoming = Filter::new()
-            .address(contract_addr)
-            .event_signature(TRANSFER_TOPIC)
-            .from_block(from_block)
-            .topic2(address_topic(account));
-        let outgoing = Filter::new()
-            .address(contract_addr)
-            .event_signature(TRANSFER_TOPIC)
-            .from_block(from_block)
-            .topic1(address_topic(account));
-        for (filter, incoming) in [(incoming, true), (outgoing, false)] {
-            let Ok(logs) = provider.get_logs(&filter).await else {
+        for log in logs {
+            let Some(token) = by_contract.get(&log.address()) else {
                 continue;
             };
-            for log in logs {
-                let Some(topics) = (log.topics().len() >= 3).then_some(log.topics()) else {
-                    continue;
-                };
-                let from = Address::from_slice(&topics[1].as_slice()[12..]);
-                let to = Address::from_slice(&topics[2].as_slice()[12..]);
-                let amount = U256::from_be_slice(log.data().data.as_ref());
-                let confirmations = log
-                    .block_number
-                    .map(|block| latest.saturating_sub(block).saturating_add(1) as u32)
-                    .unwrap_or(0);
-                items.push(EthHistoryItem {
-                    txid: log.transaction_hash.map(|h| format!("{h:#x}")).unwrap_or_default(),
-                    from: format!("{from:?}"),
-                    to: format!("{to:?}"),
-                    symbol: token.symbol.clone(),
-                    amount: format_units_trimmed(amount, token.decimals.max(0) as u8),
-                    incoming,
-                    confirmations,
-                });
-            }
+            let Some(topics) = (log.topics().len() >= 3).then_some(log.topics()) else {
+                continue;
+            };
+            let from = Address::from_slice(&topics[1].as_slice()[12..]);
+            let to = Address::from_slice(&topics[2].as_slice()[12..]);
+            let amount = U256::from_be_slice(log.data().data.as_ref());
+            let confirmations = log
+                .block_number
+                .map(|block| latest.saturating_sub(block).saturating_add(1) as u32)
+                .unwrap_or(0);
+            items.push(EthHistoryItem {
+                txid: log.transaction_hash.map(|h| format!("{h:#x}")).unwrap_or_default(),
+                from: format!("{from:?}"),
+                to: format!("{to:?}"),
+                symbol: token.symbol.clone(),
+                amount: format_units_trimmed(amount, token.decimals.max(0) as u8),
+                incoming,
+                confirmations,
+            });
         }
     }
     items
@@ -1391,6 +1450,67 @@ mod tests {
         let balance_of = encode_balance_of(to);
         assert_eq!(&balance_of[..4], &SELECTOR_BALANCE_OF);
         assert_eq!(balance_of.len(), 36);
+    }
+
+    /// The bundled list is hand-maintained, so the mistakes worth guarding against are the
+    /// clerical ones: a symbol listed twice on one network (the second silently overwrites the
+    /// first in the registry, so the wallet would show one token and spend another), an
+    /// address that is not a valid contract address, or a copy-paste that leaves two symbols
+    /// pointing at the same contract.
+    ///
+    /// It cannot check that an address is the *right* contract. That was done separately by
+    /// calling `symbol()` and `decimals()` on each one before it went in.
+    #[test]
+    fn every_bundled_token_list_is_internally_consistent() {
+        for network in [
+            EthNetwork::Mainnet,
+            EthNetwork::Sepolia,
+            EthNetwork::ArbitrumOne,
+            EthNetwork::Base,
+            EthNetwork::Optimism,
+            EthNetwork::PolygonPos,
+            EthNetwork::BnbSmartChain,
+            EthNetwork::AvalancheCChain,
+        ] {
+            let tokens = bundled_tokens(network);
+            let name = network_name(network);
+            assert!(!tokens.is_empty(), "{name} bundles no tokens at all");
+
+            let natives = tokens.iter().filter(|t| t.native).count();
+            assert_eq!(natives, 1, "{name} must bundle exactly one native asset");
+
+            let mut symbols: Vec<&str> = tokens.iter().map(|t| t.symbol.as_str()).collect();
+            symbols.sort_unstable();
+            let before = symbols.len();
+            symbols.dedup();
+            assert_eq!(before, symbols.len(), "{name} bundles a duplicate symbol");
+
+            let mut addresses: Vec<String> = Vec::new();
+            for token in &tokens {
+                if token.native {
+                    continue;
+                }
+                assert!(
+                    validate_address(&token.address).is_ok(),
+                    "{name} bundles {} with an invalid address {}",
+                    token.symbol,
+                    token.address
+                );
+                assert!(
+                    token.decimals <= 18,
+                    "{name} bundles {} with implausible decimals {}",
+                    token.symbol,
+                    token.decimals
+                );
+                let lower = token.address.to_ascii_lowercase();
+                assert!(
+                    !addresses.contains(&lower),
+                    "{name} bundles two symbols at address {}",
+                    token.address
+                );
+                addresses.push(lower);
+            }
+        }
     }
 
     #[test]

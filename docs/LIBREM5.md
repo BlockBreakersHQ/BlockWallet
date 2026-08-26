@@ -25,6 +25,21 @@ the next version number has not been decided.
 - [ ] The chosen appearance survives a restart, including on the unlock screen itself
 - [ ] Change the system accent colour: buttons and the balance card follow it
 
+## 1b. Assets and refresh cadence
+
+The bundled token list is now around forty entries and the Ethereum and Solana polls were
+slowed from twenty seconds to sixty to pay for it. Both are worth eyeballing on the device,
+since a long list is a layout problem and a slow poll is a "did that work?" problem.
+
+- [ ] Assets lists every bundled token for the selected network, each with a symbol, a name and
+      a balance, and scrolls cleanly at 360 px
+- [ ] No token row shows a placeholder or a broken icon
+- [ ] Switching the ETH network replaces the token list rather than appending to it, and no
+      stale balance from the previous network is left showing
+- [ ] After receiving, the balance updates within about a minute without the app being restarted
+- [ ] Leave the app open on Assets for ten minutes: balances keep updating and nothing starts
+      reading "offline" (the slower cadence exists to stop the wallet rate-limiting itself)
+
 ## 2. Onboard
 
 - [ ] Create 12-word wallet: write down phrase, confirm, set password
@@ -64,17 +79,32 @@ the next version number has not been decided.
 
 ## 5. Swap
 
-Be clear about what is testable where. On testnets every provider correctly declines: LI.FI has
-no Sepolia liquidity, Jupiter none on devnet, and THORChain refuses while its network-wide
-`HALTTRADING` mimir is set. The testnet rows therefore verify the *refusal* path, which is
-where the v0.1.0 UI freeze lived. Real quoting needs mainnet and a live THORChain.
+Be clear about what is testable where. On testnets every provider correctly declines: neither
+aggregator has Sepolia liquidity, Jupiter has none on devnet, and both cross-chain networks
+refuse outright. The testnet rows therefore verify the *refusal* path, which is where the
+v0.1.0 UI freeze lived. Real quoting needs mainnet.
 
-- [ ] Swap tab opens and lists the wallet's assets in both dropdowns
+Cross-chain is currently unquotable at all, for two separate reasons worth telling apart when
+reading a failure on the device: THORChain has resumed trading but none of its public gateways
+answer (no DNS on the default host, a Cloudflare challenge on one alternative, an expired
+certificate on another), while Maya answers and reports its own trading halt. So the expected
+mainnet result today is that the two EVM aggregators quote and the two vault venues decline
+with different messages.
+
+- [ ] Swap tab opens and lists the wallet's assets in both dropdowns, including the newly
+      bundled tokens for the selected network
+- [ ] The dropdowns are usable at 360 px with a list this long: the popover scrolls rather than
+      overflowing the screen
 - [ ] On testnet, **Find the best rate** returns promptly and does **not** hang the app
-- [ ] It reports that no provider could route the swap, and lists why each declined
+- [ ] It reports that no provider could route the swap, and lists why each declined, naming all
+      five venues rather than silently dropping the ones that failed
 - [ ] Changing the amount or either asset clears any shown offer
-- [ ] Mainnet, small amount: at least one provider quotes, and offers are ordered best-output-first
-- [ ] A THORChain offer is labelled as vault-held; a LI.FI or Jupiter offer is labelled as settling in one transaction
+- [ ] Mainnet, small amount, ETH-family pair: LI.FI and KyberSwap both quote, and offers are
+      ordered best-output-first
+- [ ] Mainnet, BTC to ETH: THORChain reports a gateway failure and Maya reports a halt; neither
+      shows as simply "unavailable"
+- [ ] A vault-based offer is labelled as vault-held; an aggregator offer is labelled as settling
+      in one transaction
 - [ ] The review card shows the minimum received, and Confirm is gated behind the acknowledgement
 - [ ] Optional (mainnet, real value): execute a small same-chain swap and confirm it lands
 

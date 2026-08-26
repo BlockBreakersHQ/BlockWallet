@@ -263,17 +263,27 @@ L2s (see Phase 7) and Solana (see Phase 6) already shipped. Still open: Lightnin
 
 ### P3 — swap / DeFi, no KYC — **done**
 
-Shipped as local-signed swaps across three venues, compared side by side: LI.FI for same-chain
-EVM, Jupiter for Solana, THORChain for cross-chain BTC/LTC/ETH. All non-custodial, none
-requiring an API key, and `api.1inch.io/v5.0` was deleted rather than restored.
+Shipped as local-signed swaps across five venues, compared side by side: LI.FI and KyberSwap
+for same-chain EVM, Jupiter for Solana, THORChain and Maya Protocol for cross-chain
+BTC/LTC/ETH. All non-custodial, none requiring an API key, and `api.1inch.io/v5.0` was deleted
+rather than restored.
+
+Two aggregators per EVM pair and two vault-based networks per cross-chain pair, rather than one
+of each, because a single venue is a single point of both pricing and availability failure.
+That was borne out during this pass: THORChain's trading halt lifted, and every one of its
+public gateways then turned out to be unreachable, while Maya answered normally.
 
 Still open here:
 
-- No end-to-end run against a live THORChain: the network's global `HALTTRADING` is set, so the
-  vault-payment path is unit-tested but has never moved real coins.
+- No end-to-end run against either cross-chain network. THORChain's public gateways are down
+  (no DNS on the default host, a Cloudflare challenge on one alternative, an expired
+  certificate on another) and Maya reports `trading is halted`, so the vault-payment path is
+  unit-tested against captured responses but has never moved real coins.
 - Streaming swaps are quoted with THORChain's defaults rather than tuned.
 - No in-app tracking of a cross-chain swap after broadcast; the outbound leg has to be checked
   on a block explorer.
+- No affiliate fee is taken on any route. The hooks exist on both aggregators and both
+  cross-chain networks, and the question was raised but not settled.
 
 ### P4 — hardware / platform
 

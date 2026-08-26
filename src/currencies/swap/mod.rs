@@ -22,6 +22,7 @@
 
 pub mod execute;
 pub mod jupiter;
+pub mod kyberswap;
 pub mod lifi;
 pub mod safety;
 pub mod solana_tx;
@@ -318,8 +319,10 @@ pub trait SwapProvider: Send + Sync {
 pub fn providers() -> Vec<Box<dyn SwapProvider>> {
     vec![
         Box::new(lifi::LiFi::new()),
+        Box::new(kyberswap::KyberSwap::new()),
         Box::new(jupiter::Jupiter::new()),
         Box::new(thorchain::ThorChain::new()),
+        Box::new(thorchain::ThorChain::maya()),
     ]
 }
 

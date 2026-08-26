@@ -32,6 +32,16 @@ use crate::configuration::wallet_store::{
 /// comfortably inside the budget while still feeling live for a chain with ten-minute blocks.
 const BTC_SYNC_INTERVAL_SECS: u64 = 180;
 
+/// How often an Ethereum-family or Solana account is polled.
+///
+/// Raised from twenty seconds when the bundled token list grew. Each sync costs one
+/// `balanceOf` per token plus a handful of fixed calls, so a ten-token network at the old
+/// cadence came to roughly 2,700 requests an hour against a free public RPC: the same
+/// self-inflicted rate limiting that made Bitcoin read as permanently offline, and the same
+/// symptom, since a throttled RPC is indistinguishable from being disconnected. A minute
+/// keeps a ten-token network under a thousand an hour and is still well inside a block time.
+const CHAIN_SYNC_INTERVAL_SECS: u64 = 60;
+
 #[derive(Clone)]
 pub struct ApplicationSettings {
     pub config_path         : PathBuf,
@@ -1074,7 +1084,7 @@ impl ApplicationSettings {
                         thread::sleep(Duration::from_secs(1));
                         first = false;
                     } else {
-                        thread::sleep(Duration::from_secs(20));
+                        thread::sleep(Duration::from_secs(CHAIN_SYNC_INTERVAL_SECS));
                     }
                     if address == "Uninitialized" {
                         if sender.send_blocking(String::from("Uninitialized")).is_err() {
@@ -1159,7 +1169,7 @@ impl ApplicationSettings {
                         thread::sleep(Duration::from_secs(1));
                         first = false;
                     } else {
-                        thread::sleep(Duration::from_secs(20));
+                        thread::sleep(Duration::from_secs(CHAIN_SYNC_INTERVAL_SECS));
                     }
                     if address == "Uninitialized" {
                         if sender.send_blocking(String::from("Uninitialized")).is_err() {

@@ -29,17 +29,84 @@ use crate::currencies::swap::{
     Custody, SwapAsset, SwapExecution, SwapProvider, SwapQuote, SwapRequest,
 };
 
+/// One THORChain-shaped network.
+///
+/// Maya Protocol is a THORChain fork and speaks the same API under a different path prefix,
+/// so it is a second instance of this provider rather than a second copy of it. Two venues
+/// that share a wire format should share the halt checks, the vault-agreement check and the
+/// memo handling: those are exactly the parts that lose money when they are subtly different.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Venue {
+    pub id: &'static str,
+    pub name: &'static str,
+    /// Gateways tried in order. A list rather than a single host because a public gateway
+    /// going away is not hypothetical: `thornode.ninerealms.com`, the long-standing default,
+    /// no longer resolves at all, and with one hardcoded host that took the whole venue down
+    /// while looking like the user being offline.
+    pub gateways: &'static [&'static str],
+    /// Path prefix the REST API is mounted under.
+    pub api: &'static str,
+    /// Source chains it can take an inbound payment on, as internal chain keys.
+    pub inbound_chains: &'static [&'static str],
+    /// Whether the user's configured THORNode URL applies. It does not for Maya, which is a
+    /// separate network: pointing a Maya quote at a THORNode would ask the wrong chain for
+    /// vaults, and could hand back an address belonging to neither.
+    pub honours_node_override: bool,
+}
+
 /// Public THORNode gateway used when the user has not set their own.
 ///
 /// THORChain is a permissionless network but its public API hosts are not, and they rate-limit
 /// to roughly one request a second, so the Settings field for this exists.
+///
+/// Every public gateway below was probed during this pass and none answered: ninerealms has
+/// no DNS record, thorswap sits behind a Cloudflare challenge, and liquify serves an expired
+/// certificate. They are kept and tried in turn because gateways come back, and because a
+/// wrong-but-plausible replacement would be worse than an honest failure. When they are all
+/// down the provider says so and Maya carries the cross-chain routes.
 pub const DEFAULT_THORNODE: &str = "https://thornode.ninerealms.com";
 
-pub struct ThorChain;
+pub const THORCHAIN: Venue = Venue {
+    id: "thorchain",
+    name: "THORChain",
+    gateways: &[
+        DEFAULT_THORNODE,
+        "https://thornode.thorswap.net",
+        "https://thornode.thorchain.liquify.com",
+    ],
+    api: "thorchain",
+    inbound_chains: &["btc", "ltc", "eth"],
+    honours_node_override: true,
+};
+
+/// Maya Protocol: a THORChain fork with its own validator set, vaults and liquidity.
+///
+/// Worth quoting alongside THORChain rather than instead of it. The pools are different
+/// sizes, so the better price genuinely varies by pair, and the two networks halt
+/// independently: during this pass Maya was the only one of the two whose API was reachable
+/// at all.
+///
+/// No Litecoin: Maya does not pool it, and `supports` says so before a pointless round trip.
+pub const MAYA: Venue = Venue {
+    id: "maya",
+    name: "Maya Protocol",
+    gateways: &["https://mayanode.mayachain.info"],
+    api: "mayachain",
+    inbound_chains: &["btc", "eth"],
+    honours_node_override: false,
+};
+
+pub struct ThorChain {
+    venue: &'static Venue,
+}
 
 impl ThorChain {
     pub fn new() -> Self {
-        Self
+        Self { venue: &THORCHAIN }
+    }
+
+    pub fn maya() -> Self {
+        Self { venue: &MAYA }
     }
 }
 
@@ -49,13 +116,22 @@ impl Default for ThorChain {
     }
 }
 
-fn base_url(request: &SwapRequest) -> String {
-    let node = request.thornode_url.trim();
-    if node.is_empty() {
-        DEFAULT_THORNODE.to_string()
-    } else {
-        node.trim_end_matches('/').to_string()
+/// Gateways to try, in order: the user's own first when this venue honours the setting.
+fn gateways(venue: &Venue, request: &SwapRequest) -> Vec<String> {
+    let mut out = Vec::new();
+    if venue.honours_node_override {
+        let node = request.thornode_url.trim();
+        if !node.is_empty() {
+            out.push(node.trim_end_matches('/').to_string());
+        }
     }
+    for gateway in venue.gateways {
+        let gateway = gateway.trim_end_matches('/').to_string();
+        if !out.contains(&gateway) {
+            out.push(gateway);
+        }
+    }
+    out
 }
 
 /// One chain's entry from `/thorchain/inbound_addresses`.
@@ -78,13 +154,14 @@ impl InboundAddress {
         !self.halted && !self.global_trading_paused && !self.chain_trading_paused
     }
 
+    /// Phrased without a venue name so the caller can prefix whichever network it asked.
     pub fn halt_reason(&self) -> &'static str {
         if self.global_trading_paused {
-            "THORChain has paused trading network-wide"
+            "has paused trading network-wide"
         } else if self.chain_trading_paused {
-            "THORChain has paused trading on this chain"
+            "has paused trading on this chain"
         } else {
-            "THORChain has halted this chain"
+            "has halted this chain"
         }
     }
 }
@@ -125,16 +202,47 @@ pub fn parse_inbound_addresses(json: &Value) -> Vec<InboundAddress> {
         .collect()
 }
 
-fn fetch_inbound(base: &str, chain: &str) -> Result<InboundAddress, block_error::Error> {
-    let text = http::get_text(&format!("{base}/thorchain/inbound_addresses"))?;
-    let json: Value = serde_json::from_str(&text)
-        .map_err(|e| block_error::Error::new(format!("invalid inbound_addresses response: {e}")))?;
-    parse_inbound_addresses(&json)
-        .into_iter()
-        .find(|entry| entry.chain.eq_ignore_ascii_case(chain))
-        .ok_or_else(|| {
-            block_error::Error::new(format!("THORChain does not currently serve the {chain} chain"))
-        })
+/// Read the vault listing, trying each gateway until one answers.
+///
+/// The chain argument is the venue's own spelling ("BTC", "ETH"), matched case-insensitively
+/// against what the listing returns.
+fn fetch_inbound(
+    venue: &Venue,
+    gateways: &[String],
+    chain: &str,
+) -> Result<(String, InboundAddress), block_error::Error> {
+    let mut last: Option<block_error::Error> = None;
+    for base in gateways {
+        let text = match http::get_text(&format!("{base}/{}/inbound_addresses", venue.api)) {
+            Ok(text) => text,
+            Err(why) => {
+                last = Some(why);
+                continue;
+            }
+        };
+        let json: Value = match serde_json::from_str(&text) {
+            Ok(json) => json,
+            Err(e) => {
+                last = Some(block_error::Error::new(format!(
+                    "invalid inbound_addresses response: {e}"
+                )));
+                continue;
+            }
+        };
+        return parse_inbound_addresses(&json)
+            .into_iter()
+            .find(|entry| entry.chain.eq_ignore_ascii_case(chain))
+            .map(|entry| (base.clone(), entry))
+            .ok_or_else(|| {
+                block_error::Error::new(format!(
+                    "{} does not currently serve the {chain} chain",
+                    venue.name
+                ))
+            });
+    }
+    Err(last.unwrap_or_else(|| {
+        block_error::Error::new(format!("no {} gateway answered", venue.name))
+    }))
 }
 
 /// The subset of `/thorchain/quote/swap` this wallet acts on.
@@ -152,12 +260,12 @@ pub struct ThorQuote {
 }
 
 /// Parse a quote response, or surface the node's own error message.
-pub fn parse_quote(json: &Value) -> Result<ThorQuote, block_error::Error> {
+pub fn parse_quote(json: &Value, venue_name: &str) -> Result<ThorQuote, block_error::Error> {
     // The node reports refusals as `{"error": "..."}` with a 400, and those messages are
     // genuinely useful ("swapping is halted", "amount is less than fee"), so they are passed
     // through rather than replaced with something generic.
     if let Some(message) = json.get("error").and_then(Value::as_str) {
-        return Err(block_error::Error::new(format!("THORChain declined: {message}")));
+        return Err(block_error::Error::new(format!("{venue_name} declined: {message}")));
     }
 
     let str_field = |key: &str| json.get(key).and_then(Value::as_str).map(str::to_string);
@@ -195,11 +303,11 @@ pub fn parse_quote(json: &Value) -> Result<ThorQuote, block_error::Error> {
 
 impl SwapProvider for ThorChain {
     fn id(&self) -> &'static str {
-        "thorchain"
+        self.venue.id
     }
 
     fn display_name(&self) -> &'static str {
-        "THORChain"
+        self.venue.name
     }
 
     fn custody(&self) -> Custody {
@@ -207,23 +315,24 @@ impl SwapProvider for ThorChain {
     }
 
     fn supports(&self, from: &SwapAsset, to: &SwapAsset) -> bool {
-        // Both sides must be assets THORChain pools, and there is no point routing a
-        // same-chain same-asset pair through a cross-chain protocol.
+        // Both sides must be assets the venue pools, both chains must be ones it serves, and
+        // there is no point routing a same-chain same-asset pair through a cross-chain
+        // protocol.
         from.thorchain_notation().is_some()
             && to.thorchain_notation().is_some()
+            && self.venue.inbound_chains.contains(&from.chain.as_str())
+            && self.venue.inbound_chains.contains(&to.chain.as_str())
             && !(from.chain == to.chain && from.symbol == to.symbol)
     }
 
     fn quote(&self, request: &SwapRequest) -> Result<SwapQuote, block_error::Error> {
-        let base = base_url(request);
-        let from_asset = request
-            .from
-            .thorchain_notation()
-            .ok_or_else(|| block_error::Error::new("THORChain does not pool this input asset".to_string()))?;
-        let to_asset = request
-            .to
-            .thorchain_notation()
-            .ok_or_else(|| block_error::Error::new("THORChain does not pool this output asset".to_string()))?;
+        let venue = self.venue;
+        let from_asset = request.from.thorchain_notation().ok_or_else(|| {
+            block_error::Error::new(format!("{} does not pool this input asset", venue.name))
+        })?;
+        let to_asset = request.to.thorchain_notation().ok_or_else(|| {
+            block_error::Error::new(format!("{} does not pool this output asset", venue.name))
+        })?;
 
         let source_chain = match request.from.chain.as_str() {
             "btc" => "BTC",
@@ -231,26 +340,37 @@ impl SwapProvider for ThorChain {
             "eth" => "ETH",
             other => {
                 return Err(block_error::Error::new(format!(
-                    "THORChain cannot take an inbound payment on {other}"
+                    "{} cannot take an inbound payment on {other}",
+                    venue.name
                 )))
             }
         };
+        if !venue.inbound_chains.contains(&request.from.chain.as_str()) {
+            return Err(block_error::Error::new(format!(
+                "{} has no {source_chain} pool",
+                venue.name
+            )));
+        }
 
         // Read before quoting: a halted chain must be refused before the user is shown a
-        // price they might act on. Never cached, because vaults churn.
-        let inbound = fetch_inbound(&base, source_chain)?;
+        // price they might act on. Never cached, because vaults churn. The gateway that
+        // answered is the one the quote is then asked of, so both halves of the check come
+        // from the same node rather than from two that might disagree.
+        let (base, inbound) = fetch_inbound(venue, &gateways(venue, request), source_chain)?;
         if !inbound.is_tradable() {
             return Err(block_error::Error::new(format!(
-                "{} right now, so this swap cannot be made safely",
+                "{} {} right now, so this swap cannot be made safely",
+                venue.name,
                 inbound.halt_reason()
             )));
         }
 
         let thor_amount = request.from.to_thorchain_units(request.amount_in_base);
         if thor_amount == 0 {
-            return Err(block_error::Error::new(
-                "amount is too small for THORChain to represent".to_string(),
-            ));
+            return Err(block_error::Error::new(format!(
+                "amount is too small for {} to represent",
+                venue.name
+            )));
         }
 
         // `liquidity_tolerance_bps` makes the node embed a real limit in the memo. Without it
@@ -258,33 +378,31 @@ impl SwapProvider for ThorChain {
         // price at all.
         let tolerance = request.slippage_bps.clamp(1, super::safety::MAX_SLIPPAGE_BPS);
         let url = format!(
-            "{base}/thorchain/quote/swap?from_asset={from_asset}&to_asset={to_asset}\
+            "{base}/{}/quote/swap?from_asset={from_asset}&to_asset={to_asset}\
              &amount={thor_amount}&destination={}&liquidity_tolerance_bps={tolerance}",
+            venue.api,
             request.destination.trim()
         );
 
         let text = http::get_text(&url)?;
         let json: Value = serde_json::from_str(&text)
             .map_err(|e| block_error::Error::new(format!("invalid quote response: {e}")))?;
-        let quote = parse_quote(&json)?;
+        let quote = parse_quote(&json, venue.name)?;
 
         // The vault to pay comes from the quote, but it must agree with the inbound listing
         // read moments ago. A disagreement means a churn happened mid-quote, or one of the two
         // responses is not to be trusted; either way, paying is the wrong move.
-        if !quote
-            .inbound_address
-            .eq_ignore_ascii_case(&inbound.address)
-        {
-            return Err(block_error::Error::new(
-                "THORChain's quote and vault listing disagree on the inbound address; \
-                 try again in a moment"
-                    .to_string(),
-            ));
+        if !quote.inbound_address.eq_ignore_ascii_case(&inbound.address) {
+            return Err(block_error::Error::new(format!(
+                "the quote and vault listing from {} disagree on the inbound address; \
+                 try again in a moment",
+                venue.name
+            )));
         }
 
         let expected_out_base = request.to.from_thorchain_units(quote.expected_amount_out);
-        // THORChain enforces the limit embedded in the memo, so the floor the wallet shows is
-        // derived from the tolerance that was actually requested.
+        // The network enforces the limit embedded in the memo, so the floor the wallet shows
+        // is derived from the tolerance that was actually requested.
         let min_out_base = expected_out_base
             .saturating_mul(u128::from(10_000u32.saturating_sub(tolerance)))
             / 10_000;
@@ -308,15 +426,17 @@ impl SwapProvider for ThorChain {
                     .clone()
                     .or_else(|| inbound.router.clone())
                     .ok_or_else(|| {
-                        block_error::Error::new(
-                            "THORChain gave no router contract for the Ethereum leg".to_string(),
-                        )
+                        block_error::Error::new(format!(
+                            "{} gave no router contract for the Ethereum leg",
+                            venue.name
+                        ))
                     })?;
                 build_eth_deposit(request, &router, &quote)?
             }
             other => {
                 return Err(block_error::Error::new(format!(
-                    "THORChain cannot take an inbound payment on {other}"
+                    "{} cannot take an inbound payment on {other}",
+                    venue.name
                 )))
             }
         };
@@ -336,7 +456,10 @@ impl SwapProvider for ThorChain {
             fee_note: quote.fees_total.map(|total| {
                 format!(
                     "{} {} in protocol fees",
-                    super::format_base_units(request.to.from_thorchain_units(total), request.to.decimals),
+                    super::format_base_units(
+                        request.to.from_thorchain_units(total),
+                        request.to.decimals
+                    ),
                     request.to.symbol
                 )
             }),
@@ -501,7 +624,7 @@ mod tests {
         let json: Value = serde_json::from_str(CAPTURED_INBOUND).unwrap();
         for entry in parse_inbound_addresses(&json) {
             assert!(!entry.is_tradable(), "{} should not be tradable", entry.chain);
-            assert_eq!(entry.halt_reason(), "THORChain has paused trading network-wide");
+            assert_eq!(entry.halt_reason(), "has paused trading network-wide");
         }
     }
 
@@ -521,11 +644,11 @@ mod tests {
 
         let halted = InboundAddress { halted: true, ..base.clone() };
         assert!(!halted.is_tradable());
-        assert_eq!(halted.halt_reason(), "THORChain has halted this chain");
+        assert_eq!(halted.halt_reason(), "has halted this chain");
 
         let chain_paused = InboundAddress { chain_trading_paused: true, ..base.clone() };
         assert!(!chain_paused.is_tradable());
-        assert_eq!(chain_paused.halt_reason(), "THORChain has paused trading on this chain");
+        assert_eq!(chain_paused.halt_reason(), "has paused trading on this chain");
 
         let global = InboundAddress { global_trading_paused: true, ..base };
         assert!(!global.is_tradable());
@@ -547,7 +670,7 @@ mod tests {
           "expected_amount_out":"2035299208",
           "total_swap_seconds":1674
         }"#;
-        let quote = parse_quote(&serde_json::from_str(body).unwrap()).unwrap();
+        let quote = parse_quote(&serde_json::from_str(body).unwrap(), "THORChain").unwrap();
         assert_eq!(quote.inbound_address, "bc1qt9723ak9t7lu7a97lt9kelq4gnrlmyvk4yhzwr");
         assert_eq!(quote.expected_amount_out, 2_035_299_208);
         assert_eq!(quote.expiry, Some(1_722_575_316));
@@ -560,7 +683,7 @@ mod tests {
     #[test]
     fn a_node_error_is_surfaced_rather_than_swallowed() {
         let body = r#"{"error":"swapping is halted"}"#;
-        let err = parse_quote(&serde_json::from_str(body).unwrap()).unwrap_err();
+        let err = parse_quote(&serde_json::from_str(body).unwrap(), "THORChain").unwrap_err();
         assert!(format!("{err}").contains("swapping is halted"));
     }
 
