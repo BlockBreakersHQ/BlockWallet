@@ -14,10 +14,12 @@
   <img src="docs/screenshots/home-dark.png" alt="Home screen in dark mode" width="230">
 </p>
 
-**Status:** v0.1.0 completed its [Librem 5 checklist](docs/LIBREM5.md) on PureOS 11 (Crimson)
-in August 2026: all 41 checks passed on real hardware. Development has continued since, so the
-current tree is ahead of that verified point and is being re-tested against an expanded
-checklist.
+**Status:** v0.2.0 is the current release, built from a pinned tag and distributed as a Flatpak
+bundle you install by hand. The last full [Librem 5 checklist](docs/LIBREM5.md) run was v0.1.0,
+which passed all 41 of its boxes on real hardware in August 2026. v0.2.0 has been spot-checked
+on the same device rather than re-run end to end: it installs, launches, syncs against live
+nodes with the batched token read working, and renders a zero-balance wallet correctly. The
+rest of the checklist is owed.
 
 Known unproven areas, stated plainly rather than buried: cross-chain swaps have never moved
 real coins, because THORChain's global trading halt was in force for most of development and
@@ -234,10 +236,11 @@ moved real coins.
 
 ## Install
 
-### Flatpak (recommended)
+### Flatpak bundle (recommended)
 
-The Flatpak carries its own GNOME 50 runtime, so it does not depend on what the distribution
-ships and behaves the same on every PureOS release.
+Block Wallet is distributed as a `.flatpak` bundle you download and install yourself rather
+than through Flathub. The bundle carries its own GNOME 50 runtime, so it does not depend on
+what the distribution ships and behaves the same on every PureOS release.
 
 | PureOS | Base | Native GTK4 / libadwaita | Native build |
 | --- | --- | --- | --- |
@@ -249,19 +252,46 @@ bundle installs, appears in the Phosh app grid, and runs with no errors on stder
 57 MB resident. Note that this exercises the runtime's GTK 4.22, not Crimson's own 4.8.3.
 Those are separate code paths, and only the Flatpak one has been run on hardware.
 
-From a built bundle:
+**1. Download the bundle for your architecture** from the
+[latest release](https://github.com/BlockBreakersHQ/BlockWallet/releases/latest), together
+with `SHA256SUMS`. Use `aarch64` for the Librem 5, `x86_64` for a desktop.
+
+**2. Check what you downloaded.** This is a wallet, so verify the file before installing it.
 
 ```sh
-flatpak install --user ./blockwallet-aarch64.flatpak
+sha256sum --check --ignore-missing SHA256SUMS
+```
+
+That must print `OK` for the file you downloaded. If it does not, stop and do not install it.
+
+**3. Make sure the GNOME runtime is available.** The bundle carries the app but not the
+runtime underneath it, which comes from Flathub. Most systems already have this remote, and
+adding it again is harmless.
+
+```sh
+flatpak remote-add --if-not-exists --user flathub \
+  https://dl.flathub.org/repo/flathub.flatpakrepo
+```
+
+**4. Install and run.**
+
+```sh
+flatpak install --user ./BlockWallet-v0.2.0-aarch64.flatpak
 flatpak run io.github.BlockBreakersHQ.BlockWallet
 ```
 
-From a hosted repo:
+It then appears in the Phosh app grid, or your desktop's launcher, like any other app. The
+first install also pulls the GNOME runtime, which is a few hundred MB. Later ones do not.
+
+**Updating.** A bundle has no update channel, so nothing checks for new versions on your
+behalf. Download the next release and run the same `flatpak install` command, which upgrades
+in place. Your wallet lives outside the app, in
+`~/.var/app/io.github.BlockBreakersHQ.BlockWallet/`, so it survives both upgrades and
+uninstalls. Removing the wallet is a separate, deliberate act:
 
 ```sh
-flatpak remote-add --if-not-exists --user blockwallet https://example.org/repo/blockwallet.flatpakrepo
-flatpak install --user blockwallet io.github.BlockBreakersHQ.BlockWallet
-flatpak run io.github.BlockBreakersHQ.BlockWallet
+flatpak uninstall --user io.github.BlockBreakersHQ.BlockWallet   # keeps your wallet
+rm -rf ~/.var/app/io.github.BlockBreakersHQ.BlockWallet          # deletes it
 ```
 
 Building the bundle yourself is covered in [docs/packaging.md](docs/packaging.md).
