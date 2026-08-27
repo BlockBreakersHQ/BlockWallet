@@ -55,7 +55,7 @@ pub const SWAP_FEE_BPS: u32 = 100;
 /// this wallet derives.
 pub const DEFAULT_FEE_EVM_ADDRESS: &str = "0xBfa9D462C7560d6822A9Dc2C24818eD6CF9eeb54";
 
-/// LI.FI integrator name, once registered for fee collection. Empty, so no fee is asked.
+/// LI.FI integrator name, registered on the LI.FI Partner Portal for fee collection.
 ///
 /// Separate from the EVM payout address on purpose. LI.FI does not merely ignore a fee from
 /// an unregistered integrator, it **rejects the whole quote**:
@@ -66,10 +66,10 @@ pub const DEFAULT_FEE_EVM_ADDRESS: &str = "0xBfa9D462C7560d6822A9Dc2C24818eD6CF9
 /// ```
 ///
 /// So sending one before registering would not cost a fee, it would cost the venue: every
-/// EVM pair would lose LI.FI entirely and fall back to whatever else answered. Verified
-/// against the live API. Fill this in only once the portal shows fee collection enabled, and
-/// the payout wallet is configured there rather than here.
-pub const DEFAULT_FEE_LIFI_INTEGRATOR: &str = "";
+/// EVM pair would lose LI.FI entirely and fall back to whatever else answered. Registered,
+/// with the payout wallet configured on the portal rather than here; leave this blank in a
+/// fork or self-build unless it is registered under a different name.
+pub const DEFAULT_FEE_LIFI_INTEGRATOR: &str = "BlockWallet";
 
 /// Jupiter payout. Empty, so no fee is requested on Solana swaps.
 ///
@@ -752,14 +752,14 @@ mod tests {
     }
 
     #[test]
-    fn lifi_is_asked_for_no_fee_until_the_integrator_is_registered() {
-        // The shipped EVM payout address must NOT switch LI.FI's fee on by itself. LI.FI
-        // rejects a quote outright from an unregistered integrator (code 1011), so doing so
-        // would lose the venue on every EVM pair rather than earn anything. Verified against
-        // the live API.
+    fn an_unregistered_lifi_integrator_is_asked_for_no_fee() {
+        // Sending a fee under an unregistered integrator name would not cost a fee, it would
+        // cost the venue: LI.FI rejects a quote outright from an unregistered integrator
+        // (code 1011), losing the venue on every EVM pair rather than earning anything.
+        // Covered generically, independent of whatever the shipped default currently is.
         let fee = FeePayout {
             evm: DEFAULT_FEE_EVM_ADDRESS.to_string(),
-            lifi_integrator: DEFAULT_FEE_LIFI_INTEGRATOR.to_string(),
+            lifi_integrator: String::new(),
             ..FeePayout::default()
         };
         assert_eq!(
@@ -769,5 +769,18 @@ mod tests {
         );
         // KyberSwap, which needs no registration, does charge from the same config.
         assert_eq!(fee.bps_for(&fee.evm), SWAP_FEE_BPS);
+    }
+
+    #[test]
+    fn the_shipped_lifi_integrator_charges_from_the_registered_name() {
+        // Registered on the LI.FI Partner Portal under this exact name; a mismatch here would
+        // silently lose the venue's fee rather than fail loudly, so it is pinned by name
+        // rather than just checked for non-emptiness.
+        assert_eq!(DEFAULT_FEE_LIFI_INTEGRATOR, "BlockWallet");
+        let fee = FeePayout {
+            lifi_integrator: DEFAULT_FEE_LIFI_INTEGRATOR.to_string(),
+            ..FeePayout::default()
+        };
+        assert_eq!(fee.bps_for(&fee.lifi_integrator), SWAP_FEE_BPS);
     }
 }

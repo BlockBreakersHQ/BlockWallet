@@ -97,10 +97,11 @@
   <releases>
     <release version="0.2.1" type="development" date="2026-08-27">
       <description>
-        <p>A maintenance release: one swap-fee correctness fix and a payout address update, no user-facing feature changes.</p>
+        <p>A maintenance release: a swap-fee correctness fix and a payout update. The fee is still 1% everywhere it was already disclosed; only which venues actually charge it changes.</p>
         <ul>
+          <li>LI.FI now charges the same 1% wallet fee KyberSwap already did, since this build is registered with LI.FI as an integrator. Previously LI.FI quoted with no fee at all rather than risk every EVM quote being rejected by an unregistered name.</li>
           <li>Fixed a bug that would have broken every Solana swap the moment a swap fee was enabled: Jupiter requires a fee account whenever a fee is requested, and the app was never sending one. The fee itself is still not enabled on Solana.</li>
-          <li>Updated the swap-fee payout address for Ethereum and its L2s. The 1% fee itself, and everything already disclosed about it, is unchanged.</li>
+          <li>Updated the swap-fee payout address for Ethereum and its L2s.</li>
         </ul>
       </description>
     </release>
