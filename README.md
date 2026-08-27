@@ -32,6 +32,100 @@ Application ID: `io.github.BlockBreakersHQ.BlockWallet`
 
 ---
 
+## Install
+
+### Flatpak bundle (recommended)
+
+Block Wallet is distributed as a `.flatpak` bundle you download and install yourself rather
+than through Flathub. The bundle carries its own GNOME 50 runtime, so it does not depend on
+what the distribution ships and behaves the same on every PureOS release.
+
+| PureOS | Base | Native GTK4 / libadwaita | Native build |
+| --- | --- | --- | --- |
+| Byzantium | Debian bullseye | none | not possible |
+| **Crimson** | Debian bookworm | GTK 4.8.3, libadwaita 1.2.2 | possible, but see [From source](#from-source) |
+
+Verified on a Librem 5 running **PureOS 11 (Crimson)**, kernel 6.12.0-1-librem5: the aarch64
+bundle installs, appears in the Phosh app grid, and runs with no errors on stderr and a flat
+57 MB resident. Note that this exercises the runtime's GTK 4.22, not Crimson's own 4.8.3.
+Those are separate code paths, and only the Flatpak one has been run on hardware.
+
+**1. Download the bundle for your architecture** from the
+[latest release](https://github.com/BlockBreakersHQ/BlockWallet/releases/latest), together
+with `SHA256SUMS`. Use `aarch64` for the Librem 5, `x86_64` for a desktop.
+
+**2. Check what you downloaded.** This is a wallet, so verify the file before installing it.
+
+```sh
+sha256sum --check --ignore-missing SHA256SUMS
+```
+
+That must print `OK` for the file you downloaded. If it does not, stop and do not install it.
+
+**3. Make sure the GNOME runtime is available.** The bundle carries the app but not the
+runtime underneath it, which comes from Flathub. Most systems already have this remote, and
+adding it again is harmless.
+
+```sh
+flatpak remote-add --if-not-exists --user flathub \
+  https://dl.flathub.org/repo/flathub.flatpakrepo
+```
+
+**4. Install and run.**
+
+```sh
+flatpak install --user ./BlockWallet-v0.2.0-aarch64.flatpak
+flatpak run io.github.BlockBreakersHQ.BlockWallet
+```
+
+It then appears in the Phosh app grid, or your desktop's launcher, like any other app. The
+first install also pulls the GNOME runtime, which is a few hundred MB. Later ones do not.
+
+**Updating.** A bundle has no update channel, so nothing checks for new versions on your
+behalf. Download the next release and run the same `flatpak install` command, which upgrades
+in place. Your wallet lives outside the app, in
+`~/.var/app/io.github.BlockBreakersHQ.BlockWallet/`, so it survives both upgrades and
+uninstalls. Removing the wallet is a separate, deliberate act:
+
+```sh
+flatpak uninstall --user io.github.BlockBreakersHQ.BlockWallet   # keeps your wallet
+rm -rf ~/.var/app/io.github.BlockBreakersHQ.BlockWallet          # deletes it
+```
+
+Building the bundle yourself is covered in [docs/packaging.md](docs/packaging.md).
+
+### From source
+
+Needs Rust 1.85+, GTK 4.6+, and libadwaita 1.2+.
+
+```sh
+# Debian bookworm / trixie, PureOS Crimson
+sudo apt install build-essential pkg-config libgtk-4-dev libadwaita-1-dev libssl-dev
+
+cargo build --release
+cargo test
+```
+
+**On PureOS Crimson the distribution's Rust is too old.** Crimson's `rustc` is 1.63 and this
+crate needs 1.85, so install a toolchain from [rustup](https://rustup.rs) rather than
+`apt install rustc cargo`. The GTK side is fine: Crimson's GTK 4.8.3 and libadwaita 1.2.2
+both clear the floor, and `libgtk-4-dev` / `libadwaita-1-dev` are in its repositories.
+
+That libadwaita floor is deliberate. `Cargo.toml` pins the `v1_2` feature and
+`ui::add_switch_row` hand-builds what `AdwSwitchRow` would give, precisely so this still
+compiles against the 1.2.2 that Crimson ships. Raising it to `v1_4` would break the native
+build on the device this app targets.
+
+Building on the phone itself is slow: 4 cores and 3 GB of RAM against roughly 580 crates.
+Prefer building on a faster machine and copying the result over.
+
+Windows (MSYS2 mingw64 + GNU rustc). Plain `cargo run` uses MSVC and has no
+`pkg-config`/GTK, so use the wrapper:
+
+```powershell
+.\scripts\run-windows.ps1
+```
+
 ## What it is
 
 Block Wallet is a wallet you actually hold the keys to, built for a Linux phone.
@@ -192,17 +286,11 @@ chain rather than an AMM, it requires depositing assets into its system first, a
 mainly in leveraged perpetuals. None of those fit a wallet whose whole model is one signed
 transaction, a guaranteed minimum output, and never handing custody to anyone.
 
-### The swap fee
-
 Block Wallet asks each venue for a 1% affiliate fee, deducted by the venue itself rather than
-by an extra transaction. It is shown as a single **Swap fee** line on every offer and again on
+by an extra transaction. It is shown as a single Swap fee line on every offer and again on
 the review card before anything can be confirmed. Where a venue reports its own total, that
-figure already includes this fee, so the two are never added together.
-
-Only the EVM aggregators have a payout address built in, so only they are asked for a fee.
-Solana, THORChain and Maya each need an account this wallet cannot derive (a Jupiter referral
-token account, a `thor1…` address, a `maya1…` address), and until one is configured those
-venues are asked for no fee at all and quote exactly as they would in a build with no fee.
+figure already includes this fee, so the two are never added together. Only the EVM aggregators
+have a payout address built in, so only they are asked for a fee.
 
 What the wallet checks before it will sign, on every offer:
 
@@ -233,100 +321,6 @@ So this is an infrastructure-access problem with an ordinary fix, not a dead dep
 you run your own node, set it in **Settings -> Swaps** and it is tried first, ahead of the
 public list. The cross-chain paths are unit-tested against captured responses but have not
 moved real coins.
-
-## Install
-
-### Flatpak bundle (recommended)
-
-Block Wallet is distributed as a `.flatpak` bundle you download and install yourself rather
-than through Flathub. The bundle carries its own GNOME 50 runtime, so it does not depend on
-what the distribution ships and behaves the same on every PureOS release.
-
-| PureOS | Base | Native GTK4 / libadwaita | Native build |
-| --- | --- | --- | --- |
-| Byzantium | Debian bullseye | none | not possible |
-| **Crimson** | Debian bookworm | GTK 4.8.3, libadwaita 1.2.2 | possible, but see [From source](#from-source) |
-
-Verified on a Librem 5 running **PureOS 11 (Crimson)**, kernel 6.12.0-1-librem5: the aarch64
-bundle installs, appears in the Phosh app grid, and runs with no errors on stderr and a flat
-57 MB resident. Note that this exercises the runtime's GTK 4.22, not Crimson's own 4.8.3.
-Those are separate code paths, and only the Flatpak one has been run on hardware.
-
-**1. Download the bundle for your architecture** from the
-[latest release](https://github.com/BlockBreakersHQ/BlockWallet/releases/latest), together
-with `SHA256SUMS`. Use `aarch64` for the Librem 5, `x86_64` for a desktop.
-
-**2. Check what you downloaded.** This is a wallet, so verify the file before installing it.
-
-```sh
-sha256sum --check --ignore-missing SHA256SUMS
-```
-
-That must print `OK` for the file you downloaded. If it does not, stop and do not install it.
-
-**3. Make sure the GNOME runtime is available.** The bundle carries the app but not the
-runtime underneath it, which comes from Flathub. Most systems already have this remote, and
-adding it again is harmless.
-
-```sh
-flatpak remote-add --if-not-exists --user flathub \
-  https://dl.flathub.org/repo/flathub.flatpakrepo
-```
-
-**4. Install and run.**
-
-```sh
-flatpak install --user ./BlockWallet-v0.2.0-aarch64.flatpak
-flatpak run io.github.BlockBreakersHQ.BlockWallet
-```
-
-It then appears in the Phosh app grid, or your desktop's launcher, like any other app. The
-first install also pulls the GNOME runtime, which is a few hundred MB. Later ones do not.
-
-**Updating.** A bundle has no update channel, so nothing checks for new versions on your
-behalf. Download the next release and run the same `flatpak install` command, which upgrades
-in place. Your wallet lives outside the app, in
-`~/.var/app/io.github.BlockBreakersHQ.BlockWallet/`, so it survives both upgrades and
-uninstalls. Removing the wallet is a separate, deliberate act:
-
-```sh
-flatpak uninstall --user io.github.BlockBreakersHQ.BlockWallet   # keeps your wallet
-rm -rf ~/.var/app/io.github.BlockBreakersHQ.BlockWallet          # deletes it
-```
-
-Building the bundle yourself is covered in [docs/packaging.md](docs/packaging.md).
-
-### From source
-
-Needs Rust 1.85+, GTK 4.6+, and libadwaita 1.2+.
-
-```sh
-# Debian bookworm / trixie, PureOS Crimson
-sudo apt install build-essential pkg-config libgtk-4-dev libadwaita-1-dev libssl-dev
-
-cargo build --release
-cargo test
-```
-
-**On PureOS Crimson the distribution's Rust is too old.** Crimson's `rustc` is 1.63 and this
-crate needs 1.85, so install a toolchain from [rustup](https://rustup.rs) rather than
-`apt install rustc cargo`. The GTK side is fine: Crimson's GTK 4.8.3 and libadwaita 1.2.2
-both clear the floor, and `libgtk-4-dev` / `libadwaita-1-dev` are in its repositories.
-
-That libadwaita floor is deliberate. `Cargo.toml` pins the `v1_2` feature and
-`ui::add_switch_row` hand-builds what `AdwSwitchRow` would give, precisely so this still
-compiles against the 1.2.2 that Crimson ships. Raising it to `v1_4` would break the native
-build on the device this app targets.
-
-Building on the phone itself is slow: 4 cores and 3 GB of RAM against roughly 580 crates.
-Prefer building on a faster machine and copying the result over.
-
-Windows (MSYS2 mingw64 + GNU rustc). Plain `cargo run` uses MSVC and has no
-`pkg-config`/GTK, so use the wrapper:
-
-```powershell
-.\scripts\run-windows.ps1
-```
 
 ## Trying it safely
 
