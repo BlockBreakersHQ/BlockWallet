@@ -159,9 +159,20 @@ impl SwapProvider for LiFi {
             )
         })?;
 
+        // LI.FI only honours a fee for a registered integrator, so an unregistered build that
+        // sent one would have its quotes rejected and lose the venue entirely. The parameter
+        // is therefore only added when a payout address is configured, and even then it is
+        // LI.FI that decides whether to apply it. `fee` is a fraction here, not bps.
+        let payout = request.fee.evm.trim();
+        let fee_bps = request.fee.bps_for(payout);
+        let fee_param = if fee_bps > 0 {
+            format!("&integrator=block-wallet&fee={}", fee_bps as f64 / 10_000.0)
+        } else {
+            String::new()
+        };
         let url = format!(
-            "{API}?fromChain={chain_id}&toChain={chain_id}&fromToken={}&toToken={}\
-             &fromAddress={}&toAddress={}&fromAmount={}&slippage={}",
+            "{API}?fromChain={chain_id}&toChain={chain_id}&fromToken={}&toToken={}
+             &fromAddress={}&toAddress={}&fromAmount={}&slippage={}{fee_param}",
             token_param(&request.from),
             token_param(&request.to),
             request.from_address.trim(),
@@ -195,8 +206,11 @@ impl SwapProvider for LiFi {
             // LI.FI states no expiry, so the wallet's own quote-age limit applies.
             expiry: None,
             eta_seconds: parsed.execution_duration,
-            fee_note: parsed.tool.map(|t| format!("routed via {t}")),
+            route_note: parsed.tool.map(|t| format!("routed via {t}")),
+            // LI.FI reports no fee total, so the wallet fee is all that can be stated.
+            fee_total_base: None,
             min_in_base: None,
+            fee_bps,
             execution: SwapExecution::EvmCall {
                 chain_id,
                 to: parsed.to,

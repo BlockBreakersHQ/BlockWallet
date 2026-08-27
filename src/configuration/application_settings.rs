@@ -76,6 +76,11 @@ pub struct ApplicationSettings {
     pub btc_units           : String,
     /// Hide assets whose balance is a confirmed zero on the Assets screen.
     pub hide_zero_balances  : bool,
+    /// Affiliate payout addresses. Empty means no swap fee is requested from that venue.
+    pub fee_evm_address     : String,
+    pub fee_solana_account  : String,
+    pub fee_thorchain_address: String,
+    pub fee_maya_address    : String,
     pub sync_epoch          : Arc<AtomicU64>,
 }
 
@@ -261,6 +266,10 @@ impl ApplicationSettings {
             fiat                : String::from("usd"),
             btc_units           : String::from("btc"),
             hide_zero_balances  : false,
+            fee_evm_address     : crate::currencies::swap::DEFAULT_FEE_EVM_ADDRESS.to_string(),
+            fee_solana_account  : crate::currencies::swap::DEFAULT_FEE_SOLANA_ACCOUNT.to_string(),
+            fee_thorchain_address: crate::currencies::swap::DEFAULT_FEE_THORCHAIN_ADDRESS.to_string(),
+            fee_maya_address    : crate::currencies::swap::DEFAULT_FEE_MAYA_ADDRESS.to_string(),
             sync_epoch          : Arc::new(AtomicU64::new(0)),
         };
         crate::currencies::eth_chain::apply_bundled_tokens(
@@ -708,6 +717,10 @@ impl ApplicationSettings {
                 fiat: self.fiat.clone(),
                 btc_units: self.btc_units.clone(),
                 hide_zero_balances: self.hide_zero_balances,
+                fee_evm_address: self.fee_evm_address.clone(),
+                fee_solana_account: self.fee_solana_account.clone(),
+                fee_thorchain_address: self.fee_thorchain_address.clone(),
+                fee_maya_address: self.fee_maya_address.clone(),
             },
             btc: self.btc_wallets.iter().map(|wallet| {
                 let from_seed = self.uses_store_seed(wallet.mnemonic.as_deref());
@@ -801,6 +814,14 @@ impl ApplicationSettings {
             self.fiat = payload.settings.fiat;
         }
         self.hide_zero_balances = payload.settings.hide_zero_balances;
+        // An older store has no value here, and an empty string must not wipe the shipped
+        // default back out. Same rule the other defaulted settings use.
+        if !payload.settings.fee_evm_address.trim().is_empty() {
+            self.fee_evm_address = payload.settings.fee_evm_address;
+        }
+        self.fee_solana_account = payload.settings.fee_solana_account;
+        self.fee_thorchain_address = payload.settings.fee_thorchain_address;
+        self.fee_maya_address = payload.settings.fee_maya_address;
         if !payload.settings.btc_units.is_empty() {
             self.btc_units = payload.settings.btc_units;
         }

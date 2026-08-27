@@ -247,7 +247,12 @@ impl SwapProvider for KyberSwap {
         let route = parse_route(&json)?;
 
         let build_url = format!("{API_HOST}/{slug}/api/v1/route/build");
-        let body = json!({
+        // Kyber takes the fee on the input side, in bps, paid to an ordinary address. Only
+        // sent when one is configured: an unset receiver with a fee amount is rejected, and
+        // losing the venue to earn nothing would be a poor trade.
+        let payout = request.fee.evm.trim();
+        let fee_bps = request.fee.bps_for(payout);
+        let mut body = json!({
             "routeSummary": route.route_summary,
             "sender": request.from_address.trim(),
             "recipient": request.destination.trim(),
@@ -255,6 +260,12 @@ impl SwapProvider for KyberSwap {
             "slippageTolerance": request.slippage_bps,
             "source": "block-wallet",
         });
+        if fee_bps > 0 {
+            body["feeReceiver"] = json!(payout);
+            body["chargeFeeBy"] = json!("currency_in");
+            body["feeAmount"] = json!(fee_bps.to_string());
+            body["isInBps"] = json!(true);
+        }
         let built_text = http::post_json(&build_url, &body)?;
         let built_json: Value = serde_json::from_str(&built_text)
             .map_err(|e| block_error::Error::new(format!("invalid KyberSwap response: {e}")))?;
@@ -281,8 +292,10 @@ impl SwapProvider for KyberSwap {
             destination: request.destination.clone(),
             expiry: None,
             eta_seconds: Some(30),
-            fee_note: None,
+            route_note: None,
+            fee_total_base: None,
             min_in_base: None,
+            fee_bps,
             execution: SwapExecution::EvmCall {
                 chain_id,
                 to: built.router_address.clone(),

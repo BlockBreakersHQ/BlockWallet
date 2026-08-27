@@ -53,6 +53,19 @@ fn source_address(settings: &ApplicationSettings, chain: &str) -> Option<String>
     }
 }
 
+/// Affiliate payout addresses, read from settings.
+///
+/// An unset address means that venue is asked for no fee at all, so a build with none
+/// configured quotes exactly as it did before the fee existed.
+fn fee_payout(settings: &ApplicationSettings) -> swap::FeePayout {
+    swap::FeePayout {
+        evm: settings.fee_evm_address.clone(),
+        solana: settings.fee_solana_account.clone(),
+        thorchain: settings.fee_thorchain_address.clone(),
+        maya: settings.fee_maya_address.clone(),
+    }
+}
+
 fn signing_context(settings: &ApplicationSettings) -> SigningContext {
     SigningContext {
         btc_mnemonic: settings.btc_wallets.first().and_then(|w| w.mnemonic.clone()),
@@ -155,10 +168,16 @@ fn quote_row(quote: &SwapQuote) -> adw::ActionRow {
             quote.expected_out_display(),
             quote.to.symbol
         ))
-        .subtitle(format!(
-            "{} · {} · ~{}",
-            quote.provider_name, custody_note, eta
-        ))
+        // The total cost is stated on the offer itself, not only at review, since this is
+        // the screen where offers get compared with each other. Same single figure and same
+        // name as the review card, so the two never appear to disagree.
+        .subtitle(match swap::swap_fee_line(quote) {
+            Some(fee) => format!(
+                "{} · {} · ~{} · swap fee {}",
+                quote.provider_name, custody_note, eta, fee
+            ),
+            None => format!("{} · {} · ~{}", quote.provider_name, custody_note, eta),
+        })
         .activatable(true)
         .build();
     row.add_prefix(&gtk::Image::from_icon_name(
@@ -358,6 +377,7 @@ pub fn trade_view(
                 slippage_bps: swap::safety::DEFAULT_SLIPPAGE_BPS,
                 evm_chain_id,
                 thornode_url: settings.thornode_url.clone(),
+                fee: fee_payout(&settings),
                 sol_node: settings.sol_node.clone(),
                 sol_network: settings.sol_network.clone(),
             };
@@ -458,8 +478,23 @@ pub fn trade_view(
                 Custody::AtomicOnChain => "testnet-note",
                 Custody::ProtocolVault => "spend-warning",
             });
+            // One "Swap fee" line carrying the whole cost, not one line per component.
+            //
+            // The venues that report a total already fold the affiliate cut into it, so
+            // showing the venue's fee and the wallet's separately would read as more being
+            // taken than actually is. The route note is a different thing again (which DEX,
+            // what price impact) and stays on its own line rather than being mistaken for a
+            // charge, which is what happened when both shared a field.
+            let swap_fee = swap::swap_fee_line(&quote)
+                .map(|line| format!("\nSwap fee: {line}"))
+                .unwrap_or_default();
+            let route = quote
+                .route_note
+                .as_ref()
+                .map(|note| format!("\nRoute: {note}"))
+                .unwrap_or_default();
             summary.set_label(&format!(
-                "Provider: {}\nYou send: {} {}\nYou receive at least: {} {}\nExpected: {} {}\nSettles to: {}{}",
+                "Provider: {}\nYou send: {} {}\nYou receive at least: {} {}\nExpected: {} {}\nSettles to: {}{}{}",
                 quote.provider_name,
                 quote.amount_in_display(),
                 quote.from.symbol,
@@ -468,11 +503,8 @@ pub fn trade_view(
                 quote.expected_out_display(),
                 quote.to.symbol,
                 ui::short_address(&quote.destination),
-                quote
-                    .fee_note
-                    .as_ref()
-                    .map(|note| format!("\n{note}"))
-                    .unwrap_or_default(),
+                swap_fee,
+                route,
             ));
         });
     }

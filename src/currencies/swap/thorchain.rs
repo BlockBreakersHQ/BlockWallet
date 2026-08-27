@@ -29,6 +29,13 @@ use crate::currencies::swap::{
     Custody, SwapAsset, SwapExecution, SwapProvider, SwapQuote, SwapRequest,
 };
 
+/// Which affiliate payout address a venue draws on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FeeChain {
+    Thorchain,
+    Maya,
+}
+
 /// One THORChain-shaped network.
 ///
 /// Maya Protocol is a THORChain fork and speaks the same API under a different path prefix,
@@ -48,6 +55,9 @@ pub struct Venue {
     pub api: &'static str,
     /// Source chains it can take an inbound payment on, as internal chain keys.
     pub inbound_chains: &'static [&'static str],
+    /// Which payout address in [`super::FeePayout`] belongs to this network. They are
+    /// separate chains, and paying a `thor1…` address on Maya would simply lose the fee.
+    pub payout: FeeChain,
     /// Whether the user's configured THORNode URL applies. It does not for Maya, which is a
     /// separate network: pointing a Maya quote at a THORNode would ask the wrong chain for
     /// vaults, and could hand back an address belonging to neither.
@@ -75,6 +85,7 @@ pub const THORCHAIN: Venue = Venue {
         "https://thornode.thorchain.liquify.com",
     ],
     api: "thorchain",
+    payout: FeeChain::Thorchain,
     inbound_chains: &["btc", "ltc", "eth"],
     honours_node_override: true,
 };
@@ -92,6 +103,7 @@ pub const MAYA: Venue = Venue {
     name: "Maya Protocol",
     gateways: &["https://mayanode.mayachain.info"],
     api: "mayachain",
+    payout: FeeChain::Maya,
     inbound_chains: &["btc", "eth"],
     honours_node_override: false,
 };
@@ -377,9 +389,23 @@ impl SwapProvider for ThorChain {
         // the memo comes back with a limit of 0, which means the swap will execute at any
         // price at all.
         let tolerance = request.slippage_bps.clamp(1, super::safety::MAX_SLIPPAGE_BPS);
+        // The affiliate is handed to the node, which builds it into the memo it returns.
+        // Doing it this way rather than editing the memo ourselves means the fee the user is
+        // shown is the one the network will actually apply, and `safety::memo_destination`
+        // already ignores the trailing affiliate fields when it checks where proceeds land.
+        let payout = match venue.payout {
+            FeeChain::Thorchain => request.fee.thorchain.trim(),
+            FeeChain::Maya => request.fee.maya.trim(),
+        };
+        let fee_bps = request.fee.bps_for(payout);
+        let affiliate = if fee_bps > 0 {
+            format!("&affiliate={payout}&affiliate_bps={fee_bps}")
+        } else {
+            String::new()
+        };
         let url = format!(
-            "{base}/{}/quote/swap?from_asset={from_asset}&to_asset={to_asset}\
-             &amount={thor_amount}&destination={}&liquidity_tolerance_bps={tolerance}",
+            "{base}/{}/quote/swap?from_asset={from_asset}&to_asset={to_asset}
+             &amount={thor_amount}&destination={}&liquidity_tolerance_bps={tolerance}{affiliate}",
             venue.api,
             request.destination.trim()
         );
@@ -453,17 +479,14 @@ impl SwapProvider for ThorChain {
             destination: request.destination.clone(),
             expiry: quote.expiry,
             eta_seconds: quote.total_swap_seconds,
-            fee_note: quote.fees_total.map(|total| {
-                format!(
-                    "{} {} in protocol fees",
-                    super::format_base_units(
-                        request.to.from_thorchain_units(total),
-                        request.to.decimals
-                    ),
-                    request.to.symbol
-                )
-            }),
+            route_note: None,
+            // Already inclusive of the affiliate cut: THORChain reports fees.total as
+            // outbound + liquidity + affiliate.
+            fee_total_base: quote
+                .fees_total
+                .map(|total| request.to.from_thorchain_units(total)),
             min_in_base,
+            fee_bps,
             execution,
         })
     }

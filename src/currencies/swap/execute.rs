@@ -332,6 +332,7 @@ mod tests {
             thornode_url: String::new(),
             sol_node: String::new(),
             sol_network: String::new(),
+            fee: crate::currencies::swap::FeePayout::default(),
         };
         let quote = SwapQuote {
             provider_id: "thorchain",
@@ -345,8 +346,10 @@ mod tests {
             destination: MY_ETH.into(),
             expiry: Some(u64::MAX),
             eta_seconds: Some(1800),
-            fee_note: None,
+            route_note: None,
+            fee_total_base: None,
             min_in_base: Some(100_000),
+            fee_bps: 0,
             execution: SwapExecution::UtxoWithMemo {
                 vault: "bc1qp6yzmq5kjr8yvyw7453gxvq4z3tvkdyadqm794".into(),
                 amount_base: 10_000_000,

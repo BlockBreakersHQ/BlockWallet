@@ -167,6 +167,41 @@ That means the funds are briefly out of your control between the two legs, which
 plainly on the offer and again on the review screen before you can confirm. Litecoin goes
 through THORChain specifically: Maya has no LTC pool, and says so before making a request.
 
+### Why aggregators rather than individual exchanges
+
+There is no Uniswap entry in that table, nor PancakeSwap, Curve or SushiSwap, and that is
+deliberate: **the wallet already swaps on all of them.** LI.FI and KyberSwap are aggregators.
+They quote across dozens of venues and pick whichever is best for that pair at that moment, so
+a single EVM swap routinely executes across several at once. The review card names the ones it
+used.
+
+Adding a DEX directly could only ever match what an aggregator already returns, never beat it,
+because the aggregator can always choose that DEX too. It would also move the construction of
+swap calldata out from behind a bounded interface and into this codebase, where a mistake in
+path encoding or router arguments is a mistake that loses money. That trade is not worth making
+for a price that is, at best, identical.
+
+The one thing this costs is resilience: if both aggregators are unreachable, every same-chain
+EVM pair loses its route. A minimal direct-to-Uniswap fallback would fix that, and is the only
+form in which adding a single DEX makes sense here.
+
+Hyperliquid is a different case and is deliberately absent. It is an order book on its own
+chain rather than an AMM, it requires depositing assets into its system first, and it deals
+mainly in leveraged perpetuals. None of those fit a wallet whose whole model is one signed
+transaction, a guaranteed minimum output, and never handing custody to anyone.
+
+### The swap fee
+
+Block Wallet asks each venue for a 1% affiliate fee, deducted by the venue itself rather than
+by an extra transaction. It is shown as a single **Swap fee** line on every offer and again on
+the review card before anything can be confirmed. Where a venue reports its own total, that
+figure already includes this fee, so the two are never added together.
+
+Only the EVM aggregators have a payout address built in, so only they are asked for a fee.
+Solana, THORChain and Maya each need an account this wallet cannot derive (a Jupiter referral
+token account, a `thor1…` address, a `maya1…` address), and until one is configured those
+venues are asked for no fee at all and quote exactly as they would in a build with no fee.
+
 What the wallet checks before it will sign, on every offer:
 
 - the proceeds are addressed to your own wallet, verified against the THORChain memo itself

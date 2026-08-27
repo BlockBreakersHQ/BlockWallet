@@ -33,6 +33,90 @@ use std::fmt;
 use crate::configuration::block_error;
 use crate::currencies::tokens::Token;
 
+/// Basis points taken from each swap as an affiliate fee. 100 bps is 1%.
+///
+/// Charged through each venue's own affiliate mechanism rather than by this wallet moving
+/// money: the venue deducts it and pays it out, so there is no extra transaction and nothing
+/// for the user to sign beyond the swap itself.
+///
+/// Sits inside every venue's cap (THORChain and Maya allow up to 1000 bps). It is also
+/// disclosed on the offer and again on the review screen before anything can be confirmed;
+/// a wallet that quietly skimmed a percent would be indefensible, whatever the number.
+pub const SWAP_FEE_BPS: u32 = 100;
+
+/// Payout address shipped with the app for the EVM aggregators.
+///
+/// Compiled in rather than left blank so a stock install actually pays the developer; the
+/// Settings field overrides it, which is what a fork or a self-build would use. EVM addresses
+/// are chain-agnostic, so this one collects on all seven supported EVM networks.
+///
+/// Only the EVM venues get a default. The other three need accounts that cannot be guessed:
+/// a Jupiter referral token account, a THORChain address and a Maya address, none of which
+/// this wallet derives.
+pub const DEFAULT_FEE_EVM_ADDRESS: &str = "0x87fFD6efD8Bc263073e14d9d93e4EFe8477Cb12f";
+
+/// Jupiter payout. Empty, so no fee is requested on Solana swaps.
+///
+/// Filling this in needs a Jupiter *referral token account*, not a wallet address: a program
+/// account created through their referral program, with a separate fee account per token you
+/// want to collect in. Pasting an ordinary Solana address here would not work.
+pub const DEFAULT_FEE_SOLANA_ACCOUNT: &str = "";
+
+/// THORChain payout. Empty, so no fee is requested on THORChain swaps.
+///
+/// Needs a `thor1…` address or a registered THORName, and pays out in RUNE. A Maya address
+/// is not valid here; they are separate networks.
+pub const DEFAULT_FEE_THORCHAIN_ADDRESS: &str = "";
+
+/// Maya payout. Empty, so no fee is requested on Maya swaps.
+///
+/// Needs a `maya1…` address or a MAYAName, and pays out in CACAO.
+pub const DEFAULT_FEE_MAYA_ADDRESS: &str = "";
+
+/// Where an affiliate fee is paid, per venue family.
+///
+/// An empty field means **no fee is requested from that venue at all**, and the quote is asked
+/// for exactly as it was before this existed. That is the safe default in both directions: an
+/// unconfigured build never charges anyone, and it never loses a venue because a fee parameter
+/// was rejected.
+///
+/// The addresses are separate because the venues pay out on different chains and, in two
+/// cases, need an account that has to be registered first:
+///
+/// * `evm` is an ordinary address, used by both aggregators. **LI.FI only honours a fee for a
+///   registered integrator**, so setting this alone does not start charging on LI.FI.
+/// * `solana` must be a Jupiter referral token account, not a wallet address.
+/// * `thorchain` must be a `thor1…` address or a THORName; `maya` a `maya1…` address. They are
+///   different networks and an address from one is not valid on the other.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct FeePayout {
+    pub evm: String,
+    pub solana: String,
+    pub thorchain: String,
+    pub maya: String,
+}
+
+impl FeePayout {
+    /// The fee to request from a venue, in bps. Zero when that venue has no payout address,
+    /// which is what keeps an unconfigured build behaving exactly as it did before.
+    pub fn bps_for(&self, address: &str) -> u32 {
+        if address.trim().is_empty() {
+            0
+        } else {
+            SWAP_FEE_BPS
+        }
+    }
+}
+
+/// Human-readable fee note for display, or `None` when no fee is being taken.
+pub fn fee_disclosure(bps: u32) -> Option<String> {
+    if bps == 0 {
+        return None;
+    }
+    let percent = bps as f64 / 100.0;
+    Some(format!("includes a {percent}% wallet fee"))
+}
+
 /// An asset a swap can move, identified consistently across providers.
 ///
 /// Deliberately separate from [`Token`]: a `Token` is something the wallet displays a balance
@@ -215,8 +299,20 @@ pub struct SwapQuote {
     pub expiry: Option<u64>,
     /// Rough end-to-end time, for display.
     pub eta_seconds: Option<u64>,
-    /// Provider-reported total fee, in the destination asset's base units, for display.
-    pub fee_note: Option<String>,
+    /// A note about the route rather than its cost: which DEX it went through, or the
+    /// price impact. Kept apart from the fee because it is not one, and the field these two
+    /// used to share made LI.FI's "routed via sushiswap" and Jupiter's price impact look
+    /// like fee figures.
+    pub route_note: Option<String>,
+    /// Total fee the venue will take, in the destination asset's base units.
+    ///
+    /// Where a venue reports this it is the whole cost, **including** the affiliate cut this
+    /// wallet asked for: THORChain's `fees.total` is outbound + liquidity + affiliate. So it
+    /// must never be shown alongside the wallet fee as if they were additive.
+    pub fee_total_base: Option<u128>,
+    /// Wallet fee actually requested from this venue, in bps. Zero when none was asked for.
+    /// Displayed to the user before they can confirm.
+    pub fee_bps: u32,
     /// Smallest input the provider will honour, in source base units. Sending less than this
     /// to THORChain is how people lose money to it, so it is enforced rather than displayed.
     pub min_in_base: Option<u128>,
@@ -267,6 +363,32 @@ pub fn format_base_units(amount: u128, decimals: u8) -> String {
     }
 }
 
+/// One line naming the total cost of the swap.
+///
+/// Deliberately a single figure. The venues that report a total already fold the affiliate
+/// cut into it, so listing the two separately would read as more being taken than actually
+/// is. Where a venue reports no total, the wallet's own percentage is the only part that can
+/// be stated honestly, and it is labelled as such rather than presented as the whole cost.
+pub fn swap_fee_line(quote: &SwapQuote) -> Option<String> {
+    match (quote.fee_total_base, quote.fee_bps) {
+        (Some(total), bps) if bps > 0 => Some(format!(
+            "{} {} (includes the {}% wallet fee)",
+            format_base_units(total, quote.to.decimals),
+            quote.to.symbol,
+            bps as f64 / 100.0
+        )),
+        (Some(total), _) => Some(format!(
+            "{} {}",
+            format_base_units(total, quote.to.decimals),
+            quote.to.symbol
+        )),
+        (None, bps) if bps > 0 => {
+            Some(format!("{}% wallet fee; this venue does not report its own", bps as f64 / 100.0))
+        }
+        (None, _) => None,
+    }
+}
+
 /// What the caller asks a provider for.
 #[derive(Clone, Debug)]
 pub struct SwapRequest {
@@ -288,6 +410,8 @@ pub struct SwapRequest {
     pub thornode_url: String,
     /// Solana RPC override, used when a provider needs to build against a specific cluster.
     pub sol_node: String,
+    /// Where an affiliate fee is paid, per venue. Empty fields mean no fee is requested.
+    pub fee: FeePayout,
     /// Solana cluster name ("mainnet" / "devnet"). Separate from `sol_node`, which is a URL:
     /// `sol_chain::parse_network` matches on the name, so feeding it the URL silently
     /// resolved to mainnet and made the devnet guard unreachable.
@@ -421,6 +545,29 @@ mod tests {
         }
     }
 
+    /// A minimal quote to hang fee-display assertions on. Destination is 18-decimal ETH, so
+    /// the formatted figures in the tests below read in familiar units.
+    fn sample_quote() -> SwapQuote {
+        SwapQuote {
+            provider_id: "test",
+            provider_name: "Test",
+            custody: Custody::AtomicOnChain,
+            from: asset("btc", "BTC", 8, true),
+            to: asset("eth", "ETH", 18, true),
+            amount_in_base: 1_000_000,
+            expected_out_base: 1_000_000_000_000_000_000,
+            min_out_base: 990_000_000_000_000_000,
+            destination: "0x9858EfFD232B4033E47d90003D41EC34EcaEda94".into(),
+            expiry: None,
+            eta_seconds: Some(30),
+            route_note: None,
+            fee_total_base: None,
+            min_in_base: None,
+            fee_bps: 0,
+            execution: SwapExecution::SolanaTx { transaction_b64: String::new() },
+        }
+    }
+
     #[test]
     fn thorchain_notation_matches_the_protocols_spelling() {
         assert_eq!(asset("btc", "BTC", 8, true).thorchain_notation().unwrap(), "BTC.BTC");
@@ -474,11 +621,114 @@ mod tests {
             destination: "0x0".into(),
             expiry: None,
             eta_seconds: None,
-            fee_note: None,
+            route_note: None,
+            fee_total_base: None,
             min_in_base: None,
+            fee_bps: 0,
             execution: SwapExecution::SolanaTx { transaction_b64: String::new() },
         };
         // 1 ETH for 4000 USDC is a rate of 1/4000.
         assert!((quote.rate() - 0.00025).abs() < 1e-12);
+    }
+
+    #[test]
+    fn no_payout_address_means_no_fee_is_requested() {
+        // The safe default in both directions: an unconfigured build charges nobody, and
+        // never loses a venue to a fee parameter that venue would reject.
+        let none = FeePayout::default();
+        assert_eq!(none.bps_for(&none.evm), 0);
+        assert_eq!(none.bps_for("   "), 0);
+        assert_eq!(fee_disclosure(0), None);
+    }
+
+    #[test]
+    fn a_configured_address_requests_exactly_one_percent() {
+        let payout = FeePayout {
+            evm: "0x9858EfFD232B4033E47d90003D41EC34EcaEda94".into(),
+            ..FeePayout::default()
+        };
+        assert_eq!(payout.bps_for(&payout.evm), 100);
+        assert_eq!(SWAP_FEE_BPS, 100, "1% expressed in basis points");
+        // Venues are independent: configuring the EVM payout must not start charging on
+        // Solana or either cross-chain network.
+        assert_eq!(payout.bps_for(&payout.solana), 0);
+        assert_eq!(payout.bps_for(&payout.thorchain), 0);
+        assert_eq!(payout.bps_for(&payout.maya), 0);
+    }
+
+    fn quote_with(fee_total_base: Option<u128>, fee_bps: u32) -> SwapQuote {
+        let mut q = sample_quote();
+        q.fee_total_base = fee_total_base;
+        q.fee_bps = fee_bps;
+        q
+    }
+
+    #[test]
+    fn the_fee_line_is_one_total_not_a_sum_of_parts() {
+        // A venue that reports a total already has the affiliate cut inside it, so the line
+        // shows that one figure and says the wallet fee is part of it. Adding the two would
+        // overstate what is actually taken.
+        let q = quote_with(Some(2_000_000_000_000_000), 100);
+        let line = swap_fee_line(&q).unwrap();
+        assert!(line.contains("includes the 1% wallet fee"), "{line}");
+        assert!(line.starts_with("0.002 "), "{line}");
+    }
+
+    #[test]
+    fn a_venue_total_with_no_wallet_fee_is_shown_alone() {
+        let q = quote_with(Some(2_000_000_000_000_000), 0);
+        let line = swap_fee_line(&q).unwrap();
+        assert!(!line.contains("wallet fee"), "{line}");
+    }
+
+    #[test]
+    fn a_venue_that_reports_no_total_says_so_rather_than_implying_one() {
+        // The aggregators do not report a fee total. Showing "1%" bare would read as the
+        // whole cost of the swap, which it is not.
+        let q = quote_with(None, 100);
+        let line = swap_fee_line(&q).unwrap();
+        assert!(line.contains("does not report its own"), "{line}");
+    }
+
+    #[test]
+    fn no_total_and_no_wallet_fee_shows_no_fee_line_at_all() {
+        assert_eq!(swap_fee_line(&quote_with(None, 0)), None);
+    }
+
+    #[test]
+    fn the_rate_stays_inside_every_venue_cap() {
+        // THORChain and Maya reject an affiliate above 1000 bps outright, and a fee at that
+        // scale would be indefensible anyway. This is a tripwire on the constant, not on the
+        // networks.
+        assert!(SWAP_FEE_BPS <= 1_000, "above the cross-chain affiliate cap");
+        assert!(SWAP_FEE_BPS < 10_000, "a fee cannot be the whole swap");
+    }
+
+    #[test]
+    fn the_shipped_payout_address_is_a_valid_checksummed_address() {
+        // A typo here sends every EVM fee somewhere unrecoverable, and nothing else in the
+        // app would notice: the venues would happily pay out to a valid-looking address that
+        // nobody holds a key for. Checked against EIP-55 so a single flipped character fails
+        // the build rather than the payout.
+        let parsed = crate::currencies::eth_chain::validate_address(DEFAULT_FEE_EVM_ADDRESS)
+            .expect("shipped payout address must parse");
+        assert_eq!(
+            parsed.to_checksum(None),
+            DEFAULT_FEE_EVM_ADDRESS,
+            "address is not in EIP-55 checksummed form, so a typo could go unnoticed"
+        );
+    }
+
+    #[test]
+    fn a_default_evm_payout_means_the_evm_venues_charge_out_of_the_box() {
+        let payout = FeePayout {
+            evm: DEFAULT_FEE_EVM_ADDRESS.to_string(),
+            ..FeePayout::default()
+        };
+        assert_eq!(payout.bps_for(&payout.evm), SWAP_FEE_BPS);
+        // And the venues with no shipped default still charge nothing until configured.
+        assert_eq!(payout.bps_for(&payout.solana), 0);
+        assert_eq!(payout.bps_for(&payout.thorchain), 0);
+        assert_eq!(payout.bps_for(&payout.maya), 0);
     }
 }

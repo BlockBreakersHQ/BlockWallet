@@ -152,8 +152,18 @@ impl SwapProvider for Jupiter {
         let slippage = request
             .slippage_bps
             .clamp(1, super::safety::MAX_SLIPPAGE_BPS);
+        // Jupiter pays a platform fee into a referral token account, which has to be created
+        // through their referral program first; a wallet address will not do. Only requested
+        // when one is configured.
+        let payout = request.fee.solana.trim();
+        let fee_bps = request.fee.bps_for(payout);
+        let fee_param = if fee_bps > 0 {
+            format!("&platformFeeBps={fee_bps}")
+        } else {
+            String::new()
+        };
         let url = format!(
-            "{QUOTE_API}?inputMint={}&outputMint={}&amount={}&slippageBps={slippage}",
+            "{QUOTE_API}?inputMint={}&outputMint={}&amount={}&slippageBps={slippage}{fee_param}",
             mint_param(&request.from),
             mint_param(&request.to),
             request.amount_in_base,
@@ -196,10 +206,12 @@ impl SwapProvider for Jupiter {
             expiry: None,
             // Solana settles in a slot or two; the honest number is "seconds".
             eta_seconds: Some(30),
-            fee_note: quote
+            route_note: quote
                 .price_impact_pct
                 .map(|p| format!("{:.3}% price impact", p * 100.0)),
+            fee_total_base: None,
             min_in_base: None,
+            fee_bps,
             execution: SwapExecution::SolanaTx { transaction_b64 },
         })
     }

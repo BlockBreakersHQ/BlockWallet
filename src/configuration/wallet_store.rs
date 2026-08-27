@@ -115,6 +115,15 @@ pub struct StoreSettings {
     /// before the option existed, which is the behaviour those users already had.
     #[serde(default)]
     pub hide_zero_balances: bool,
+    /// Affiliate payout addresses, per venue family. Empty means no fee is requested.
+    #[serde(default)]
+    pub fee_evm_address: String,
+    #[serde(default)]
+    pub fee_solana_account: String,
+    #[serde(default)]
+    pub fee_thorchain_address: String,
+    #[serde(default)]
+    pub fee_maya_address: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -215,6 +224,10 @@ impl Default for PayloadV1 {
                 fiat: String::new(),
                 btc_units: String::new(),
                 hide_zero_balances: false,
+                fee_evm_address: String::new(),
+                fee_solana_account: String::new(),
+                fee_thorchain_address: String::new(),
+                fee_maya_address: String::new(),
             },
             btc: Vec::new(),
             eth: Vec::new(),
@@ -495,6 +508,10 @@ mod tests {
                 fiat: "usd".to_string(),
                 btc_units: "btc".to_string(),
                 hide_zero_balances: false,
+                fee_evm_address: String::new(),
+                fee_solana_account: String::new(),
+                fee_thorchain_address: String::new(),
+                fee_maya_address: String::new(),
             },
             btc: vec![BtcRecord {
                 name: "btc_wallet".to_string(),
