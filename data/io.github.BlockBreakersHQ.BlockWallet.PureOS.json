@@ -44,7 +44,7 @@
                     "type": "git",
                     "url": "https://github.com/BlockBreakersHQ/BlockWallet.git",
                     "tag": "v0.2.1",
-                    "commit": "COMMIT_TBD"
+                    "commit": "465025a46496a5307a401b6e8a7ebbb6822a5874"
                 },
                 {
                     "type": "file",
