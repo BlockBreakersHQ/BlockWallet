@@ -244,8 +244,7 @@ concern mirroring screenshots to `dl.flathub.org`, which only their builders do.
 
 ### PureOS Store
 
-Earlier revisions of this document said the submission channel was undocumented. **That was
-wrong.** It is documented at <https://storage.puri.sm/pureos-policy/publish.html>:
+Documented at <https://storage.puri.sm/pureos-policy/publish.html>:
 
 1. Fork <https://source.puri.sm/flatpak-apps/submission>.
 2. Branch from the `submission` branch, named after the app ID.
@@ -254,15 +253,47 @@ wrong.** It is documented at <https://storage.puri.sm/pureos-policy/publish.html
 5. After CI passes, Purism's App Curation Team tags it for inclusion, a repo is created, and
    it builds and distributes automatically.
 
-**Being on Flathub does not put you here**, and the manifest is not reusable as-is:
+**Being on Flathub does not put you here**, and the manifest is not reusable as-is. PureOS
+requires its own runtime, `sm.puri.Platform` and `sm.puri.Sdk`.
 
-- PureOS requires its **own runtime**, `sm.puri.Platform` and `sm.puri.Sdk`, not
-  `org.gnome.Platform`. That needs a separate manifest variant, built and tested against a
-  runtime this project has never used. Expect GTK/libadwaita version surprises, in the same
-  way Crimson's exactly-1.2.2 libadwaita turned out to be load-bearing.
-- Icons at **64x64 and 128x128** are required. Only 256x256 is shipped today.
-- OARS content rating is required, and is already present in the metainfo.
-- Compliance with Flathub's requirements is also required, so do Flathub first.
+`data/io.github.BlockBreakersHQ.BlockWallet.PureOS.json` is that variant, ready except for the
+blocker below. It pins the same tag and commit as the Flathub manifest, swaps the runtime, and
+installs the extra icon sizes. Rename it to `io.github.BlockBreakersHQ.BlockWallet.json` when
+submitting: PureOS names the app repo after the app ID, and the Flathub linter fails a manifest
+whose filename does not match the ID.
+
+#### Blocked: the PureOS runtime is too old to build this
+
+Measured against the live `pureos` remote
+(`flatpak remote-add pureos https://store.puri.sm/repo/stable/pureos.flatpakrepo --user`):
+
+| Ref | Latest branch | Last built |
+| --- | --- | --- |
+| `sm.puri.Platform` (aarch64) | 44, and `master` | **2023-03-28** |
+| `sm.puri.Sdk` (aarch64) | 44, and `master` | 2023-03-28 |
+| `org.freedesktop.Sdk.Extension.rust-stable` | **22.08** | 2023-05-02 |
+
+`sm.puri.Sdk` 44 is built on freedesktop 22.08, so the only Rust toolchain available to it is
+that 22.08 extension, which is stable Rust as of May 2023: approximately 1.69. This crate
+declares `rust-version = "1.85"` in `Cargo.toml`, and the dependency tree (alloy 1.x, bdk 1.x)
+requires it. There is roughly a two-year gap, not a marginal one.
+
+Note that `master` is no newer than 44; both were built the same day. There is no newer branch
+to target.
+
+Three ways out, none of them quick:
+
+- **Wait for Purism to refresh the runtime.** Nothing to do here but watch the remote. Given it
+  has not moved since March 2023, this may not happen.
+- **Bundle a Rust toolchain as a manifest module**, downloading a `rustup` tarball as a source
+  rather than using the SDK extension. Technically possible and sometimes accepted, but it is a
+  large addition, has to be vendored for an offline build, and curated stores tend to look hard
+  at an app shipping its own compiler.
+- **Lower the MSRV below 1.69.** Not realistic. It would mean replacing alloy and bdk.
+
+Everything else PureOS asks for is already satisfied: GPL-3.0-or-later, CC0-1.0 metadata
+licence, OARS rating, a description, screenshots, `<display_length compare="ge">360</display_length>`,
+and now icons at 64x64 and 128x128 alongside the existing 256x256.
 
 `generated-sources.json` carries over unchanged; the Rust dependency set does not care which
 runtime it builds against.
