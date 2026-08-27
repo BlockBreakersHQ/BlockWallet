@@ -1,6 +1,6 @@
 [package]
 name = "block_wallet"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 rust-version = "1.85"
 description = "Self-custody Bitcoin and Ethereum wallet for the Librem 5"

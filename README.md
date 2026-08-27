@@ -14,7 +14,7 @@
   <img src="docs/screenshots/home-dark.png" alt="Home screen in dark mode" width="230">
 </p>
 
-**Status:** v0.2.1 is the current release, built from a pinned tag and distributed as a Flatpak
+**Status:** v0.2.2 is the current release, built from a pinned tag and distributed as a Flatpak
 bundle you install by hand. It is a maintenance release over v0.2.0 (a swap-fee correctness fix
 and a payout address update), with no UI or hardware-relevant code changed, so nothing new was
 run against the device for it. The last full [Librem 5 checklist](docs/LIBREM5.md) run was
@@ -76,7 +76,7 @@ flatpak remote-add --if-not-exists --user flathub \
 **4. Install and run.**
 
 ```sh
-flatpak install --user ./BlockWallet-v0.2.1-aarch64.flatpak
+flatpak install --user ./BlockWallet-v0.2.2-aarch64.flatpak
 flatpak run io.github.BlockBreakersHQ.BlockWallet
 ```
 

@@ -43,8 +43,8 @@
                 {
                     "type": "git",
                     "url": "https://github.com/BlockBreakersHQ/BlockWallet.git",
-                    "tag": "v0.2.1",
-                    "commit": "465025a46496a5307a401b6e8a7ebbb6822a5874",
+                    "tag": "v0.2.2",
+                    "commit": "1686a5fb6338f8cda704417e6d9480f551cbf518",
                     "//": "commit is filled in alongside the tag so the build is reproducible even if the tag moves"
                 },
                 "generated-sources.json"
