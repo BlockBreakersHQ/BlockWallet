@@ -1,15 +1,19 @@
 {
-    "//": "PureOS Store manifest. Same pinned tag as the Flathub release, built against",
-    "//2": "sm.puri.Platform, which PureOS requires: https://storage.puri.sm/pureos-policy/",
-    "//3": "Ships 64x64 and 128x128 icons on top of 256x256, which PureOS requires.",
-    "//4": "BLOCKED: sm.puri.Sdk 44 was last built 2023-03-28 and its rust-stable extension is 22.08 (rustc ~1.69). This crate declares rust-version 1.85, so it cannot build until Purism refresh the runtime. See docs/packaging.md.",
+    "//": "PureOS Store manifest. Ships a prebuilt binary rather than compiling, since",
+    "//2": "sm.puri.Sdk 44's rust-stable extension (22.08, rustc ~1.69) is far below this",
+    "//3": "crate's real 1.91 floor (set by alloy). sm.puri.Platform 44 itself is not the",
+    "//4": "problem: it ships GTK 4.10.1, libadwaita 1.3.1 and glibc 2.35, all comfortably",
+    "//5": "above this app's floors. See docs/packaging.md.",
+    "//6": "Each binary was built INSIDE sm.puri.Sdk 44 (so it links against its GTK/",
+    "//7": "libadwaita/glibc, proven by installing and running the result), using an",
+    "//8": "upstream Rust 1.98 toolchain in place of the SDK's own. Reproduce with",
+    "//9": "scripts/pureos-binary-build.sh at the tag below; the sha256 of each binary is",
+    "//10": "pinned in its source entry so a tampered download fails the build rather than",
+    "//11": "silently installing.",
     "app-id": "io.github.BlockBreakersHQ.BlockWallet",
     "runtime": "sm.puri.Platform",
     "runtime-version": "44",
     "sdk": "sm.puri.Sdk",
-    "sdk-extensions": [
-        "org.freedesktop.Sdk.Extension.rust-stable"
-    ],
     "command": "block_wallet",
     "finish-args": [
         "--share=ipc",
@@ -19,37 +23,43 @@
         "--device=dri",
         "--talk-name=org.freedesktop.secrets"
     ],
-    "build-options": {
-        "append-path": "/usr/lib/sdk/rust-stable/bin",
-        "env": {
-            "CARGO_HOME": "/run/build/block-wallet/cargo"
-        }
-    },
     "modules": [
         {
             "name": "block-wallet",
             "buildsystem": "simple",
             "build-commands": [
-                "cargo build --release --locked --offline",
-                "install -Dm755 ./target/release/block_wallet /app/bin/block_wallet",
+                "install -Dm755 block_wallet /app/bin/block_wallet",
                 "install -Dm644 data/io.github.BlockBreakersHQ.BlockWallet.desktop /app/share/applications/io.github.BlockBreakersHQ.BlockWallet.desktop",
                 "install -Dm644 data/io.github.BlockBreakersHQ.BlockWallet.metainfo.xml /app/share/metainfo/io.github.BlockBreakersHQ.BlockWallet.metainfo.xml",
-                "install -Dm644 data/icons/hicolor/256x256/apps/io.github.BlockBreakersHQ.BlockWallet.png /app/share/icons/hicolor/256x256/apps/io.github.BlockBreakersHQ.BlockWallet.png",
-                "install -Dm644 data/icons/hicolor/128x128/apps/io.github.BlockBreakersHQ.BlockWallet.png /app/share/icons/hicolor/128x128/apps/io.github.BlockBreakersHQ.BlockWallet.png",
                 "install -Dm644 data/icons/hicolor/64x64/apps/io.github.BlockBreakersHQ.BlockWallet.png /app/share/icons/hicolor/64x64/apps/io.github.BlockBreakersHQ.BlockWallet.png",
-                "mkdir -p /app/share/blockwallet",
+                "install -Dm644 data/icons/hicolor/128x128/apps/io.github.BlockBreakersHQ.BlockWallet.png /app/share/icons/hicolor/128x128/apps/io.github.BlockBreakersHQ.BlockWallet.png",
+                "install -Dm644 data/icons/hicolor/256x256/apps/io.github.BlockBreakersHQ.BlockWallet.png /app/share/icons/hicolor/256x256/apps/io.github.BlockBreakersHQ.BlockWallet.png",
                 "install -Dm644 LICENSE /app/share/licenses/$FLATPAK_ID/LICENSE",
+                "mkdir -p /app/share/blockwallet",
                 "cp -a Images /app/share/blockwallet/Images"
             ],
             "sources": [
                 {
+                    "//": "Source of the data files, and the commit each binary was built from.",
                     "type": "git",
                     "url": "https://github.com/BlockBreakersHQ/BlockWallet.git",
-                    "tag": "v0.2.0",
-                    "commit": "69d6ae14ccc8a7ef812c3395945f51286bd92ce0",
-                    "//": "commit is filled in alongside the tag so the build is reproducible even if the tag moves"
+                    "tag": "v0.2.1",
+                    "commit": "COMMIT_TBD"
                 },
-                "generated-sources.json"
+                {
+                    "type": "file",
+                    "only-arches": ["aarch64"],
+                    "url": "https://github.com/BlockBreakersHQ/BlockWallet/releases/download/v0.2.1/block_wallet-pureos-aarch64",
+                    "sha256": "SHA_AARCH64_TBD",
+                    "dest-filename": "block_wallet"
+                },
+                {
+                    "type": "file",
+                    "only-arches": ["x86_64"],
+                    "url": "https://github.com/BlockBreakersHQ/BlockWallet/releases/download/v0.2.1/block_wallet-pureos-x86_64",
+                    "sha256": "SHA_X86_64_TBD",
+                    "dest-filename": "block_wallet"
+                }
             ]
         }
     ]

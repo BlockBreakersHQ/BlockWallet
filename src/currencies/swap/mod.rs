@@ -53,7 +53,7 @@ pub const SWAP_FEE_BPS: u32 = 100;
 /// Only the EVM venues get a default. The other three need accounts that cannot be guessed:
 /// a Jupiter referral token account, a THORChain address and a Maya address, none of which
 /// this wallet derives.
-pub const DEFAULT_FEE_EVM_ADDRESS: &str = "0x87fFD6efD8Bc263073e14d9d93e4EFe8477Cb12f";
+pub const DEFAULT_FEE_EVM_ADDRESS: &str = "0xBfa9D462C7560d6822A9Dc2C24818eD6CF9eeb54";
 
 /// LI.FI integrator name, once registered for fee collection. Empty, so no fee is asked.
 ///

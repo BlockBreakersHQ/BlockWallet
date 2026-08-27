@@ -14,12 +14,14 @@
   <img src="docs/screenshots/home-dark.png" alt="Home screen in dark mode" width="230">
 </p>
 
-**Status:** v0.2.0 is the current release, built from a pinned tag and distributed as a Flatpak
-bundle you install by hand. The last full [Librem 5 checklist](docs/LIBREM5.md) run was v0.1.0,
-which passed all 41 of its boxes on real hardware in August 2026. v0.2.0 has been spot-checked
-on the same device rather than re-run end to end: it installs, launches, syncs against live
-nodes with the batched token read working, and renders a zero-balance wallet correctly. The
-rest of the checklist is owed.
+**Status:** v0.2.1 is the current release, built from a pinned tag and distributed as a Flatpak
+bundle you install by hand. It is a maintenance release over v0.2.0 (a swap-fee correctness fix
+and a payout address update), with no UI or hardware-relevant code changed, so nothing new was
+run against the device for it. The last full [Librem 5 checklist](docs/LIBREM5.md) run was
+v0.1.0, which passed all 41 of its boxes on real hardware in August 2026. v0.2.0 was
+spot-checked on the same device rather than re-run end to end: it installs, launches, syncs
+against live nodes with the batched token read working, and renders a zero-balance wallet
+correctly. The rest of the checklist is owed.
 
 Known unproven areas, stated plainly rather than buried: cross-chain swaps have never moved
 real coins, because THORChain's global trading halt was in force for most of development and
@@ -74,7 +76,7 @@ flatpak remote-add --if-not-exists --user flathub \
 **4. Install and run.**
 
 ```sh
-flatpak install --user ./BlockWallet-v0.2.0-aarch64.flatpak
+flatpak install --user ./BlockWallet-v0.2.1-aarch64.flatpak
 flatpak run io.github.BlockBreakersHQ.BlockWallet
 ```
 

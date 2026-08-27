@@ -95,6 +95,15 @@
     <content_attribute id="money-purchasing">intense</content_attribute>
   </content_rating>
   <releases>
+    <release version="0.2.1" type="development" date="2026-08-27">
+      <description>
+        <p>A maintenance release: one swap-fee correctness fix and a payout address update, no user-facing feature changes.</p>
+        <ul>
+          <li>Fixed a bug that would have broken every Solana swap the moment a swap fee was enabled: Jupiter requires a fee account whenever a fee is requested, and the app was never sending one. The fee itself is still not enabled on Solana.</li>
+          <li>Updated the swap-fee payout address for Ethereum and its L2s. The 1% fee itself, and everything already disclosed about it, is unchanged.</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.2.0" type="development" date="2026-08-26">
       <description>
         <p>Many more tokens, more swap venues, and a sync that no longer slows down as the token list grows.</p>

@@ -109,6 +109,26 @@ pub fn parse_quote(json: &Value) -> Result<JupiterQuote, block_error::Error> {
     })
 }
 
+/// Build the `/swap` request body.
+///
+/// Jupiter enforces `feeAccount` whenever the quote carried `platformFeeBps > 0`: omitting it
+/// does not silently skip the fee, it fails the whole swap. `feeAccount` must itself be a
+/// token account whose mint is part of the swap pair (input or output, since this wallet only
+/// ever asks for ExactIn), not an arbitrary wallet address, so a single fixed account only
+/// works for pairs that actually include its mint.
+fn swap_body(quote_raw: &Value, user_pubkey: &str, fee_bps: u32, payout: &str) -> Value {
+    let mut body = json!({
+        "quoteResponse": quote_raw,
+        "userPublicKey": user_pubkey,
+        "wrapAndUnwrapSol": true,
+        "dynamicComputeUnitLimit": true,
+    });
+    if fee_bps > 0 {
+        body["feeAccount"] = json!(payout);
+    }
+    body
+}
+
 /// Pull the base64 transaction out of a `/swap` response.
 pub fn parse_swap_transaction(json: &Value) -> Result<String, block_error::Error> {
     if let Some(message) = json.get("error").and_then(Value::as_str) {
@@ -181,12 +201,7 @@ impl SwapProvider for Jupiter {
 
         // Second round trip: turn the route into a signable transaction. The quote object is
         // echoed back exactly as received, which is what Jupiter requires.
-        let body = json!({
-            "quoteResponse": quote.raw,
-            "userPublicKey": request.from_address.trim(),
-            "wrapAndUnwrapSol": true,
-            "dynamicComputeUnitLimit": true,
-        });
+        let body = swap_body(&quote.raw, request.from_address.trim(), fee_bps, payout);
         let swap_text = http::post_json(SWAP_API, &body)?;
         let swap_json: Value = serde_json::from_str(&swap_text)
             .map_err(|e| block_error::Error::new(format!("invalid Jupiter swap response: {e}")))?;
@@ -283,6 +298,28 @@ mod tests {
     fn native_sol_is_addressed_by_the_wrapped_mint() {
         let sol = SwapAsset { chain: "sol".into(), symbol: "SOL".into(), address: String::new(), decimals: 9, native: true };
         assert_eq!(mint_param(&sol), WSOL_MINT);
+    }
+
+    #[test]
+    fn fee_account_is_sent_only_when_a_fee_is_actually_charged() {
+        let raw = json!({"swapMode": "ExactIn"});
+
+        // No payout configured: Jupiter would reject a feeAccount it was never asked to pay
+        // through platformFeeBps, so the field must be entirely absent, not empty.
+        let unconfigured = swap_body(&raw, "userpubkey", 0, "");
+        assert!(unconfigured.get("feeAccount").is_none());
+
+        // A fee was requested: Jupiter requires feeAccount whenever platformFeeBps > 0, or it
+        // fails the whole swap rather than silently skipping the fee.
+        let configured = swap_body(&raw, "userpubkey", 100, "FeeTokenAccountPubkey11111111111");
+        assert_eq!(
+            configured.get("feeAccount").and_then(Value::as_str),
+            Some("FeeTokenAccountPubkey11111111111")
+        );
+        assert_eq!(
+            configured.get("userPublicKey").and_then(Value::as_str),
+            Some("userpubkey")
+        );
     }
 
     #[test]
