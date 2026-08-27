@@ -39,8 +39,69 @@ impl From<serde_json::error::Error> for Error {
 
 impl From<reqwest::Error> for Error {
     fn from(error: reqwest::Error) -> Self {
-        Error::Crate("request", format!("{:?}", error))
+        Error::Crate("request", describe_request_error(&error))
     }
+}
+
+/// Turn a transport failure into one short line a person can act on.
+///
+/// This used to be `format!("{:?}", error)`, which Debug-formats the whole `reqwest::Error`:
+/// the request struct, the hyper source beneath it, and, for a TLS failure, the entire
+/// OpenSSL error stack with file names and line numbers. On a 360 px phone screen that filled
+/// the swap results with a wall of text and buried the one fact that mattered, which was that
+/// a gateway's certificate had expired.
+///
+/// Only the host is named, never the full URL. Several of these URLs carry the user's own
+/// address in the query string, and an error message is not a good place for it to surface.
+fn describe_request_error(error: &reqwest::Error) -> String {
+    let host = error
+        .url()
+        .and_then(|url| url.host_str())
+        .unwrap_or("the server")
+        .to_string();
+
+    if error.is_timeout() {
+        return format!("{host} did not respond in time");
+    }
+    if let Some(status) = error.status() {
+        return format!("{host} returned HTTP {}", status.as_u16());
+    }
+
+    // reqwest exposes no predicate for "the certificate was bad", so the cause chain is
+    // walked and matched on. Flattened to lower case once rather than per pattern.
+    let mut causes = String::new();
+    let mut source = std::error::Error::source(error);
+    while let Some(cause) = source {
+        causes.push_str(&cause.to_string());
+        causes.push(' ');
+        source = cause.source();
+    }
+    // The precise reason a certificate was rejected (`X509VerifyResult { error: "certificate
+    // has expired" }`) appears only in the Debug representation, not in any Display in the
+    // cause chain. It is read here purely to classify, and never emitted: the Debug string is
+    // the multi-line dump this function exists to replace.
+    causes.push_str(&format!("{error:?}"));
+    let causes = causes.to_lowercase();
+
+    if causes.contains("certificate") || causes.contains("tls") || causes.contains("ssl") {
+        if causes.contains("expired") {
+            return format!("{host} has an expired security certificate");
+        }
+        if causes.contains("self-signed") || causes.contains("self signed") {
+            return format!("{host} has a self-signed security certificate");
+        }
+        return format!("{host} has an invalid security certificate");
+    }
+    if causes.contains("dns") || causes.contains("resolve") || causes.contains("name or service") {
+        return format!("{host} could not be found");
+    }
+    if error.is_connect() {
+        return format!("could not connect to {host}");
+    }
+    if error.is_body() || error.is_decode() {
+        return format!("{host} sent a reply that could not be read");
+    }
+    format!("could not reach {host}")
 }
 
 impl From<rustc_hex::FromHexError> for Error {

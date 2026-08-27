@@ -252,8 +252,17 @@ fn fetch_inbound(
                 ))
             });
     }
-    Err(last.unwrap_or_else(|| {
-        block_error::Error::new(format!("no {} gateway answered", venue.name))
+    // Every gateway failed. Report that as one line naming how many were tried and why the
+    // last one refused, rather than surfacing a raw transport error as if a single host had
+    // been asked. The count is the useful part: it distinguishes "this gateway is down" from
+    // "the whole public gateway layer is down", which is the actual situation for THORChain.
+    let tried = gateways.len();
+    Err(block_error::Error::new(match last {
+        Some(why) => format!(
+            "no {} gateway answered ({tried} tried); last said: {why}",
+            venue.name
+        ),
+        None => format!("no {} gateway answered ({tried} tried)", venue.name),
     }))
 }
 
