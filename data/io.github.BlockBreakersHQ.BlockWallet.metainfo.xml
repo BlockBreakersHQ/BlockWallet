@@ -105,6 +105,7 @@
           <li>The swap screen picks tokens through a searchable list rather than a long dropdown.</li>
           <li>Empty assets can be hidden from the Assets screen, and the home screen narrows to what you hold once you hold something. A balance that is still syncing, or that could not be fetched, is never treated as empty.</li>
           <li>Polygon's native token is now correctly shown as POL rather than MATIC.</li>
+          <li>Swaps now carry a 1% wallet fee, taken by the exchange itself rather than as a separate transaction. It is shown as a single Swap fee line on every offer and again on the review screen before anything can be confirmed, and where a venue reports its own fee total that figure already includes it.</li>
         </ul>
       </description>
     </release>
