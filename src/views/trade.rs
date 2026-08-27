@@ -126,9 +126,9 @@ impl SwapGate {
         row.connect_changed(move |_| gate.invalidate());
     }
 
-    fn watch_combo(&self, row: &adw::ComboRow) {
+    fn watch_picker(&self, row: &ui::PickerRow) {
         let gate = self.clone();
-        row.connect_selected_notify(move |_| gate.invalidate());
+        row.connect_changed(move || gate.invalidate());
     }
 }
 
@@ -189,18 +189,20 @@ pub fn trade_view(
         return (outer, app_settings);
     }
 
-    let labels: Vec<&str> = assets.iter().map(|(label, _)| label.as_str()).collect();
+    // Searchable pickers rather than dropdowns: the bundled list runs to a few hundred tokens
+    // on Ethereum mainnet, and an AdwComboRow that long cannot be scanned on a phone.
+    let labels: Vec<String> = assets.iter().map(|(label, _)| label.clone()).collect();
 
     let form = ui::group("Swap");
-    let from_row = ui::combo_row("From", &labels);
-    let to_row = ui::combo_row("To", &labels);
+    let from_row = ui::PickerRow::new("From", &labels);
+    let to_row = ui::PickerRow::new("To", &labels);
     // Anything other than the same asset on both sides, so the screen opens on a valid pair.
     if labels.len() > 1 {
         to_row.set_selected(1);
     }
     let amount = ui::entry_row("Amount");
-    form.add(&from_row);
-    form.add(&to_row);
+    form.add(from_row.row());
+    form.add(to_row.row());
     form.add(&amount);
     page.append(&form);
 
@@ -280,8 +282,8 @@ pub fn trade_view(
         chosen: Rc::new(Mutex::new(None)),
     };
     gate.watch_entry(&amount);
-    gate.watch_combo(&from_row);
-    gate.watch_combo(&to_row);
+    gate.watch_picker(&from_row);
+    gate.watch_picker(&to_row);
 
     let assets = Rc::new(assets);
 
@@ -292,8 +294,11 @@ pub fn trade_view(
         #[strong] assets,
         #[strong] shown,
         #[weak] amount,
-        #[weak] from_row,
-        #[weak] to_row,
+        // Strong: `PickerRow` is a plain struct rather than a GObject, so it cannot be held
+        // weakly. It holds no reference back to this button, and the handlers it does hold
+        // keep only weak references to widgets, so this closes no reference cycle.
+        #[strong] from_row,
+        #[strong] to_row,
         #[weak] error,
         #[weak] status,
         #[weak] offers,

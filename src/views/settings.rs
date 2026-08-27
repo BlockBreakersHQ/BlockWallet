@@ -119,6 +119,12 @@ pub fn settings_view(window: ApplicationWindow, app_settings: Arc<Mutex<Applicat
     if app_settings.lock().unwrap().fiat.eq_ignore_ascii_case("eur") {
         fiat.set_selected(1);
     }
+    let hide_zero = ui::add_switch_row(
+        &display,
+        "Hide empty assets",
+        "Leaves out assets with a zero balance. A syncing or unreachable one is never hidden, and the Assets screen keeps a button to show them so you can still receive.",
+        app_settings.lock().unwrap().hide_zero_balances,
+    );
     let units = ui::combo_row("Bitcoin units", &["BTC", "Satoshis"]);
     if app_settings.lock().unwrap().btc_units.eq_ignore_ascii_case("sats") {
         units.set_selected(1);
@@ -160,6 +166,7 @@ pub fn settings_view(window: ApplicationWindow, app_settings: Arc<Mutex<Applicat
         #[weak] prices,
         #[weak] fiat,
         #[weak] units,
+        #[weak] hide_zero,
         move |_| {
             let secs = TIMEOUT_VALUES
                 .get(timeout.selected() as usize)
@@ -170,6 +177,7 @@ pub fn settings_view(window: ApplicationWindow, app_settings: Arc<Mutex<Applicat
             settings.show_prices = prices.is_active();
             settings.fiat = if fiat.selected() == 1 { "eur".into() } else { "usd".into() };
             settings.btc_units = if units.selected() == 1 { "sats".into() } else { "btc".into() };
+            settings.hide_zero_balances = hide_zero.is_active();
             let _ = settings.write_config();
             drop(settings);
             ui::toast("Display and security settings saved.");

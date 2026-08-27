@@ -199,10 +199,33 @@ pub fn home_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, Na
                     rows.remove(&child);
                 }
 
+                // Once anything is held, show only what is held. Until then, show all four
+                // chains.
+                //
+                // A wallet with nothing in it should still look like a wallet with four
+                // chains in it, so a new user can see what they have and tap through to
+                // receive. The moment a real balance lands, the empty chains are just noise
+                // sitting above the thing they actually own. The rule flips itself, so there
+                // is nothing to configure and no state to get stuck in.
+                //
+                // "Held" and "empty" are both narrower than they look: a syncing row and an
+                // unreachable node both report zero without meaning it, and neither is
+                // treated as empty. See `nav::is_confirmed_zero`.
+                let any_held = items.iter().any(|item| nav::has_balance(&item.amount));
+                let shown: Vec<RowItem> = if any_held {
+                    items
+                        .iter()
+                        .filter(|item| !nav::is_confirmed_zero(&item.amount))
+                        .cloned()
+                        .collect()
+                } else {
+                    items.clone()
+                };
+
                 match (&total, syncing) {
                     (Some(value), _) => {
                         hero_total.set_label(value);
-                        hero_sub.set_label(&format!("{} assets across 4 chains", items.len()));
+                        hero_sub.set_label(&asset_count_label(shown.len()));
                     }
                     (None, true) => {
                         hero_total.set_label("Syncing…");
@@ -211,7 +234,11 @@ pub fn home_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, Na
                     (None, false) => {
                         // No fiat total available. Show the chain count instead of a
                         // fabricated figure, and say why in the subtitle.
-                        hero_total.set_label(&format!("{} assets", items.len()));
+                        hero_total.set_label(&if shown.len() == 1 {
+                            "1 asset".to_string()
+                        } else {
+                            format!("{} assets", shown.len())
+                        });
                         hero_sub.set_label(if snapshot.show_prices {
                             "Fiat total unavailable right now"
                         } else {
@@ -225,13 +252,15 @@ pub fn home_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, Na
                     offline_text
                 } else if syncing {
                     "Syncing balances from your nodes…"
+                } else if any_held {
+                    "Showing the assets you hold. Open Assets to see them all."
                 } else {
                     "Balances come straight from the nodes you configured."
                 });
                 ui::set_notice_warning(&banner, offline);
 
                 let group = ui::group("Assets");
-                for item in items {
+                for item in shown {
                     let row = currency_row(&item);
                     let gesture = gtk::GestureClick::new();
                     let nav = nav.clone();
@@ -251,6 +280,18 @@ pub fn home_view(app_settings: Arc<Mutex<ApplicationSettings>>) -> (gtk::Box, Na
     );
 
     (page, nav, app_settings)
+}
+
+/// Subtitle for the hero total.
+///
+/// The count used to be a constant four, so "1 assets across 4 chains" was unreachable and
+/// the grammar never showed. Filtering Home down to what is held makes every count from one
+/// to four possible, so the singular has to exist.
+fn asset_count_label(count: usize) -> String {
+    match count {
+        1 => "1 asset across 4 chains".to_string(),
+        n => format!("{n} assets across 4 chains"),
+    }
 }
 
 /// One tappable asset row: coin mark, name + chain tag, amount + fiat.
@@ -364,4 +405,76 @@ pub fn generate_currency_box(element: (Token, Arc<Mutex<String>>)) -> gtk::Box {
         ),
     );
     row
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The Home rule, expressed the same way the render callback expresses it, so the
+    /// behaviour can be checked without a display.
+    fn shown_labels(labels: &[&str]) -> Vec<String> {
+        let any_held = labels.iter().any(|l| nav::has_balance(l));
+        labels
+            .iter()
+            .filter(|l| !any_held || !nav::is_confirmed_zero(l))
+            .map(|l| l.to_string())
+            .collect()
+    }
+
+    #[test]
+    fn an_empty_wallet_still_shows_all_four_chains() {
+        // Nothing held anywhere. Hiding here would leave a new user with a blank screen and
+        // no way to tap through and receive.
+        let shown = shown_labels(&["0 BTC", "0 ETH", "0 SOL", "0 LTC"]);
+        assert_eq!(shown.len(), 4);
+    }
+
+    #[test]
+    fn once_anything_is_held_the_empty_chains_drop_away() {
+        let shown = shown_labels(&["0.5 BTC", "0 ETH", "0 SOL", "0 LTC"]);
+        assert_eq!(shown, vec!["0.5 BTC"]);
+    }
+
+    #[test]
+    fn several_holdings_all_survive() {
+        let shown = shown_labels(&["0.5 BTC", "0 ETH", "12 SOL", "0 LTC"]);
+        assert_eq!(shown, vec!["0.5 BTC", "12 SOL"]);
+    }
+
+    #[test]
+    fn a_syncing_chain_is_never_dropped() {
+        // Mid-sync, an unread balance reads as zero. Dropping it would make rows appear and
+        // disappear as each chain reports in.
+        let shown = shown_labels(&["0.5 BTC", "Syncing…", "0 SOL", "0 LTC"]);
+        assert_eq!(shown, vec!["0.5 BTC", "Syncing…"]);
+    }
+
+    #[test]
+    fn an_unreachable_chain_is_never_dropped() {
+        // The important one: an offline node reports zero without meaning it, and hiding on
+        // that would remove an asset the user holds at the moment they cannot check it.
+        let shown = shown_labels(&["0.5 BTC", "0 ETH (offline)", "0 SOL", "0 LTC"]);
+        assert_eq!(shown, vec!["0.5 BTC", "0 ETH (offline)"]);
+    }
+
+    #[test]
+    fn a_holding_that_cannot_be_refreshed_counts_as_held() {
+        // A carried-over balance from the last good sync is still a real holding, so it both
+        // survives the filter and is enough to switch the screen out of show-everything mode.
+        let shown = shown_labels(&["0 BTC", "2.5 ETH (offline)", "0 SOL", "0 LTC"]);
+        assert_eq!(shown, vec!["2.5 ETH (offline)"]);
+    }
+
+    #[test]
+    fn everything_syncing_shows_everything() {
+        let shown = shown_labels(&["Syncing…", "Syncing…", "Syncing…", "Syncing…"]);
+        assert_eq!(shown.len(), 4);
+    }
+
+    #[test]
+    fn the_asset_count_subtitle_is_grammatical_at_one() {
+        assert_eq!(asset_count_label(1), "1 asset across 4 chains");
+        assert_eq!(asset_count_label(3), "3 assets across 4 chains");
+    }
 }

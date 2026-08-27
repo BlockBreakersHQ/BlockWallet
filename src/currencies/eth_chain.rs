@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::configuration::block_error;
 use crate::currencies::fees::clamp_gas_price;
+use crate::currencies::multicall;
 use crate::currencies::tokens::Token;
 
 const TRANSFER_TOPIC: B256 = B256::new([
@@ -219,11 +220,17 @@ pub fn default_rpc(network: EthNetwork) -> &'static str {
     }
 }
 
-/// The chain's native gas token symbol. Not always "ETH" — L2s/sidechains with their own
+/// The chain's native gas token symbol. Not always "ETH": L2s and sidechains with their own
 /// native asset (Polygon, BNB Smart Chain, Avalanche C-Chain) use their own symbol.
+///
+/// Polygon's is POL, not MATIC. The token was renamed and this said MATIC until the on-chain
+/// verification pass read `symbol()` from Polygon's own native-token predeploy and got back
+/// POL. Note that MATIC still exists as a perfectly real bridged ERC-20 on mainnet, BSC and
+/// Arbitrum, and those entries are correctly still called MATIC; it is only Polygon's gas
+/// token that was renamed.
 pub fn native_symbol(network: EthNetwork) -> &'static str {
     match network {
-        EthNetwork::PolygonPos => "MATIC",
+        EthNetwork::PolygonPos => "POL",
         EthNetwork::BnbSmartChain => "BNB",
         EthNetwork::AvalancheCChain => "AVAX",
         _ => "ETH",
@@ -264,21 +271,24 @@ pub fn bundled_tokens(network: EthNetwork) -> Vec<RegistryToken> {
         decimals: 18,
         native: true,
     }];
+    // Every entry below was verified on-chain before it was bundled: `symbol()` and
+    // `decimals()` were read from the contract itself and had to agree with what goes in
+    // here. The curated source list supplied candidate addresses and nothing more, which is
+    // the right division of trust, and it earned its keep: the list had FLUX at 18 decimals
+    // where all three of its contracts say 8, which would have misreported the balance by ten
+    // orders of magnitude.
+    //
+    // Where a symbol differs from the commonly used one, the on-chain value wins and the name
+    // says why. Most of those are Avalanche bridge assets, whose contracts genuinely report
+    // `WETH.e`, `LINK.e` and so on: a user holding the bridged asset should see the bridged
+    // symbol rather than be told they hold the native one. Two contracts report a symbol that
+    // cannot be displayed at all (Arbitrum USDT0 uses a non-ASCII glyph, and Arbitrum's
+    // bridged MKR reports a stringified bytes32), and those fall back to the conventional
+    // symbol rather than being mangled into a plausible-looking but different string.
+    //
+    // Generated rather than hand-typed, then checked by
+    // `every_bundled_token_list_is_internally_consistent`.
     match network {
-        EthNetwork::Mainnet => {
-            tokens.extend([
-                erc20("USDC", "USD Coin", "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", 6),
-                erc20("USDT", "Tether USD", "0xdac17f958d2ee523a2206206994597c13d831ec7", 6),
-                erc20("DAI", "Dai Stablecoin", "0x6b175474e89094c44da98b954eedeac495271d0f", 18),
-                erc20("WBTC", "Wrapped BTC", "0x2260fac5e5542a773aa44fbcfedf7c193bc2c599", 8),
-                erc20("WETH", "Wrapped Ether", "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2", 18),
-                erc20("LINK", "Chainlink", "0x514910771af9ca656af840dff83e8264ecf986ca", 18),
-                erc20("UNI", "Uniswap", "0x1f9840a85d5af5bf1d1762f925bdaddc4201f984", 18),
-                erc20("AAVE", "Aave", "0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9", 18),
-                erc20("LDO", "Lido DAO", "0x5a98fcbea516cf06857215779fd812ca3bef1b32", 18),
-                erc20("CRV", "Curve DAO", "0xd533a949740bb3306d119cc777fa900ba034cd52", 18),
-            ]);
-        }
         EthNetwork::Sepolia => {
             tokens.push(erc20(
                 "USDC",
@@ -287,57 +297,307 @@ pub fn bundled_tokens(network: EthNetwork) -> Vec<RegistryToken> {
                 6,
             ));
         }
+        EthNetwork::Mainnet => {
+            tokens.extend([
+                erc20("1INCH", "1inch", "0x111111111117dC0aa78b770fA6A738034120C302", 18),
+                erc20("AAVE", "Aave", "0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9", 18),
+                erc20("ALPHA", "Alpha Venture DAO", "0xa1faa113cbE53436Df28FF0aEe54275c13B40975", 18),
+                erc20("ANKR", "Ankr", "0x8290333ceF9e6D528dD5618Fb97a76f268f3EDD4", 18),
+                erc20("ARPA", "ARPA Chain", "0xBA50933C268F567BDC86E1aC131BE072C6B0b71a", 18),
+                erc20("AUSD", "AUSD", "0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a", 6),
+                erc20("AXL", "Axelar", "0x467719aD09025FcC6cF6F8311755809d45a5E5f3", 6),
+                erc20("BAL", "Balancer", "0xba100000625a3754423978a60c9317c58a424e3D", 18),
+                erc20("BUSD", "Binance USD", "0x4Fabb145d64652a948d72533023f6E7A623C7C53", 18),
+                erc20("cbETH", "Coinbase Wrapped Staked ETH", "0xBe9895146f7AF43049ca1c1AE358B0541Ea49704", 18),
+                erc20("COMP", "Compound", "0xc00e94Cb662C3520282E6f5717214004A7f26888", 18),
+                erc20("CRV", "Curve DAO Token", "0xD533a949740bb3306d119CC777fa900bA034cd52", 18),
+                erc20("CTSI", "Cartesi", "0x491604c0FDF08347Dd1fa4Ee062a822A5DD06B5D", 18),
+                erc20("DAI", "Dai Stablecoin", "0x6B175474E89094C44Da98b954EedeAC495271d0F", 18),
+                erc20("DRV", "Derive", "0xB1D1eae60EEA9525032a6DCb4c1CE336a1dE71BE", 18),
+                erc20("ENS", "Ethereum Name Service", "0xC18360217D8F7Ab5e7c516566761Ea12Ce7F9D72", 18),
+                erc20("EURA", "agEur (listed as AGEUR)", "0x1a7e4e63778B4f12a199C062f3eFdD288afCBce8", 18),
+                erc20("EURC", "Euro Coin", "0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c", 6),
+                erc20("FARM", "Harvest Finance", "0xa0246c9032bC3A600820415aE600c6388619A14D", 18),
+                erc20("FET", "Fetch ai", "0xaea46A60368A7bD060eec7DF8CBa43b7EF41Ad85", 18),
+                erc20("FLUX", "Flux", "0x720CD16b011b987Da3518fbf38c3071d4F0D1495", 8),
+                erc20("FRAX", "Frax", "0x853d955aCEf822Db058eb8505911ED77F175b99e", 18),
+                erc20("FXS", "Frax Share", "0x3432B6A60D23Ca0dFCa7761B7ab56459D9C964D0", 18),
+                erc20("GRT", "The Graph", "0xc944E90C64B2c07662A292be6244BDf05Cda44a7", 18),
+                erc20("KII", "Kiichain", "0xEEC6574eAbBa52bac3f0277F2cD5Ac7e67197886", 18),
+                erc20("KRL", "KRYLL", "0x464eBE77c293E473B48cFe96dDCf88fcF7bFDAC0", 18),
+                erc20("KUJI", "Kujira", "0x96543ef8d2C75C26387c1a319ae69c0BEE6f3fe7", 6),
+                erc20("LDO", "Lido DAO", "0x5a98fcbea516cf06857215779fd812ca3bef1b32", 18),
+                erc20("LINK", "ChainLink Token", "0x514910771AF9Ca656af840dff83E8264EcF986CA", 18),
+                erc20("LRC", "LoopringCoin V2", "0xBBbbCA6A901c926F240b89EacB641d8Aec7AEafD", 18),
+                erc20("MASK", "Mask Network", "0x69af81e73A73B40adF4f3d4223Cd9b1ECE623074", 18),
+                erc20("MATIC", "Polygon", "0x7D1AfA7B718fb893dB30A3aBc0Cfc608AaCfeBB0", 18),
+                erc20("MIM", "Magic Internet Money", "0x99D8a9C45b2ecA8864373A26D1459e3Dff1e17F3", 18),
+                erc20("MKR", "Maker", "0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2", 18),
+                erc20("MULTI", "Multichain", "0x65Ef703f5594D2573eb71Aaf55BC0CB548492df4", 18),
+                erc20("PENDLE", "Pendle", "0x808507121B80c02388fAd14726482e061B8da827", 18),
+                erc20("PERP", "Perpetual Protocol", "0xbC396689893D065F41bc2C6EcbeE5e0085233447", 18),
+                erc20("RAI", "Rai Reflex Index", "0x03ab458634910AaD20eF5f1C8ee96F1D6ac54919", 18),
+                erc20("RPL", "Rocket Pool Protocol", "0xD33526068D116cE69F19A9ee46F0bd304F21A51f", 18),
+                erc20("SNT", "Status", "0x744d70FDBE2Ba4CF95131626614a1763DF805B9E", 18),
+                erc20("SNX", "Synthetix Network Token", "0xC011a73ee8576Fb46F5E1c5751cA3B9Fe0af2a6F", 18),
+                erc20("SOL", "SOL Wormhole ", "0xD31a59c85aE9D8edEFeC411D448f90841571b89c", 9),
+                erc20("STG", "Stargate Finance", "0xAf5191B0De278C7286d6C7CC6ab6BB8A73bA2Cd6", 18),
+                erc20("sUSD", "Synth sUSD", "0x57Ab1ec28D129707052df4dF418D58a2D46d5f51", 18),
+                erc20("SUSHI", "Sushi", "0x6B3595068778DD592e39A122f4f5a5cF09C90fE2", 18),
+                erc20("SYN", "Synapse", "0x0f2D719407FdBeFF09D87557AbB7232601FD9F29", 18),
+                erc20("TEL", "Telcoin", "0x467Bccd9d29f223BcE8043b84E8C8B282827790F", 2),
+                erc20("UMA", "UMA Voting Token v1", "0x04Fa0d235C4abf4BcF4787aF4CF447DE572eF828", 18),
+                erc20("UNI", "Uniswap", "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984", 18),
+                erc20("USDC", "USDCoin", "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", 6),
+                erc20("USDT", "Tether USD", "0xdAC17F958D2ee523a2206206994597C13D831ec7", 6),
+                erc20("WBTC", "Wrapped BTC", "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", 8),
+                erc20("WETH", "Wrapped Ether", "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", 18),
+                erc20("WOO", "WOO Network", "0x4691937a7508860F876c9c0a2a617E7d9E945D4B", 18),
+                erc20("YFI", "yearn finance", "0x0bc529c00C6401aEF6D220BE8C6Ea1667F6Ad93e", 18),
+                erc20("ZRO", "LayerZero", "0x6985884C4392D348587B19cb9eAAf157F13271cd", 18),
+                erc20("ZRX", "0x Protocol Token", "0xE41d2489571d322189246DaFA5ebDe1F4699F498", 18),
+            ]);
+        }
         EthNetwork::ArbitrumOne => {
             tokens.extend([
-                erc20("USDC", "USD Coin", "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", 6),
+                erc20("1INCH", "1inch", "0x6314C31A7a1652cE482cffe247E9CB7c3f4BB9aF", 18),
+                erc20("AAVE", "Aave", "0xba5DdD1f9d7F570dc94a51479a000E3BCE967196", 18),
+                erc20("ALPHA", "Alpha Venture DAO", "0xC9CBf102c73fb77Ec14f8B4C8bd88e050a6b2646", 18),
+                erc20("ANKR", "Ankr", "0x1bfc5d35bf0f7B9e15dc24c78b8C02dbC1e95447", 18),
                 erc20("ARB", "Arbitrum", "0x912CE59144191C1204E64559FE8253a0e49E6548", 18),
-                erc20("WETH", "Wrapped Ether", "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", 18),
-                erc20("WBTC", "Wrapped BTC", "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f", 8),
-                // On-chain symbol is "USD{20ae}0" since Tether's omnichain rebrand; labelled
-                // USDT here because the real glyph does not render on Phosh.
+                erc20("AUSD", "AUSD", "0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a", 6),
+                erc20("AXL", "Axelar", "0x23ee2343B892b1BB63503a4FAbc840E0e2C6810f", 6),
+                erc20("BAL", "Balancer", "0x040d1EdC9569d4Bab2D15287Dc5A4F10F56a56B8", 18),
+                erc20("BUSD", "Binance USD", "0x31190254504622cEFdFA55a7d3d272e6462629a2", 18),
+                erc20("cbETH", "Coinbase Wrapped Staked ETH", "0x1DEBd73E752bEaF79865Fd6446b0c970EaE7732f", 18),
+                erc20("COMP", "Compound", "0x354A6dA3fcde098F8389cad84b0182725c6C91dE", 18),
+                erc20("CRV", "Curve DAO Token", "0x11cDb42B0EB46D95f990BeDD4695A6e3fA034978", 18),
+                erc20("CTSI", "Cartesi", "0x319f865b287fCC10b30d8cE6144e8b6D1b476999", 18),
+                erc20("DAI", "Dai Stablecoin", "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1", 18),
+                erc20("DRV", "Derive", "0x77b7787a09818502305C95d68A2571F090abb135", 18),
+                erc20("ENS", "Ethereum Name Service", "0xfeA31d704DEb0975dA8e77Bf13E04239e70d7c28", 18),
+                erc20("EURA", "agEur (listed as AGEUR)", "0xFA5Ed56A203466CbBC2430a43c66b9D8723528E7", 18),
+                erc20("EUROC", "Euro Coin (listed as EURC)", "0x863708032B5c328e11aBcbC0DF9D79C71Fc52a48", 6),
+                erc20("FARM", "Harvest Finance", "0x8553d254Cb6934b16F87D2e486b64BbD24C83C70", 18),
+                erc20("FET", "Fetch ai", "0x4BE87C766A7CE11D5Cc864b6C3Abb7457dCC4cC9", 18),
+                erc20("FLUX", "Flux", "0x63806C056Fa458c548Fb416B15E358A9D685710A", 8),
+                erc20("FRAX", "Frax", "0x7468a5d8E02245B00E8C0217fCE021C70Bc51305", 18),
+                erc20("FXS", "Frax Share", "0xd9f9d2Ee2d3EFE420699079f16D9e924affFdEA4", 18),
+                erc20("GRT", "The Graph", "0x9623063377AD1B27544C965cCd7342f7EA7e88C7", 18),
+                erc20("KRL", "KRYLL", "0xf75eE6D319741057a82a88Eeff1DbAFAB7307b69", 18),
+                erc20("KUJI", "Kujira", "0x3A18dcC9745eDcD1Ef33ecB93b0b6eBA5671e7Ca", 6),
+                erc20("LINK", "ChainLink Token", "0xf97f4df75117a78c1A5a0DBb814Af92458539FB4", 18),
+                erc20("LRC", "LoopringCoin V2", "0x46d0cE7de6247b0A95f67b43B589b4041BaE7fbE", 18),
+                erc20("MASK", "Mask Network", "0x533A7B414CD1236815a5e09F1E97FC7d5c313739", 18),
+                erc20("MATIC", "Polygon", "0x561877b6b3DD7651313794e5F2894B2F18bE0766", 18),
+                erc20("MIM", "Magic Internet Money", "0xB20A02dfFb172C474BC4bDa3fD6f4eE70C04daf2", 18),
+                erc20("MKR", "Maker", "0x2e9a6Df78E42a30712c10a9Dc4b1C8656f8F2879", 18),
+                erc20("MULTI", "Multichain", "0x7b9b94aebe5E2039531af8E31045f377EcD9A39A", 18),
+                erc20("PENDLE", "Pendle", "0x0c880f6761F1af8d9Aa9C466984b80DAb9a8c9e8", 18),
+                erc20("PERP", "Perpetual Protocol", "0x753D224bCf9AAFaCD81558c32341416df61D3DAC", 18),
+                erc20("RAI", "Rai Reflex Index", "0xaeF5bbcbFa438519a5ea80B4c7181B4E78d419f2", 18),
+                erc20("RPL", "Rocket Pool Protocol", "0xB766039cc6DB368759C1E56B79AFfE831d0Cc507", 18),
+                erc20("SNT", "Status", "0x707F635951193dDaFBB40971a0fCAAb8A6415160", 18),
+                erc20("SNX", "Synthetix Network Token", "0xcBA56Cd8216FCBBF3fA6DF6137F3147cBcA37D60", 18),
+                erc20("SOL", "SOL Wormhole ", "0xb74Da9FE2F96B9E0a5f4A3cf0b92dd2bEC617124", 9),
+                erc20("STG", "Stargate Finance", "0xe018C7a3d175Fb0fE15D70Da2c874d3CA16313EC", 18),
+                erc20("sUSD", "Synth sUSD", "0xA970AF1a584579B618be4d69aD6F73459D112F95", 18),
+                erc20("SUSHI", "Sushi", "0xd4d42F0b6DEF4CE0383636770eF773390d85c61A", 18),
+                erc20("SYN", "Synapse", "0x1bCfc0B4eE1471674cd6A9F6B363A034375eAD84", 18),
+                erc20("TEL", "Telcoin", "0x0419E8bfBBB2623728c3A6129090DA4Ff4e48113", 2),
+                erc20("UMA", "UMA Voting Token v1", "0xd693Ec944A85eeca4247eC1c3b130DCa9B0C3b22", 18),
+                erc20("UNI", "Uniswap", "0xFa7F8980b0f1E64A2062791cc3b0871572f1F7f0", 18),
+                erc20("USDC", "USDCoin", "0xaf88d065e77c8cC2239327C5EDb3A432268e5831", 6),
                 erc20("USDT", "Tether USD (USDT0)", "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9", 6),
+                erc20("WBTC", "Wrapped BTC", "0x2f2a2543B76A4166549F7aaB2e75Bef0aefC5B0f", 8),
+                erc20("WETH", "Wrapped Ether", "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1", 18),
+                erc20("WOO", "WOO Network", "0xcAFcD85D8ca7Ad1e1C6F82F651fA15E33AEfD07b", 18),
+                erc20("XAUt0", "Tether Gold", "0x40461291347e1eCbb09499F3371D3f17f10d7159", 6),
+                erc20("YFI", "yearn finance", "0x82e3A8F066a6989666b031d916c43672085b1582", 18),
+                erc20("ZRO", "LayerZero", "0x6985884C4392D348587B19cb9eAAf157F13271cd", 18),
+                erc20("ZRX", "0x Protocol Token", "0xBD591Bd4DdB64b77B5f76Eab8f03d02519235Ae2", 18),
             ]);
         }
         EthNetwork::Base => {
             tokens.extend([
-                erc20("USDC", "USD Coin", "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", 6),
-                erc20("WETH", "Wrapped Ether", "0x4200000000000000000000000000000000000006", 18),
-                erc20("DAI", "Dai Stablecoin", "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb", 18),
+                erc20("ARPA", "ARPA Chain", "0x1C9Fa01e87487712706Fb469a13bEb234262C867", 18),
+                erc20("AUSD", "AUSD", "0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a", 6),
                 erc20("cbBTC", "Coinbase Wrapped BTC", "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf", 8),
+                erc20("cbETH", "Coinbase Wrapped Staked ETH", "0x2Ae3F1Ec7F1F5012CFEab0185bfc7aa3cf0DEc22", 18),
+                erc20("COMP", "Compound", "0x9e1028F5F1D5eDE59748FFceE5532509976840E0", 18),
+                erc20("DAI", "Dai Stablecoin", "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb", 18),
+                erc20("DRV", "Derive", "0x9d0E8f5b25384C7310CB8C6aE32C8fbeb645d083", 18),
+                erc20("EURC", "EURC", "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42", 6),
+                erc20("FARM", "Harvest Finance", "0xD08a2917653d4E460893203471f0000826fb4034", 18),
+                erc20("FET", "Fetch ai", "0x74F804B4140ee70830B3Eef4e690325841575F89", 18),
+                erc20("FLUX", "Flux", "0xb008BDCF9CdFf9da684a190941dC3dCa8C2Cdd44", 8),
+                erc20("KII", "Kiichain", "0x3EBA6644819546C44Eb3e7c3A92f034f921dcA80", 18),
+                erc20("KRL", "KRYLL", "0xDAE49C25fAd3a62a8e8bFB6dA12c46bE611f9f7a", 18),
+                erc20("LRC", "LoopringCoin V2", "0x0D760ee479401Bb4C40BDB7604b329FfF411b3f2", 18),
+                erc20("RPL", "Rocket Pool Protocol", "0x1f73EAf55d696BFFA9b0EA16fa987B93b0f4d302", 18),
+                erc20("SNT", "Status", "0x662015EC830DF08C0FC45896FaB726542e8AC09E", 18),
+                erc20("SNX", "Synthetix Network Token", "0x22e6966B799c4D5B13BE962E1D117b56327FDa66", 18),
+                erc20("TEL", "Telcoin", "0x09bE1692ca16e06f536F0038fF11D1dA8524aDB1", 2),
+                erc20("UNI", "Uniswap", "0xc3De830EA07524a0761646a6a4e4be0e114a3C83", 18),
+                erc20("USDC", "USD Coin", "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", 6),
+                erc20("USDT", "Tether USD", "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2", 6),
+                erc20("WETH", "Wrapped Ether", "0x4200000000000000000000000000000000000006", 18),
+                erc20("ZRO", "LayerZero", "0x6985884C4392D348587B19cb9eAAf157F13271cd", 18),
+                erc20("ZRX", "0x Protocol Token", "0x3bB4445D30AC020a84c1b5A8A2C6248ebC9779D0", 18),
             ]);
         }
         EthNetwork::Optimism => {
             tokens.extend([
-                erc20("USDC", "USD Coin", "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", 6),
+                erc20("1INCH", "1inch", "0xAd42D013ac31486B73b6b059e748172994736426", 18),
+                erc20("AAVE", "Aave", "0x76FB31fb4af56892A25e32cFC43De717950c9278", 18),
+                erc20("ARPA", "ARPA Chain", "0x334cc734866E97D8452Ae6261d68Fd9bc9BFa31E", 18),
+                erc20("BAL", "Balancer", "0xFE8B128bA8C78aabC59d4c64cEE7fF28e9379921", 18),
+                erc20("BUSD", "Binance USD", "0x9C9e5fD8bbc25984B178FdCE6117Defa39d2db39", 18),
+                erc20("cbETH", "Coinbase Wrapped Staked ETH", "0xadDb6A0412DE1BA0F936DCaeb8Aaa24578dcF3B2", 18),
+                erc20("CRV", "Curve DAO Token", "0x0994206dfE8De6Ec6920FF4D779B0d950605Fb53", 18),
+                erc20("CTSI", "Cartesi", "0xEc6adef5E1006bb305bB1975333e8fc4071295bf", 18),
+                erc20("DAI", "Dai Stablecoin", "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1", 18),
+                erc20("DRV", "Derive", "0x33800De7E817A70A694F31476313A7c572BBa100", 18),
+                erc20("ENS", "Ethereum Name Service", "0x65559aA14915a70190438eF90104769e5E890A00", 18),
+                erc20("FRAX", "Frax", "0x2E3D870790dC77A83DD1d18184Acc7439A53f475", 18),
+                erc20("FXS", "Frax Share", "0x67CCEA5bb16181E7b4109c9c2143c24a1c2205Be", 18),
+                erc20("KRL", "KRYLL", "0x2ed6222CB75E353b8789bec7Bb443b7eC9022021", 18),
+                erc20("KUJI", "Kujira", "0x3A18dcC9745eDcD1Ef33ecB93b0b6eBA5671e7Ca", 6),
+                erc20("LINK", "ChainLink Token", "0x350a791Bfc2C21F9Ed5d10980Dad2e2638ffa7f6", 18),
+                erc20("LRC", "LoopringCoin V2", "0xFEaA9194F9F8c1B65429E31341a103071464907E", 18),
+                erc20("MASK", "Mask Network", "0x3390108E913824B8eaD638444cc52B9aBdF63798", 18),
+                erc20("MKR", "Maker", "0xab7bAdEF82E9Fe11f6f33f87BC9bC2AA27F2fCB5", 18),
                 erc20("OP", "Optimism", "0x4200000000000000000000000000000000000042", 18),
-                erc20("WETH", "Wrapped Ether", "0x4200000000000000000000000000000000000006", 18),
+                erc20("PENDLE", "Pendle", "0xBC7B1Ff1c6989f006a1185318eD4E7b5796e66E1", 18),
+                erc20("PERP", "Perpetual Protocol", "0x9e1028F5F1D5eDE59748FFceE5532509976840E0", 18),
+                erc20("RAI", "Rai Reflex Index", "0x7FB688CCf682d58f86D7e38e03f9D22e7705448B", 18),
+                erc20("RPL", "Rocket Pool Protocol", "0xC81D1F0EB955B0c020E5d5b264E1FF72c14d1401", 18),
+                erc20("SNT", "Status", "0x650AF3C15AF43dcB218406d30784416D64Cfb6B2", 18),
+                erc20("SNX", "Synthetix Network Token", "0x8700dAec35aF8Ff88c16BdF0418774CB3D7599B4", 18),
+                erc20("SOL", "SOL Wormhole ", "0xba1Cf949c382A32a09A17B2AdF3587fc7fA664f1", 9),
+                erc20("sUSD", "Synth sUSD", "0x8c6f28f2F1A3C87F0f938b96d27520d9751ec8d9", 18),
+                erc20("SUSHI", "Sushi", "0x3eaEb77b03dBc0F6321AE1b72b2E9aDb0F60112B", 18),
+                erc20("UMA", "UMA Voting Token v1", "0xE7798f023fC62146e8Aa1b36Da45fb70855a77Ea", 18),
+                erc20("UNI", "Uniswap", "0x6fd9d7AD17242c41f7131d257212c54A0e816691", 18),
+                erc20("USDC", "USDCoin", "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85", 6),
                 erc20("USDT", "Tether USD", "0x94b008aA00579c1307B0EF2c499aD98a8ce58e58", 6),
+                erc20("WBTC", "Wrapped BTC", "0x68f180fcCe6836688e9084f035309E29Bf0A2095", 8),
+                erc20("WETH", "Wrapped Ether", "0x4200000000000000000000000000000000000006", 18),
+                erc20("WOO", "WOO Network", "0x871f2F2ff935FD1eD867842FF2a7bfD051A5E527", 18),
+                erc20("YFI", "yearn finance", "0x9046D36440290FfDE54FE0DD84Db8b1CfEE9107B", 18),
+                erc20("ZRO", "LayerZero", "0x6985884C4392D348587B19cb9eAAf157F13271cd", 18),
+                erc20("ZRX", "0x Protocol Token", "0xD1917629B3E6A72E6772Aab5dBe58Eb7FA3C2F33", 18),
             ]);
         }
         EthNetwork::PolygonPos => {
             tokens.extend([
-                erc20("USDC", "USD Coin", "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", 6),
-                erc20("WETH", "Wrapped Ether", "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", 18),
+                erc20("AAVE", "Aave", "0xD6DF932A45C0f255f85145f286eA0b292B21C90B", 18),
+                erc20("AUSD", "AUSD", "0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a", 6),
+                erc20("BAL", "Balancer", "0x9a71012B13CA4d3D0Cdc72A177DF3ef03b0E76A3", 18),
+                erc20("COMP", "Compound", "0x8505b9d2254A7Ae468c0E9dd10Ccea3A837aef5c", 18),
+                erc20("CRV", "Curve DAO Token", "0x172370d5Cd63279eFa6d502DAB29171933a610AF", 18),
+                erc20("DAI", "Dai Stablecoin", "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063", 18),
+                erc20("ENS", "Ethereum Name Service", "0xbD7A5Cf51d22930B8B3Df6d834F9BCEf90EE7c4f", 18),
+                erc20("EURA", "agEur (listed as AGEUR)", "0xE0B52e49357Fd4DAf2c15e02058DCE6BC0057db4", 18),
+                erc20("GRT", "The Graph", "0x5fe2B58c013d7601147DcdD68C143A77499f5531", 18),
+                erc20("KII", "Kiichain", "0xEEC6574eAbBa52bac3f0277F2cD5Ac7e67197886", 18),
+                erc20("LINK", "ChainLink Token", "0x53E0bca35eC356BD5ddDFebbD1Fc0fD03FaBad39", 18),
+                erc20("LRC", "LoopringCoin V2", "0x84e1670F61347CDaeD56dcc736FB990fBB47ddC1", 18),
+                erc20("MKR", "Maker", "0x6f7C932e7684666C9fd1d44527765433e01fF61d", 18),
+                erc20("SNX", "Synthetix Network Token", "0x50B728D8D964fd00C2d0AAD81718b71311feF68a", 18),
+                erc20("sUSD", "Synth sUSD", "0xF81b4Bec6Ca8f9fe7bE01CA734F55B2b6e03A7a0", 18),
+                erc20("TEL", "Telcoin", "0xdF7837DE1F2Fa4631D716CF2502f8b230F1dcc32", 2),
+                erc20("UMA", "UMA Voting Token v1", "0x3066818837c5e6eD6601bd5a91B0762877A6B731", 18),
+                erc20("UNI", "Uniswap", "0xb33EaAd8d922B1083446DC23f610c2567fB5180f", 18),
+                erc20("USDC", "USDCoin", "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359", 6),
+                erc20("USDT0", "Tether USD (listed as USDT)", "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", 6),
                 erc20("WBTC", "Wrapped BTC", "0x1BFD67037B42Cf73acF2047067bd4F2C47D9BfD6", 8),
-                erc20("USDT", "Tether USD (USDT0)", "0xc2132D05D31c914a87C6611C10748AEb04B58e8F", 6),
+                erc20("WETH", "Wrapped Ether", "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619", 18),
+                erc20("XAUt0", "Tether Gold", "0xF1815bd50389c46847f0Bda824eC8da914045D14", 6),
+                erc20("YFI", "yearn finance", "0xDA537104D6A5edd53c6fBba9A898708E465260b6", 18),
+                erc20("ZRO", "LayerZero", "0x6985884C4392D348587B19cb9eAAf157F13271cd", 18),
+                erc20("ZRX", "0x Protocol Token", "0x5559Edb74751A0edE9DeA4DC23aeE72cCA6bE3D5", 18),
             ]);
         }
         EthNetwork::BnbSmartChain => {
-            // Circle does not issue native USDC on BSC; bundle Binance-Peg USDT instead.
-            // BSC's USDT contract uses 18 decimals, unlike Ethereum's 6.
             tokens.extend([
-                erc20("USDT", "Tether USD (BSC)", "0x55d398326f99059fF775485246999027B3197955", 18),
-                // BSC USDC is also 18 decimals, unlike Ethereum's 6.
-                erc20("USDC", "USD Coin (BSC)", "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", 18),
+                erc20("1INCH", "1inch", "0x111111111117dC0aa78b770fA6A738034120C302", 18),
+                erc20("AAVE", "Aave", "0xfb6115445Bff7b52FeB98650C87f44907E58f802", 18),
+                erc20("ALPHA", "Alpha Venture DAO", "0xa1faa113cbE53436Df28FF0aEe54275c13B40975", 18),
+                erc20("ANKR", "Ankr", "0xf307910A4c7bbc79691fD374889b36d8531B08e3", 18),
+                erc20("ARPA", "ARPA Chain", "0x6F769E65c14Ebd1f68817F5f1DcDb61Cfa2D6f7e", 18),
+                erc20("AUSD", "AUSD", "0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a", 6),
+                erc20("AXL", "Axelar", "0x8b1f4432F943c465A973FeDC6d7aa50Fc96f1f65", 6),
+                erc20("BUSD", "Binance USD", "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56", 18),
+                erc20("COMP", "Compound", "0x52CE071Bd9b1C4B00A0b92D298c512478CaD67e8", 18),
+                erc20("CTSI", "Cartesi", "0x8dA443F84fEA710266C8eB6bC34B71702d033EF2", 18),
+                erc20("DAI", "Dai Stablecoin", "0x1AF3F329e8BE154074D8769D1FFa4eE058B1DBc3", 18),
+                erc20("ETH", "Wrapped Ether (listed as WETH)", "0x2170Ed0880ac9A755fd29B2688956BD959F933F8", 18),
+                erc20("EURA", "agEur (listed as AGEUR)", "0x12f31B73D812C6Bb0d735a218c086d44D5fe5f89", 18),
+                erc20("FARM", "Harvest Finance", "0x4B5C23cac08a567ecf0c1fFcA8372A45a5D33743", 18),
+                erc20("FET", "Fetch ai", "0x031b41e504677879370e9DBcF937283A8691Fa7f", 18),
+                erc20("FRAX", "Frax", "0x90C97F71E18723b0Cf0dfa30ee176Ab653E89F40", 18),
+                erc20("FXS", "Frax Share", "0xe48A3d7d0Bc88d552f730B62c006bC925eadB9eE", 18),
+                erc20("KII", "Kiichain", "0xEEC6574eAbBa52bac3f0277F2cD5Ac7e67197886", 18),
+                erc20("KUJI", "Kujira", "0x073690e6CE25bE816E68F32dCA3e11067c9FB5Cc", 6),
+                erc20("LINK", "ChainLink Token", "0xF8A0BF9cF54Bb92F17374d9e9A321E6a111a51bD", 18),
+                erc20("MASK", "Mask Network", "0x2eD9a5C8C13b93955103B9a7C167B67Ef4d568a3", 18),
+                erc20("MATIC", "Polygon", "0xCC42724C6683B7E57334c4E856f4c9965ED682bD", 18),
+                erc20("MIM", "Magic Internet Money", "0xfE19F0B51438fd612f6FD59C1dbB3eA319f433Ba", 18),
+                erc20("MULTI", "Multichain", "0x9Fb9a33956351cf4fa040f65A13b835A3C8764E3", 18),
+                erc20("PERP", "Perpetual Protocol", "0x4e7f408be2d4E9D60F49A64B89Bb619c84C7c6F5", 18),
+                erc20("SOL", "SOL Wormhole ", "0xfA54fF1a158B5189Ebba6ae130CEd6bbd3aEA76e", 9),
+                erc20("STG", "Stargate Finance", "0xB0D502E938ed5f4df2E681fE6E419ff29631d62b", 18),
+                erc20("SUSHI", "Sushi", "0x947950BcC74888a40Ffa2593C5798F11Fc9124C4", 18),
+                erc20("SYN", "Synapse", "0xa4080f1778e69467E905B8d6F72f6e441f9e9484", 18),
+                erc20("UNI", "Uniswap", "0xBf5140A22578168FD562DCcF235E5D43A02ce9B1", 18),
+                erc20("USDC", "USDCoin", "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d", 18),
+                erc20("USDT", "Tether USD", "0x55d398326f99059fF775485246999027B3197955", 18),
                 erc20("WBNB", "Wrapped BNB", "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c", 18),
+                erc20("WOO", "WOO Network", "0x4691937a7508860F876c9c0a2a617E7d9E945D4B", 18),
+                erc20("XAUt", "Tether Gold (listed as XAUT0)", "0x21cAef8A43163Eea865baeE23b9C2E327696A3bf", 6),
+                erc20("ZRO", "LayerZero", "0x6985884C4392D348587B19cb9eAAf157F13271cd", 18),
             ]);
         }
         EthNetwork::AvalancheCChain => {
             tokens.extend([
-                erc20("USDC", "USD Coin", "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E", 6),
-                // On-chain symbol is "USDt" (lower-case t); labelled USDT for consistency.
-                erc20("USDT", "Tether USD", "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7", 6),
+                erc20("1INCH.e", "1inch (bridged)", "0xd501281565bf7789224523144Fe5D98e8B28f267", 18),
+                erc20("AAVE.e", "Aave (bridged)", "0x63a72806098Bd3D9520cC43356dD78afe5D386D9", 18),
+                erc20("ALPHA.e", "Alpha Venture DAO (bridged)", "0x2147EFFF675e4A4eE1C2f918d181cDBd7a8E208f", 18),
+                erc20("ANKR", "Ankr", "0x20CF1b6E9d856321ed4686877CF4538F2C84B4dE", 18),
+                erc20("AUSD", "AUSD", "0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a", 6),
+                erc20("AXL", "Axelar", "0x44c784266cf024a60e8acF2427b9857Ace194C5d", 6),
+                erc20("BUSD", "Binance USD", "0x9C9e5fD8bbc25984B178FdCE6117Defa39d2db39", 18),
+                erc20("COMP.e", "Compound (bridged)", "0xc3048E19E76CB9a3Aa9d77D8C03c29Fc906e2437", 18),
+                erc20("CTSI", "Cartesi", "0x6b289CCeAA8639e3831095D75A3e43520faBf552", 18),
+                erc20("EURA", "agEur (listed as AGEUR)", "0xAEC8318a9a59bAEb39861d10ff6C7f7bf1F96C57", 18),
+                erc20("EURC", "Euro Coin", "0xC891EB4cbdEFf6e073e859e987815Ed1505c2ACD", 6),
+                erc20("FLUX", "Flux", "0xc4B06F17ECcB2215a5DBf042C672101Fc20daF55", 8),
+                erc20("FRAX", "Frax", "0xD24C2Ad096400B6FBcd2ad8B24E7acBc21A1da64", 18),
+                erc20("FXS", "Frax Share", "0x214DB107654fF987AD859F34125307783fC8e387", 18),
+                erc20("GRT.e", "The Graph (bridged)", "0x8a0cAc13c7da965a312f08ea4229c37869e85cB9", 18),
+                erc20("LINK.e", "ChainLink Token (bridged)", "0x5947BB275c521040051D82396192181b413227A3", 18),
+                erc20("MIM", "Magic Internet Money", "0x130966628846BFd36ff31a822705796e8cb8C18D", 18),
+                erc20("MKR.e", "Maker (bridged)", "0x88128fd4b259552A9A1D457f435a6527AAb72d42", 18),
+                erc20("MULTI", "Multichain", "0x9Fb9a33956351cf4fa040f65A13b835A3C8764E3", 18),
+                erc20("PENDLE", "Pendle", "0xfB98B335551a418cD0737375a2ea0ded62Ea213b", 18),
+                erc20("RAI", "Rai Reflex Index", "0x97Cd1CFE2ed5712660bb6c14053C0EcB031Bff7d", 18),
+                erc20("SNX.e", "Synthetix Network Token (bridged)", "0xBeC243C995409E6520D7C41E404da5dEba4b209B", 18),
+                erc20("SOL", "SOL Wormhole ", "0xFE6B19286885a4F7F55AdAD09C3Cd1f906D2478F", 9),
+                erc20("STG", "Stargate Finance", "0x2F6F07CDcf3588944Bf4C42aC74ff24bF56e7590", 18),
+                erc20("SUSHI.e", "Sushi (bridged)", "0x37B608519F91f70F2EeB0e5Ed9AF4061722e4F76", 18),
+                erc20("SYN", "Synapse", "0x1f1E7c893855525b303f99bDF5c3c05Be09ca251", 18),
+                erc20("UMA.e", "UMA Voting Token v1 (bridged)", "0x3Bd2B1c7ED8D396dbb98DED3aEbb41350a5b2339", 18),
+                erc20("USDC", "USDC Token", "0xB97EF9Ef8734C71904D8002F8b6Bc66Dd9c48a6E", 6),
+                erc20("USDt", "Tether USD", "0x9702230A8Ea53601f5cD2dc00fDBc13d4dF4A8c7", 6),
                 erc20("WAVAX", "Wrapped AVAX", "0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7", 18),
+                erc20("WBTC.e", "Wrapped BTC (bridged)", "0x50b7545627a5162F82A992c33b87aDc75187B218", 8),
+                erc20("WETH.e", "Wrapped Ether (bridged)", "0x49D5c2BdFfac6CE2BFdB6640F4F80f226bc10bAB", 18),
+                erc20("WOO.e", "WOO Network (bridged)", "0xaBC9547B534519fF73921b1FBA6E672b5f58D083", 18),
+                erc20("XAUt0", "Tether Gold", "0x2775d5105276781B4b85bA6eA6a6653bEeD1dd32", 6),
+                erc20("YFI.e", "yearn finance (bridged)", "0x9eAaC1B23d935365bD7b542Fe22cEEe2922f52dc", 18),
+                erc20("ZRO", "LayerZero", "0x6985884C4392D348587B19cb9eAAf157F13271cd", 18),
+                erc20("ZRX.e", "0x Protocol Token (bridged)", "0x596fA47043f99A4e0F122243B841E55375cdE0d2", 18),
             ]);
         }
     }
@@ -608,20 +868,7 @@ async fn sync_account_async(
         }
     };
 
-    let mut erc20 = BTreeMap::new();
-    for token in &tokens {
-        if is_native_token(token) {
-            continue;
-        }
-        let Ok(contract_addr) = Address::from_str(token.address.trim()) else {
-            continue;
-        };
-        if let Ok(raw) = eth_call(&provider, contract_addr, encode_balance_of(account)).await {
-            let balance = decode_u256(raw.as_ref());
-            let decimals = token.decimals.max(0) as u8;
-            erc20.insert(token.symbol.clone(), format_units_trimmed(balance, decimals));
-        }
-    }
+    let erc20 = fetch_token_balances(&provider, account, &tokens).await;
 
     // Native transfers move no tokens, so they emit no logs and `erc20_history` cannot see
     // them. They need an indexer. Etherscan is used when a key is configured; otherwise
@@ -653,6 +900,97 @@ async fn sync_account_async(
         offline: false,
         native_symbol: symbol,
     })
+}
+
+/// Fetch every bundled token balance for an account in one request.
+///
+/// Falls back to individual `balanceOf` calls if the batch fails for any reason: an RPC that
+/// rejects a large `eth_call`, a chain where Multicall3 somehow is not deployed, or a
+/// malformed response. The fallback is slow and is exactly the behaviour this replaced, so it
+/// is a safety net rather than a path anything should routinely take. Getting a wrong balance
+/// is worse than getting one slowly.
+async fn fetch_token_balances<P: Provider>(
+    provider: &P,
+    account: Address,
+    tokens: &[Token],
+) -> BTreeMap<String, String> {
+    let mut wanted: Vec<(&Token, Address)> = Vec::new();
+    for token in tokens {
+        if is_native_token(token) {
+            continue;
+        }
+        if let Ok(contract) = Address::from_str(token.address.trim()) {
+            wanted.push((token, contract));
+        }
+    }
+    if wanted.is_empty() {
+        return BTreeMap::new();
+    }
+
+    if let Some(balances) = batched_token_balances(provider, account, &wanted).await {
+        return balances;
+    }
+
+    crate::configuration::logging::warn(
+        "multicall balance read failed; falling back to one call per token",
+    );
+    let mut out = BTreeMap::new();
+    for (token, contract) in &wanted {
+        if let Ok(raw) = eth_call(provider, *contract, encode_balance_of(account)).await {
+            let decimals = token.decimals.max(0) as u8;
+            out.insert(
+                token.symbol.clone(),
+                format_units_trimmed(decode_u256(raw.as_ref()), decimals),
+            );
+        }
+    }
+    out
+}
+
+/// One `eth_call` covering every token, via Multicall3.
+///
+/// `None` means the batch could not be trusted and the caller should fall back. A token whose
+/// own call reverted is simply omitted from the map, the same outcome the per-token version
+/// reached by failing its request, so a single broken contract cannot blank the rest.
+async fn batched_token_balances<P: Provider>(
+    provider: &P,
+    account: Address,
+    wanted: &[(&Token, Address)],
+) -> Option<BTreeMap<String, String>> {
+    let multicall = Address::from_str(multicall::MULTICALL3).ok()?;
+    let calls: Vec<multicall::Call3> = wanted
+        .iter()
+        .map(|(_, contract)| multicall::Call3 {
+            target: *contract,
+            allow_failure: true,
+            call_data: encode_balance_of(account),
+        })
+        .collect();
+
+    let raw = eth_call(provider, multicall, multicall::encode_aggregate3(&calls))
+        .await
+        .ok()?;
+    let results = multicall::decode_aggregate3(raw.as_ref()).ok()?;
+
+    // A result count that does not match what was asked for means the pairing of answers to
+    // tokens is not reliable, and a balance attributed to the wrong token is worse than no
+    // balance at all.
+    if results.len() != wanted.len() {
+        return None;
+    }
+
+    let mut out = BTreeMap::new();
+    for ((token, _), result) in wanted.iter().zip(results) {
+        if !result.success || result.return_data.len() < 32 {
+            continue;
+        }
+        let decimals = token.decimals.max(0) as u8;
+        out.insert(
+            token.symbol.clone(),
+            format_units_trimmed(decode_u256(result.return_data.as_ref()), decimals),
+        );
+    }
+    Some(out)
 }
 
 /// Token transfer history for every bundled contract, in two log queries rather than two
@@ -1335,7 +1673,7 @@ mod tests {
             ("arbitrum", EthNetwork::ArbitrumOne, 42161u64, "ETH"),
             ("base", EthNetwork::Base, 8453, "ETH"),
             ("optimism", EthNetwork::Optimism, 10, "ETH"),
-            ("polygon", EthNetwork::PolygonPos, 137, "MATIC"),
+            ("polygon", EthNetwork::PolygonPos, 137, "POL"),
             ("bsc", EthNetwork::BnbSmartChain, 56, "BNB"),
             ("avalanche", EthNetwork::AvalancheCChain, 43114, "AVAX"),
         ];
@@ -1370,12 +1708,22 @@ mod tests {
                 assert_ne!(t.address, NATIVE_SENTINEL);
             }
         }
-        // BSC's bundled stablecoin uses 18 decimals (Binance-Peg USDT), unlike the 6-decimal
-        // USDC bundled on the other L2s/sidechains.
+        // Binance-Peg stablecoins use 18 decimals, unlike the 6 that USDC and USDT carry
+        // nearly everywhere else. Looked up by symbol rather than by position: the lists are
+        // generated in alphabetical order, so indexing into one asserts nothing useful and
+        // breaks whenever a token is added ahead of it.
         let bsc = bundled_tokens(EthNetwork::BnbSmartChain);
-        let bsc_stable = bsc.iter().find(|t| !t.native).unwrap();
-        assert_eq!(bsc_stable.symbol, "USDT");
-        assert_eq!(bsc_stable.decimals, 18);
+        for symbol in ["USDT", "USDC"] {
+            let stable = bsc
+                .iter()
+                .find(|t| t.symbol == symbol)
+                .unwrap_or_else(|| panic!("BSC should bundle {symbol}"));
+            assert_eq!(stable.decimals, 18, "Binance-Peg {symbol} is an 18-decimal token");
+        }
+        // The 6-decimal assumption still holds where it should.
+        let mainnet = bundled_tokens(EthNetwork::Mainnet);
+        let usdc = mainnet.iter().find(|t| t.symbol == "USDC").expect("mainnet USDC");
+        assert_eq!(usdc.decimals, 6);
     }
 
     #[test]

@@ -99,6 +99,31 @@ pub fn label_is_pending_sync(text: &str) -> bool {
     lower.contains("uninitialized") || lower.contains("syncing")
 }
 
+/// Is this balance label a confirmed zero, safe to hide?
+///
+/// Only a real, settled zero counts. "Syncing…" and an offline label both parse as an amount
+/// of zero, but neither is a statement that the balance *is* zero: one is "not asked yet" and
+/// the other is "could not ask". Hiding those would make rows flicker in and out as a sync
+/// lands, and worse, would quietly hide an asset the user does hold whenever their node is
+/// unreachable. So the rule is deliberately narrow: hide only what the wallet has actually
+/// been told is empty.
+pub fn is_confirmed_zero(display: &str) -> bool {
+    if label_is_offline(display) || label_is_pending_sync(display) {
+        return false;
+    }
+    parse_leading_amount(display) == 0.0
+}
+
+/// Does this label report an amount actually held?
+///
+/// Not the negation of [`is_confirmed_zero`], and deliberately so. A label can be neither: a
+/// syncing row and an unreachable node at zero are both "we do not know yet". Only a positive
+/// amount counts here, including one carried over from the last good sync while a node is
+/// offline, because that is still a real holding the wallet was told about.
+pub fn has_balance(display: &str) -> bool {
+    parse_leading_amount(display) > 0.0
+}
+
 pub fn format_btc_units(display: &str, units: &str) -> String {
     if units.eq_ignore_ascii_case("sats") {
         let btc = parse_leading_amount(display);
@@ -144,5 +169,30 @@ mod tests {
         assert!(label_is_offline("0.0 BTC (offline)"));
         assert!(label_is_pending_sync("Uninitialized"));
         assert!(!label_is_offline("0.1 ETH"));
+    }
+
+    #[test]
+    fn only_a_settled_zero_counts_as_hideable() {
+        // Real zeros, in the shapes the assets screen builds.
+        assert!(is_confirmed_zero("0 BTC"));
+        assert!(is_confirmed_zero("0 ETH"));
+        assert!(is_confirmed_zero("0.00000000 BTC"));
+
+        // Anything held is never hidden.
+        assert!(!is_confirmed_zero("0.001 BTC"));
+        assert!(!is_confirmed_zero("1.5 ETH"));
+
+        // Not yet asked. Hiding these would make rows flicker in and out as a sync lands.
+        assert!(!is_confirmed_zero("Syncing…"));
+        assert!(!is_confirmed_zero("Uninitialized"));
+
+        // Could not ask. This is the one that matters: an unreachable node reports zero, and
+        // hiding on that would quietly remove an asset the user really does hold.
+        assert!(!is_confirmed_zero("0 BTC (offline)"));
+        assert!(!is_confirmed_zero("0 ETH (offline)"));
+        assert!(!is_confirmed_zero("Node unreachable"));
+
+        // A held balance that cannot be refreshed stays visible too.
+        assert!(!is_confirmed_zero("2.5 ETH (offline)"));
     }
 }

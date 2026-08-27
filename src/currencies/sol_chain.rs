@@ -152,17 +152,57 @@ pub fn bundled_tokens(network: SolNetwork) -> Vec<RegistryToken> {
         native: true,
     }];
     match network {
+        // Every mint below was verified on-chain before it was bundled: the account exists,
+        // is owned by the classic SPL token program, is of type "mint", and reports these
+        // decimals. Ranked by holder count with a liquidity floor, which is a better proxy
+        // for "a wallet user will actually hold this" than liquidity alone: ranking purely by
+        // liquidity produced a list that was eighteen near-identical liquid-staking SOL
+        // derivatives and omitted JUP, BONK, PYTH and WIF entirely.
+        //
+        // Classic SPL only. Token-2022 mints are excluded because `find_associated_token_address`
+        // and the transfer instruction both use the classic program id, and Token-2022 uses its
+        // own as an ATA seed: bundling one would show a balance that could not be spent.
         SolNetwork::Mainnet => tokens.extend([
-            spl("USDC", "USD Coin", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", 6),
-            spl("USDT", "Tether USD", "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", 6),
-            spl("wSOL", "Wrapped SOL", "So11111111111111111111111111111111111111112", 9),
+            spl("ANTFUN", "AntFun", "CWZ6BsdnjkDVTGkmL6bGbJXXig6ceef12KvyGQW14cMt", 6),
+            spl("BOME", "BOOK OF MEME", "ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82", 6),
+            spl("Bonk", "Bonk", "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", 5),
+            spl("CHILLGUY", "Just a chill guy", "Df6yfrKC8kZE3KNkrHERKzAetSxbrWeniQfyJY4Jpump", 6),
+            spl("DBR", "deBridge", "DBRiDgJAMsM95moTzJs7M9LnkGErpbv9v6CUR1DXnUu5", 6),
+            spl("DOOD", "Doodles", "DvjbEsdca43oQcw2h3HW1CT7N3x5vRcr3QrvTUHnXvgV", 9),
+            spl("ETH", "Ether (Portal)", "7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs", 8),
+            spl("Fartcoin", "Fartcoin", "9BB6NFEcjBCtnNLFko2FqVQBq8HHM13kCyYcdQbgpump", 6),
+            spl("GIGA", "GIGACHAD", "63LfDmNb3MQ8mw9MtZ2To9bEA2M71kZUUGq5tiJxcqj9", 5),
+            spl("GOAT", "Goatseus Maximus", "CzLSujWBLFsSjncfkh59rUFqvafWcY5tzedWJSuypump", 6),
+            spl("GRASS", "Grass", "Grass7B4RdKfBCjTKgSqnXkqjwiGvQyFbuSCUJr3XXjs", 9),
+            spl("HNT", "Helium Network Token", "hntyVP6YFm1Hg25TN9WGLqM12b8TQmcknKrdu1oxWux", 8),
+            spl("JitoSOL", "Jito Staked SOL", "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn", 9),
+            spl("JLP", "Jupiter Perps", "27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4", 6),
+            spl("JTO", "JITO", "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL", 9),
             spl("JUP", "Jupiter", "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN", 6),
-            // BONK is 5 decimals, not the more common 6 or 9. Confirmed on-chain.
-            spl("BONK", "Bonk", "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", 5),
-            spl("JTO", "Jito", "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL", 9),
+            spl("ME", "Magic Eden", "MEFNBXixkEbait3xn9bkm8WsJzXtVsaJEn4c8Sam21u", 6),
+            spl("MELANIA", "Melania Meme", "FUAfBo2jgks6gB4Z4LfZkqSZgzNucisEHqnNebaRxM1P", 6),
+            spl("MEW", "cat in a dogs world", "MEW1gQWJ3nEXg2qgERiKu7FAFj79PHvQVREQUzScPP5", 5),
+            spl("MOODENG", "Moo Deng", "ED5nyyWEzpPPiWimP8vYm7sD7TD3LAt3Q3gRTWHzPJBY", 6),
+            spl("mSOL", "Marinade staked SOL (mSOL)", "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So", 9),
+            spl("ORCA", "Orca", "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE", 6),
+            spl("PENGU", "Pudgy Penguins", "2zMMhcVQEXDtdE6vsFS7S7D5oUodfJHE8vd1gnBouauv", 6),
+            spl("Pnut", "Peanut the Squirrel", "2qEHjDLDLbuBgRYvsxhc5D6uDWAivNFZGan56P1tpump", 6),
+            spl("POPCAT", "Popcat", "7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr", 9),
+            spl("PSOL", "Phantom Staked SOL", "pSo1f9nQXWgXibFtKf7NWYxb5enAM4qfP6UJSiXRQfL", 9),
             spl("PYTH", "Pyth Network", "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3", 6),
             spl("RAY", "Raydium", "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R", 6),
+            spl("RENDER", "Render Token", "rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof", 8),
+            spl("SLIM", "Solanium", "xxxxa1sKNGwFtw2kFn8XauW9xq8hBZ5kVtcSesTT9fW", 6),
+            spl("SOLCEX", "SolCex ", "AMjzRn1TBQwQfNAjHFeBb7uGbbqbJB7FzXAnGgdFPk6K", 6),
+            spl("TRUMP", "OFFICIAL TRUMP", "6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN", 6),
+            spl("USA", "American Coin", "69kdRLyP5DTRkpHraaSZAQbWmAwzF9guKjZfzMXzcbAs", 6),
+            spl("USDC", "USD Coin", "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", 6),
+            spl("USDT", "USDT", "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB", 6),
+            spl("VINE", "Vine Coin", "6AJcP7wuLwmRYLBNbi825wgguaPsWzPBEHcHndpRpump", 6),
+            spl("W", "Wormhole Token", "85VBFQZC9TZkfaptBWjvUw7YbZjy52A6mjtPGjstQAmQ", 6),
+            spl("WEN", "Wen", "WENWENvqqNya429ubCdR81ZmD69brwQaaBYY6p3LCpk", 5),
             spl("WIF", "dogwifhat", "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm", 6),
+            spl("wSOL", "Wrapped SOL", "So11111111111111111111111111111111111111112", 9),
         ]),
         SolNetwork::Devnet => tokens.extend([
             spl("USDC", "USD Coin (devnet)", "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU", 6),

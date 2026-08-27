@@ -21,10 +21,10 @@ checklist.
 
 Known unproven areas, stated plainly rather than buried: cross-chain swaps have never moved
 real coins, because THORChain's global trading halt was in force for most of development and
-its public gateways are unreachable now that it has lifted, while Maya is halted in turn; swap
-quoting is only exercisable on mainnet, since no testnet has aggregator liquidity; and the
-Activity view was not visually confirmed during a network outage. See the checklist for the
-full record.
+every free public THORNode gateway went dark once it lifted, while Maya reports a halt of its
+own; swap quoting is only exercisable on mainnet, since no testnet has aggregator liquidity;
+Token-2022 mints on Solana are excluded rather than shown as unspendable; and the Activity view
+was not visually confirmed during a network outage. See the checklist for the full record.
 
 Application ID: `io.github.BlockBreakersHQ.BlockWallet`
 
@@ -39,8 +39,8 @@ Block Wallet is a wallet you actually hold the keys to, built for a Linux phone.
 account to create, no email, no KYC, and nothing to sign up for. Write the phrase down and
 that is the whole backup.
 
-**Your keys never leave the device.** The store is a single encrypted file — Argon2id at
-64 MiB for the password, ChaCha20-Poly1305 for the contents — written owner-only under your
+**Your keys never leave the device.** The store is a single encrypted file (Argon2id at
+64 MiB for the password, ChaCha20-Poly1305 for the contents), written owner-only under your
 XDG data directory, and replaced atomically so an interrupted save cannot corrupt it.
 Anyone who copies that file can attack it offline at their own pace, so how strong a password
 you pick is what protects it. Every copy of your keys is wiped from memory when it goes out of
@@ -51,28 +51,39 @@ context strings that never contain a phrase, key or password.
 **Your nodes, not ours.** Every chain talks to an endpoint you choose: an Electrum or
 Esplora server for Bitcoin, any JSON-RPC for Ethereum and Solana, an Esplora-style server
 for Litecoin. The defaults are public endpoints so it works out of the box, but those
-endpoints see which addresses you ask about — point it at your own server in Settings and
+endpoints see which addresses you ask about. Point it at your own server in Settings and
 that stops. Remote endpoints must use TLS; plaintext `http://` is accepted only for a node
 running on the device itself. Nothing a node says is taken on trust: fee estimates are
 capped, and a fee larger than the amount being sent is refused rather than shown.
+
+**It asks a node as little as it can.** A sync costs the same whether the wallet is tracking
+four tokens or three hundred: Ethereum balances are read in a single `eth_call` through
+Multicall3, token history in two `eth_getLogs` queries covering every contract at once, and
+Solana holdings in one `getTokenAccountsByOwner`. This is not only politeness to a free public
+endpoint. A wallet that hammers one gets rate-limited, and a rate-limited node is
+indistinguishable from being offline, which is exactly how Bitcoin appeared broken for the
+whole of this project's early life. Multicall3 is used for reads only, never for anything
+signed, so it can affect what you see but never what you spend.
 
 **Receiving works with the radios off.** Addresses and QR codes are derived locally, so
 the receive screen is fully usable in airplane mode or when a node is unreachable. The app
 says so plainly rather than showing a spinner.
 
 **It tries hard not to let you lose money.** Any network that spends real value requires an
-explicit "I understand" checkbox before the Confirm button becomes active — and that gate
+explicit "I understand" checkbox before the Confirm button becomes active, and that gate
 keys off *"is this a known testnet"*, not *"is this literally mainnet"*, so a newly added
 L2 defaults to protected rather than unprotected. Consent is per send, not per screen: the
-box is unticked again for every transaction. What you confirm is always what you reviewed —
+box is unticked again for every transaction. What you confirm is always what you reviewed:
 changing the recipient, amount, fee or account tears the review card down rather than
 leaving Confirm wired to the previous plan, and each plan is bound to the account it was
 built for, so it cannot be signed by another. The header carries a permanent LIVE or TEST
 NETWORKS chip so the answer is never more than a glance away.
 
 **It is shaped like a phone app.** 360×720, touch-sized targets, a bottom tab bar, and
-libadwaita's own patterns throughout — boxed lists, preference groups, status pages,
-toasts. It follows the system light/dark theme and accent colour.
+libadwaita's own patterns throughout: boxed lists, preference groups, status pages,
+toasts. It follows the system accent colour, and **Settings → Appearance** either follows the
+system light/dark theme or pins one of them. That choice is stored outside the encrypted
+store, so the lock screen is themed correctly before you have typed anything.
 
 ## Screens
 
@@ -81,7 +92,7 @@ toasts. It follows the system light/dark theme and accent colour.
 | ![Unlock](docs/screenshots/unlock-light.png) | ![Home](docs/screenshots/home-light.png) | ![Wallets](docs/screenshots/wallets-light.png) |
 | Unlock | Home | Accounts, one phrase behind all of them |
 | ![Receive](docs/screenshots/receive-light.png) | ![Send](docs/screenshots/send-light.png) | ![Unlock dark](docs/screenshots/unlock-dark.png) |
-| Receive — works offline | Send | Dark mode |
+| Receive, works offline | Send | Dark mode |
 | ![Home dark](docs/screenshots/home-dark.png) | ![Detail dark](docs/screenshots/detail-dark.png) | |
 | Home in dark mode | Asset detail in dark mode | |
 
@@ -92,17 +103,41 @@ Captured at 360×720, the Librem 5's logical resolution.
 | Chain | Derivation | Networks | Notes |
 | --- | --- | --- | --- |
 | **Bitcoin** | BIP84 `m/84'/0'/0'/0/0` | mainnet, testnet | BDK 1.x, Electrum or Esplora, fee tiers, RBF-ready PSBT flow |
-| **Ethereum** | BIP44 `m/44'/60'/0'/0/0` | mainnet, Sepolia, **Arbitrum One, Base, Optimism, Polygon PoS, BNB Smart Chain, Avalanche C-Chain** | Alloy. One address across all of them. Native gas token follows the chain (ETH / MATIC / BNB / AVAX) |
-| **Solana** | SLIP-0010 ed25519 `m/44'/501'/0'/0'` | mainnet, devnet | SOL and SPL tokens, hand-rolled transaction format — no `solana-sdk` dependency |
+| **Ethereum** | BIP44 `m/44'/60'/0'/0/0` | mainnet, Sepolia, **Arbitrum One, Base, Optimism, Polygon PoS, BNB Smart Chain, Avalanche C-Chain** | Alloy. One address across all of them. Native gas token follows the chain (ETH / POL / BNB / AVAX) |
+| **Solana** | SLIP-0010 ed25519 `m/44'/501'/0'/0'` | mainnet, devnet | SOL and SPL tokens, hand-rolled transaction format, no `solana-sdk` dependency |
 | **Litecoin** | BIP84-style `m/84'/2'/0'/0/0` | mainnet, testnet | Hand-rolled: no Litecoin fork of `bitcoin`/`bdk_wallet` exists on crates.io, so this reuses the project's BIP32/secp256k1/BIP143 code and adds Litecoin's own bech32 and WIF encoding |
 
-Tokens: a bundled list of around forty entries across the supported networks, including USDC,
-USDT, DAI, WBTC, WETH, LINK, UNI, AAVE, LDO and CRV on Ethereum; each L2's own token (ARB, OP,
-WBNB, WAVAX) alongside its native USDC and WETH; and JUP, BONK, JTO, PYTH, RAY and WIF on
-Solana. Every contract address and mint in that list was verified on-chain before it went in,
-by calling `symbol()` and `decimals()` on the contract or reading the mint account, rather than
-being copied from a listing site. You can add any other ERC-20 by contract or any SPL token by
-mint address.
+Tokens: about 315 bundled entries, covering roughly 275 ERC-20s across the seven EVM networks
+and the top 40 SPL tokens on Solana. Every contract address and mint was verified on-chain
+before it went in, by reading `symbol()` and `decimals()` from the contract or the mint
+account itself rather than trusting a listing file. That check earns its keep: the curated
+source list had FLUX at 18 decimals where all three of its contracts report 8, which would
+have misreported the balance by ten orders of magnitude. You can add any other ERC-20 by
+contract or any SPL token by mint address.
+
+Where a token's on-chain symbol differs from the one commonly used, the on-chain value is
+what the wallet shows. Most of those are Avalanche bridge assets, whose contracts genuinely
+report `WETH.e`, `LINK.e` and so on: if you hold the bridged asset, the wallet says so rather
+than implying you hold the native one. The two contracts whose symbol cannot be displayed at
+all fall back to the conventional name rather than being mangled into something that looks
+right but is not.
+
+Solana coverage is classic SPL only. Token-2022 mints are deliberately left out: the wallet
+derives associated token accounts and builds transfers against the classic program id, so
+bundling one would show a balance that could not be spent, which is worse than not listing it.
+
+Because the list is long, the swap screen picks tokens through a searchable list rather than a
+dropdown. Typing filters on the whole label, so a chain name narrows it as well as a symbol.
+
+Home shows all four chains while the wallet is empty, so a new wallet looks like a wallet
+rather than a blank page, and narrows to just what you hold the moment a balance lands. It
+needs no setting: the rule flips itself.
+
+The Assets screen only lists tokens you actually hold, plus each chain's own asset so there is
+always a way in to receive. **Settings -> Hide empty assets** hides those too, with a button on
+the list to bring them back for a visit. A balance that is still syncing, or that could not be
+fetched because a node is unreachable, is never hidden: both read as zero, and treating either
+as empty would hide something you own at the exact moment you cannot check.
 
 Import from a mnemonic, a WIF, a raw private key, or an existing encrypted `.dic`.
 
@@ -145,15 +180,22 @@ What the wallet checks before it will sign, on every offer:
 - a Solana transaction built elsewhere is payable only by your own account.
 
 Providers that decline say why rather than quietly disappearing, and the reason is worth
-reading. A vault-based venue refuses outright while its network is halted, which THORChain was
-for most of this project's development. It has since resumed, but at the time of writing every
-public THORNode gateway is unreachable from outside: the long-standing default has no DNS
-record at all, one alternative sits behind a Cloudflare challenge, and another serves an
-expired certificate. The wallet tries each in turn and then says so, rather than presenting the
-failure as your connection being down. Maya answers normally.
+reading, because the two cross-chain venues are currently unavailable for entirely different
+reasons.
 
-If you run your own node, set it in **Settings -> Swaps** and it is tried first. The cross-chain
-paths are unit-tested against captured responses but have not moved real coins.
+**THORChain the network is healthy.** It settled around $24M of swaps in the last 24 hours and
+its 30-day volume is up roughly 83% month over month. What has gone is the free public API
+layer: at the time of writing the long-standing default gateway has no DNS record at all, one
+alternative sits behind a Cloudflare challenge, and a third serves a certificate that expired
+in February 2024 and fronts a node frozen at a single block height, which refuses to quote
+and says so. The wallet tries each in turn and then reports the failure honestly rather than
+presenting it as your connection being down. **Maya** answers normally and reports its own
+trading halt.
+
+So this is an infrastructure-access problem with an ordinary fix, not a dead dependency. If
+you run your own node, set it in **Settings -> Swaps** and it is tried first, ahead of the
+public list. The cross-chain paths are unit-tested against captured responses but have not
+moved real coins.
 
 ## Install
 
@@ -214,7 +256,7 @@ build on the device this app targets.
 Building on the phone itself is slow: 4 cores and 3 GB of RAM against roughly 580 crates.
 Prefer building on a faster machine and copying the result over.
 
-Windows (MSYS2 mingw64 + GNU rustc) — plain `cargo run` uses MSVC and has no
+Windows (MSYS2 mingw64 + GNU rustc). Plain `cargo run` uses MSVC and has no
 `pkg-config`/GTK, so use the wrapper:
 
 ```powershell
@@ -255,11 +297,9 @@ User files follow the XDG Base Directory spec. Override the root with `BLOCKWALL
 
 Progress and remaining work: [docs/ROADMAP.md](docs/ROADMAP.md).
 
-After the device checklist passes:
-
-```sh
-git tag v0.1.0
-```
+`v0.1.0` is tagged, and release builds are produced for both `aarch64` (the Librem 5) and
+`x86_64` (desktop). Work since that tag is unreleased and is being re-tested against the
+expanded checklist.
 
 ## License
 

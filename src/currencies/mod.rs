@@ -11,6 +11,7 @@ pub mod sol_chain;
 pub mod swap;
 pub mod currency_pairs;
 pub mod fees;
+pub mod multicall;
 pub mod prices;
 pub mod tokens;
 pub mod transactions;

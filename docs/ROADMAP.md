@@ -112,7 +112,7 @@ moved on since that run — see Phases 10 and 11.
 ### Phase 7 — EVM L2s/sidechains — **done** (verified on a Librem 5 running PureOS 11 Crimson, Aug 2026)
 
 - Same ETH key/address (`m/44'/60'/0'/0/0`), same Alloy provider code — added as more `eth_network` values: Arbitrum One, Base, Optimism, Polygon PoS, BNB Smart Chain, Avalanche C-Chain (chain IDs and RPCs verified against each network's own docs)
-- Native gas token generalized: `eth_chain::native_symbol(network)` (ETH / MATIC / BNB / AVAX) now drives balance, fee, and history display instead of a hardcoded `"ETH"`
+- Native gas token generalized: `eth_chain::native_symbol(network)` (ETH / POL / BNB / AVAX) now drives balance, fee, and history display instead of a hardcoded `"ETH"`
 - Bundled stablecoin per network (Circle-issued native USDC on Arbitrum/Base/Optimism/Polygon/Avalanche; Binance-Peg USDT, 18 decimals, on BSC — Circle doesn't issue native USDC there)
 - Switching networks now clears the previous network's bundled tokens and each wallet's ERC-20 balance cache, so a stale contract address/amount from the prior network can't linger under a reused symbol key
 - Safety-check fix: the mainnet spend-confirmation checkbox was gated on `network == "mainnet"`, which hid it (and left Confirm enabled) for *any* other network name, including a new L2 — now gated on `eth_chain::is_testnet`, correct for every real-value network
@@ -284,6 +284,40 @@ Still open here:
   on a block explorer.
 - No affiliate fee is taken on any route. The hooks exist on both aggregators and both
   cross-chain networks, and the question was raised but not settled.
+
+### Token coverage and sync cost
+
+The bundled list went from 33 entries to about 315: roughly 275 ERC-20s across the seven EVM
+networks (every token the curated source lists on four or more of them, plus the chain-specific
+ones already carried) and the top 40 SPL tokens by holder count.
+
+Nothing was bundled on the strength of a list file. All 276 EVM candidates and all 40 mints
+were verified on-chain first, in bulk, and the check found real problems: FLUX listed at 18
+decimals against three contracts that report 8, Polygon's gas token renamed from MATIC to POL,
+and two contracts whose symbol cannot be rendered (Arbitrum USDT0 uses a non-ASCII glyph and
+Arbitrum's bridged MKR reports a stringified bytes32).
+
+A list that long is only affordable because the per-token costs were removed first:
+
+- **Multicall3** (`currencies::multicall`) collapses every `balanceOf` into one `eth_call`, so
+  a sync costs the same with 275 tokens as with 4. Verified end to end against a live node: a
+  batched read reproduced, to the wei, what four separate `eth_call`s returned for the same
+  account.
+- **`getTokenAccountsByOwner`** does the same for Solana, one call for every holding.
+- **Batched `eth_getLogs`** covers all token contracts in two queries rather than two per token.
+- The Ethereum and Solana poll interval moved from 20s to 60s.
+
+Still open here:
+
+- Token-2022 mints are excluded. Four of the top forty SPL tokens use it (CASH, PUMP, ANSEM,
+  CATE), but `find_associated_token_address` and the transfer instruction both assume the
+  classic program id, and Token-2022 uses its own as an ATA seed. Bundling one would show a
+  balance that could not be spent.
+- ~~The Assets screen renders every bundled token as a row.~~ It never did: the ERC-20 and SPL
+  loops already skipped zero balances, so only the four native rows persisted when empty.
+  **Settings -> Hide empty assets** now covers those too, and the searchable picker handles the
+  swap screen where the list really is long.
+- No periodic refresh of the bundled list. It is a snapshot, and tokens get renamed.
 
 ### P4 — hardware / platform
 

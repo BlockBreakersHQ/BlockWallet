@@ -111,6 +111,10 @@ pub struct StoreSettings {
     pub fiat: String,
     #[serde(default)]
     pub btc_units: String,
+    /// Hide assets whose balance is a confirmed zero. Defaults to false on records written
+    /// before the option existed, which is the behaviour those users already had.
+    #[serde(default)]
+    pub hide_zero_balances: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -210,6 +214,7 @@ impl Default for PayloadV1 {
                 show_prices: false,
                 fiat: String::new(),
                 btc_units: String::new(),
+                hide_zero_balances: false,
             },
             btc: Vec::new(),
             eth: Vec::new(),
@@ -489,6 +494,7 @@ mod tests {
                 show_prices: false,
                 fiat: "usd".to_string(),
                 btc_units: "btc".to_string(),
+                hide_zero_balances: false,
             },
             btc: vec![BtcRecord {
                 name: "btc_wallet".to_string(),
@@ -536,6 +542,35 @@ mod tests {
         assert_eq!(loaded, payload);
         let _ = session;
         let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn hide_zero_balances_survives_a_store_roundtrip() {
+        let path = temp_path();
+        let mut payload = sample_payload();
+        payload.settings.hide_zero_balances = true;
+        StoreSession::create(&path, "correct horse", &payload).unwrap();
+        let (loaded, _) = StoreSession::unlock(&path, "correct horse").unwrap();
+        assert!(loaded.settings.hide_zero_balances);
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn a_store_written_before_the_option_existed_still_loads() {
+        // Every existing user's store predates this field. Deserialising must fall back to
+        // false, which is the behaviour they already had, rather than failing to open the
+        // wallet at all.
+        let json = r#"{
+            "starred": ["BTC"],
+            "infura_key": "", "etherscan_key": "",
+            "btc_node": "", "eth_node": "", "sol_node": "", "ltc_node": "",
+            "thornode_url": "",
+            "btc_network": "bitcoin", "eth_network": "mainnet",
+            "sol_network": "mainnet", "ltc_network": "mainnet",
+            "custom_tokens": []
+        }"#;
+        let settings: StoreSettings = serde_json::from_str(json).expect("old settings still parse");
+        assert!(!settings.hide_zero_balances);
     }
 
     #[test]

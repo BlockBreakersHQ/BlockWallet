@@ -1,5 +1,7 @@
 use adw::prelude::*;
 use glib::{clone, ControlFlow};
+use std::cell::Cell;
+use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -165,6 +167,14 @@ pub fn asset_view(
         }
     });
 
+    // A session-only override for the setting, so hidden assets are always one tap away.
+    //
+    // Receiving is only reachable by opening an asset, so hiding a zero-balance row also hides
+    // the only route to its receive address. The footer button below flips this for the
+    // current visit rather than changing the saved preference, which keeps the setting honest
+    // and the receive path reachable at the same time.
+    let reveal_all = Rc::new(Cell::new(false));
+
     crate::configuration::ui_channel::attach(
         receiver,
         clone!(
@@ -172,15 +182,31 @@ pub fn asset_view(
             #[weak] empty,
             #[weak] banner,
             #[strong] nav,
+            #[strong] reveal_all,
             #[upgrade_or]
             ControlFlow::Break,
             move |(items, offline, snapshot): (Vec<(Token, String)>, bool, ApplicationSettings)| {
                 while let Some(child) = rows.first_child() {
                     rows.remove(&child);
                 }
-                empty.set_visible(items.is_empty());
+
+                let hiding = snapshot.hide_zero_balances && !reveal_all.get();
+                let shown: Vec<(Token, String)> = if hiding {
+                    items
+                        .iter()
+                        .filter(|(_, display)| !nav::is_confirmed_zero(display))
+                        .cloned()
+                        .collect()
+                } else {
+                    items.clone()
+                };
+                let hidden_count = items.len() - shown.len();
+
+                empty.set_visible(shown.is_empty() && hidden_count == 0);
                 banner.set_label(if offline {
                     "A node is unreachable. You can still open an asset to receive."
+                } else if snapshot.hide_zero_balances {
+                    "Tap an asset to send or receive. Empty assets are hidden."
                 } else {
                     "Tap an asset to send or receive. Zero balances stay listed so you can still receive."
                 });
@@ -191,7 +217,7 @@ pub fn asset_view(
                 // chain is the thing that decides where a send actually goes.
                 for chain in ["btc", "eth", "sol", "ltc"] {
                     let chain_items: Vec<&(Token, String)> =
-                        items.iter().filter(|(token, _)| token.chain == chain).collect();
+                        shown.iter().filter(|(token, _)| token.chain == chain).collect();
                     if chain_items.is_empty() {
                         continue;
                     }
@@ -217,6 +243,49 @@ pub fn asset_view(
                         group.add(&row);
                     }
                     rows.append(&group);
+                }
+
+                // Everything is empty and the filter has swallowed the whole list. Say so
+                // rather than presenting a blank screen that looks like a failure to load.
+                if shown.is_empty() && hidden_count > 0 {
+                    rows.append(&ui::empty_state(
+                        "Nothing with a balance yet",
+                        "Every asset is empty, so they are all hidden. Show them to receive.",
+                        "view-grid-symbolic",
+                    ));
+                }
+
+                if hidden_count > 0 {
+                    let label = if hidden_count == 1 {
+                        "Show 1 empty asset".to_string()
+                    } else {
+                        format!("Show {hidden_count} empty assets")
+                    };
+                    let show = gtk::Button::builder()
+                        .label(label)
+                        .halign(gtk::Align::Center)
+                        .css_classes(["flat"])
+                        .build();
+                    let reveal = Rc::clone(&reveal_all);
+                    show.connect_clicked(move |button| {
+                        reveal.set(true);
+                        // The list rebuilds on the next poll; disable in the meantime so a
+                        // second press cannot queue a second rebuild.
+                        button.set_sensitive(false);
+                    });
+                    rows.append(&show);
+                } else if reveal_all.get() && snapshot.hide_zero_balances {
+                    let hide = gtk::Button::builder()
+                        .label("Hide empty assets again")
+                        .halign(gtk::Align::Center)
+                        .css_classes(["flat"])
+                        .build();
+                    let reveal = Rc::clone(&reveal_all);
+                    hide.connect_clicked(move |button| {
+                        reveal.set(false);
+                        button.set_sensitive(false);
+                    });
+                    rows.append(&hide);
                 }
                 ControlFlow::Continue
             }

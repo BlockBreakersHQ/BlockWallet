@@ -31,8 +31,28 @@ The bundled token list is now around forty entries and the Ethereum and Solana p
 slowed from twenty seconds to sixty to pay for it. Both are worth eyeballing on the device,
 since a long list is a layout problem and a slow poll is a "did that work?" problem.
 
-- [ ] Assets lists every bundled token for the selected network, each with a symbol, a name and
-      a balance, and scrolls cleanly at 360 px
+- [ ] Home on an empty wallet lists all four chains; the hero subtitle reads "4 assets across
+      4 chains"
+- [ ] Once one chain has a balance, Home lists only that one, and the subtitle reads
+      "1 asset across 4 chains" (singular, not "1 assets")
+- [ ] With a balance held, turn the radios off: no row vanishes, because an unreachable node
+      reports zero without meaning it
+- [ ] Immediately after unlock, Home does not drop and re-add rows as each chain reports in
+- [ ] Assets lists the four native assets plus any token with a non-zero balance, each with a
+      symbol, a name and a balance, and scrolls cleanly at 360 px
+- [ ] Settings -> **Hide empty assets** on: empty assets disappear, and a "Show N empty assets"
+      button appears at the bottom of the list
+- [ ] Tapping that button reveals them for this visit only; leaving Assets and coming back
+      hides them again, and the Settings switch is still on
+- [ ] With every asset empty and the switch on, the screen explains that rather than going blank
+- [ ] Turn the radios off with the switch on: nothing disappears, because an unreachable node
+      reports zero and must never be treated as a confirmed zero
+- [ ] Immediately after unlock, assets do not flicker in and out as balances arrive (a syncing
+      row is not hideable either)
+- [ ] Avalanche: bridged assets show their real symbols (WETH.e, LINK.e, WBTC.e) rather than
+      implying the native token
+- [ ] Polygon: the native balance reads POL, not MATIC, while the bridged MATIC ERC-20 on
+      mainnet, BSC and Arbitrum still reads MATIC
 - [ ] No token row shows a placeholder or a broken icon
 - [ ] Switching the ETH network replaces the token list rather than appending to it, and no
       stale balance from the previous network is left showing
@@ -74,7 +94,7 @@ since a long list is a layout problem and a slow poll is a "did that work?" prob
 - [ ] Optional: send a Sepolia ERC-20 if you have a test token
 - [ ] SOL devnet: airdrop with `solana airdrop`, send a tiny amount back; Review → summary shows **devnet**
 - [ ] Optional: send the bundled devnet USDC-SPL (or a token added by mint address) to confirm the associated-token-account creation path works
-- [ ] Settings → switch the ETH network dropdown to an L2 (Arbitrum/Base/Optimism/Polygon/BSC/Avalanche): balance row shows the correct native symbol (MATIC/BNB/AVAX where applicable, ETH otherwise), and the "I understand this spends real value" checkbox is visible and gates Confirm on send
+- [ ] Settings → switch the ETH network dropdown to an L2 (Arbitrum/Base/Optimism/Polygon/BSC/Avalanche): balance row shows the correct native symbol (POL/BNB/AVAX where applicable, ETH otherwise), and the "I understand this spends real value" checkbox is visible and gates Confirm on send
 - [ ] LTC testnet: fund from a faucet, send a small amount back; Review → summary shows **testnet**; mainnet send requires the "I understand this spends real litecoin" checkbox (spot-check by turning test networks off; do not broadcast)
 
 ## 5. Swap
@@ -91,10 +111,12 @@ certificate on another), while Maya answers and reports its own trading halt. So
 mainnet result today is that the two EVM aggregators quote and the two vault venues decline
 with different messages.
 
-- [ ] Swap tab opens and lists the wallet's assets in both dropdowns, including the newly
-      bundled tokens for the selected network
-- [ ] The dropdowns are usable at 360 px with a list this long: the popover scrolls rather than
-      overflowing the screen
+- [ ] Swap tab opens; From and To are searchable rows, not dropdowns
+- [ ] Tapping one opens a search dialog listing every bundled token for the selected network
+      (about 275 on Ethereum mainnet, 40 on Solana), scrolling smoothly at 360 px
+- [ ] Typing filters the list; a symbol ("usdc") and a chain name ("solana") both narrow it
+- [ ] The currently selected token is ticked when the dialog opens, and Cancel leaves it alone
+- [ ] Choosing a token closes the dialog, updates the row, and clears any shown offer
 - [ ] On testnet, **Find the best rate** returns promptly and does **not** hang the app
 - [ ] It reports that no provider could route the swap, and lists why each declined, naming all
       five venues rather than silently dropping the ones that failed

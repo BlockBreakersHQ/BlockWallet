@@ -74,6 +74,8 @@ pub struct ApplicationSettings {
     pub show_prices         : bool,
     pub fiat                : String,
     pub btc_units           : String,
+    /// Hide assets whose balance is a confirmed zero on the Assets screen.
+    pub hide_zero_balances  : bool,
     pub sync_epoch          : Arc<AtomicU64>,
 }
 
@@ -258,6 +260,7 @@ impl ApplicationSettings {
             show_prices         : false,
             fiat                : String::from("usd"),
             btc_units           : String::from("btc"),
+            hide_zero_balances  : false,
             sync_epoch          : Arc::new(AtomicU64::new(0)),
         };
         crate::currencies::eth_chain::apply_bundled_tokens(
@@ -704,6 +707,7 @@ impl ApplicationSettings {
                 show_prices: self.show_prices,
                 fiat: self.fiat.clone(),
                 btc_units: self.btc_units.clone(),
+                hide_zero_balances: self.hide_zero_balances,
             },
             btc: self.btc_wallets.iter().map(|wallet| {
                 let from_seed = self.uses_store_seed(wallet.mnemonic.as_deref());
@@ -796,6 +800,7 @@ impl ApplicationSettings {
         if !payload.settings.fiat.is_empty() {
             self.fiat = payload.settings.fiat;
         }
+        self.hide_zero_balances = payload.settings.hide_zero_balances;
         if !payload.settings.btc_units.is_empty() {
             self.btc_units = payload.settings.btc_units;
         }

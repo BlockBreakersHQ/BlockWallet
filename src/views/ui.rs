@@ -7,8 +7,9 @@
 
 use adw::prelude::*;
 use gtk::{Align, Orientation};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::path::Path;
+use std::rc::Rc;
 
 /// Page gutter. One value, used everywhere, so nothing drifts by a stray pixel.
 pub const GUTTER: i32 = 12;
@@ -306,6 +307,197 @@ pub fn combo_row(title: &str, options: &[&str]) -> adw::ComboRow {
         .build()
 }
 
+// ------------------------------------------------------------------ searchable picker
+
+/// Does this picker label match what the user has typed?
+///
+/// A free function rather than a closure body so it can be tested without a display, which
+/// is the whole reason the matching rule lives here instead of inline in the filter.
+///
+/// Case-insensitive substring, over the whole visible label. Substring rather than prefix
+/// because the labels carry the chain in them ("USDC (Ethereum)"), so typing a chain name is
+/// a reasonable way to narrow a list of three hundred, and prefix matching would find
+/// nothing. `needle` is expected already lowercased by the caller.
+pub fn picker_matches(label: &str, needle: &str) -> bool {
+    if needle.is_empty() {
+        return true;
+    }
+    label.to_lowercase().contains(needle)
+}
+
+/// A row that opens a searchable list, for choices too numerous for a dropdown.
+///
+/// `AdwComboRow` is right for a handful of options and wrong for several hundred: the bundled
+/// token list runs to about 275 entries on Ethereum mainnet, and a dropdown that long is a
+/// single unscannable column on a 360 px phone screen. This presents the same choice as an
+/// activatable row that opens a dialog with a search entry, which is how every phone contact
+/// picker works and for the same reason.
+///
+/// Deliberately built from `AdwWindow`, `GtkSearchEntry` and `GtkListBox`, all present in
+/// libadwaita 1.2 and GTK 4.8. `AdwDialog` would be the modern spelling but it needs 1.5,
+/// which would raise the floor above Debian bookworm and break the phone this targets.
+#[derive(Clone)]
+pub struct PickerRow {
+    row: adw::ActionRow,
+    options: Rc<Vec<String>>,
+    selected: Rc<Cell<usize>>,
+    on_change: Rc<RefCell<Vec<Rc<dyn Fn()>>>>,
+}
+
+impl PickerRow {
+    pub fn new(title: &str, options: &[String]) -> Self {
+        let row = adw::ActionRow::builder()
+            .title(title)
+            .activatable(true)
+            .build();
+        // A chevron, matching what AdwComboRow shows, so the row reads as "opens something"
+        // rather than as a static label.
+        row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
+
+        let picker = Self {
+            row,
+            options: Rc::new(options.to_vec()),
+            selected: Rc::new(Cell::new(0)),
+            on_change: Rc::new(RefCell::new(Vec::new())),
+        };
+        picker.apply_selection();
+
+        let opener = picker.clone();
+        picker.row.connect_activated(move |row| opener.open_dialog(row));
+        picker
+    }
+
+    pub fn row(&self) -> &adw::ActionRow {
+        &self.row
+    }
+
+    pub fn selected(&self) -> usize {
+        self.selected.get()
+    }
+
+    pub fn set_selected(&self, index: usize) {
+        if index >= self.options.len() {
+            return;
+        }
+        if self.selected.get() == index {
+            return;
+        }
+        self.selected.set(index);
+        self.apply_selection();
+        self.notify();
+    }
+
+    /// Run `f` whenever the selection changes, matching `connect_selected_notify` on a combo
+    /// row so callers can treat the two the same way.
+    pub fn connect_changed<F: Fn() + 'static>(&self, f: F) {
+        self.on_change.borrow_mut().push(Rc::new(f));
+    }
+
+    fn notify(&self) {
+        // The handler list is cloned out and the borrow dropped before anything is called. A
+        // handler is free to touch this picker (the swap screen's invalidation gate does), and
+        // calling one while the list is still borrowed would panic at runtime rather than
+        // fail to compile.
+        let handlers: Vec<Rc<dyn Fn()>> = self.on_change.borrow().iter().cloned().collect();
+        for handler in handlers {
+            handler();
+        }
+    }
+
+    fn apply_selection(&self) {
+        let label = self
+            .options
+            .get(self.selected.get())
+            .cloned()
+            .unwrap_or_default();
+        self.row.set_subtitle(&label);
+    }
+
+    fn open_dialog(&self, anchor: &adw::ActionRow) {
+        let window = adw::Window::builder()
+            .modal(true)
+            .default_width(360)
+            .default_height(640)
+            .build();
+        if let Some(root) = anchor.root().and_downcast::<gtk::Window>() {
+            window.set_transient_for(Some(&root));
+        }
+
+        let header = adw::HeaderBar::new();
+        header.set_title_widget(Some(&adw::WindowTitle::new(&self.row.title(), "")));
+        let cancel = gtk::Button::with_label("Cancel");
+        header.pack_start(&cancel);
+
+        let search = gtk::SearchEntry::new();
+        search.set_placeholder_text(Some("Search"));
+        search.set_margin_start(GUTTER);
+        search.set_margin_end(GUTTER);
+        search.set_margin_top(GUTTER);
+        search.set_margin_bottom(GUTTER / 2);
+
+        let list = gtk::ListBox::new();
+        list.set_selection_mode(gtk::SelectionMode::None);
+        list.add_css_class("boxed-list");
+        list.set_margin_start(GUTTER);
+        list.set_margin_end(GUTTER);
+        list.set_margin_bottom(GUTTER);
+
+        for (index, option) in self.options.iter().enumerate() {
+            let item = adw::ActionRow::builder()
+                .title(option)
+                .activatable(true)
+                .build();
+            if index == self.selected.get() {
+                item.add_suffix(&gtk::Image::from_icon_name("object-select-symbolic"));
+            }
+            let picker = self.clone();
+            let window_ref = window.clone();
+            item.connect_activated(move |_| {
+                picker.set_selected(index);
+                window_ref.close();
+            });
+            list.append(&item);
+        }
+
+        // The row index is recovered from the widget position rather than stored alongside it,
+        // so the filter needs no parallel bookkeeping to stay in step with the list.
+        let options = Rc::clone(&self.options);
+        let query = Rc::new(RefCell::new(String::new()));
+        let query_for_filter = Rc::clone(&query);
+        list.set_filter_func(move |row| {
+            let needle = query_for_filter.borrow();
+            options
+                .get(row.index().max(0) as usize)
+                .map(|label| picker_matches(label, &needle))
+                .unwrap_or(true)
+        });
+
+        let list_for_search = list.clone();
+        search.connect_search_changed(move |entry| {
+            *query.borrow_mut() = entry.text().to_lowercase();
+            list_for_search.invalidate_filter();
+        });
+
+        let scroller = gtk::ScrolledWindow::builder()
+            .hscrollbar_policy(gtk::PolicyType::Never)
+            .vexpand(true)
+            .child(&list)
+            .build();
+
+        let body = gtk::Box::new(Orientation::Vertical, 0);
+        body.append(&header);
+        body.append(&search);
+        body.append(&scroller);
+        window.set_content(Some(&body));
+
+        let window_for_cancel = window.clone();
+        cancel.connect_clicked(move |_| window_for_cancel.close());
+
+        window.present();
+        search.grab_focus();
+    }
+}
+
 /// Add a labelled toggle row to `group` and hand back the switch itself.
 ///
 /// This is an `AdwActionRow` with a `GtkSwitch` suffix rather than an `AdwSwitchRow`,
@@ -443,5 +635,29 @@ mod tests {
         unique.sort_unstable();
         unique.dedup();
         assert_eq!(unique.len(), 4);
+    }
+
+    #[test]
+    fn picker_search_matches_symbol_and_chain_anywhere_in_the_label() {
+        // Labels the swap screen actually builds.
+        let usdc_eth = "USDC (Ethereum)";
+        let usdc_sol = "USDC (Solana)";
+        let wbtc = "WBTC (Ethereum)";
+
+        // Empty query shows everything, so opening the picker is not an empty screen.
+        assert!(picker_matches(usdc_eth, ""));
+
+        // Case-insensitive on the symbol.
+        assert!(picker_matches(usdc_eth, "usdc"));
+        assert!(picker_matches(usdc_eth, "usd"));
+        assert!(!picker_matches(wbtc, "usdc"));
+
+        // Substring, not prefix: the chain sits at the end of the label, and narrowing three
+        // hundred tokens by chain is a reasonable thing to want.
+        assert!(picker_matches(usdc_sol, "solana"));
+        assert!(!picker_matches(usdc_eth, "solana"));
+
+        // A query matching nothing matches nothing, rather than falling open.
+        assert!(!picker_matches(usdc_eth, "zzzz"));
     }
 }
