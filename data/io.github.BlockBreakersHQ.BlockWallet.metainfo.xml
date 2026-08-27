@@ -95,6 +95,19 @@
     <content_attribute id="money-purchasing">intense</content_attribute>
   </content_rating>
   <releases>
+    <release version="0.2.0" type="development" date="2026-08-26">
+      <description>
+        <p>Many more tokens, more swap venues, and a sync that no longer slows down as the token list grows.</p>
+        <ul>
+          <li>Around 315 bundled tokens, up from 33: roughly 275 ERC-20s across the seven supported EVM networks and the top 40 Solana tokens. Every contract and mint was verified on-chain before inclusion.</li>
+          <li>Two more swap venues: KyberSwap alongside LI.FI for same-chain swaps, and Maya Protocol alongside THORChain for cross-chain. Venues are compared side by side and the ones that decline say why.</li>
+          <li>Balances are read in a single batched call per chain, so syncing costs the same with 300 tokens as with 4 and no longer risks rate-limiting a public node.</li>
+          <li>The swap screen picks tokens through a searchable list rather than a long dropdown.</li>
+          <li>Empty assets can be hidden from the Assets screen, and the home screen narrows to what you hold once you hold something. A balance that is still syncing, or that could not be fetched, is never treated as empty.</li>
+          <li>Polygon's native token is now correctly shown as POL rather than MATIC.</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.0" type="development" date="2026-08-24">
       <description>
         <p>First packaged release: Bitcoin, Ethereum (plus L2s), Solana and Litecoin send/receive/lock from one recovery phrase. Verified against the Librem 5 hardware checklist on PureOS 11 (Crimson).</p>
