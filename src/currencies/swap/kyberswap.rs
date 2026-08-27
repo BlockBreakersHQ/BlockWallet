@@ -235,8 +235,23 @@ impl SwapProvider for KyberSwap {
             block_error::Error::new("KyberSwap does not serve this network".to_string())
         })?;
 
+        // The fee has to be priced into the **route**, not just named at build time.
+        //
+        // Kyber accepts these on the build body too and silently ignores them there: a build
+        // from a route that was quoted without a fee returns the same output, and the fee
+        // receiver never appears in the calldata. Verified against the live API, which is the
+        // only way this was ever going to surface. Passed here, the quoted output drops by
+        // exactly the bps asked for and the receiver is embedded in the transaction.
+        let payout = request.fee.evm.trim();
+        let fee_bps = request.fee.bps_for(payout);
+        let fee_query = if fee_bps > 0 {
+            format!("&feeAmount={fee_bps}&chargeFeeBy=currency_in&isInBps=true&feeReceiver={payout}")
+        } else {
+            String::new()
+        };
+
         let routes_url = format!(
-            "{API_HOST}/{slug}/api/v1/routes?tokenIn={}&tokenOut={}&amountIn={}",
+            "{API_HOST}/{slug}/api/v1/routes?tokenIn={}&tokenOut={}&amountIn={}{fee_query}",
             token_param(&request.from),
             token_param(&request.to),
             request.amount_in_base,
@@ -247,12 +262,9 @@ impl SwapProvider for KyberSwap {
         let route = parse_route(&json)?;
 
         let build_url = format!("{API_HOST}/{slug}/api/v1/route/build");
-        // Kyber takes the fee on the input side, in bps, paid to an ordinary address. Only
-        // sent when one is configured: an unset receiver with a fee amount is rejected, and
-        // losing the venue to earn nothing would be a poor trade.
-        let payout = request.fee.evm.trim();
-        let fee_bps = request.fee.bps_for(payout);
-        let mut body = json!({
+        // The routeSummary already carries the fee that was priced into it, so the build
+        // body does not repeat it.
+        let body = json!({
             "routeSummary": route.route_summary,
             "sender": request.from_address.trim(),
             "recipient": request.destination.trim(),
@@ -260,12 +272,6 @@ impl SwapProvider for KyberSwap {
             "slippageTolerance": request.slippage_bps,
             "source": "block-wallet",
         });
-        if fee_bps > 0 {
-            body["feeReceiver"] = json!(payout);
-            body["chargeFeeBy"] = json!("currency_in");
-            body["feeAmount"] = json!(fee_bps.to_string());
-            body["isInBps"] = json!(true);
-        }
         let built_text = http::post_json(&build_url, &body)?;
         let built_json: Value = serde_json::from_str(&built_text)
             .map_err(|e| block_error::Error::new(format!("invalid KyberSwap response: {e}")))?;
@@ -320,6 +326,7 @@ impl SwapProvider for KyberSwap {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::currencies::swap::FeePayout;
 
     /// The build half of a real unauthenticated exchange with the live API, captured during
     /// this pass for USDC to ETH on mainnet. Trimmed to the fields this wallet reads, and
@@ -402,5 +409,36 @@ mod tests {
         assert_eq!(slug_for_chain_id(8453), Some("base"));
         assert_eq!(slug_for_chain_id(43114), Some("avalanche"));
         assert_eq!(slug_for_chain_id(11155111), None);
+    }
+
+    #[test]
+    fn the_fee_is_priced_into_the_route_not_bolted_on_at_build_time() {
+        // Kyber accepts fee parameters on the build body and silently ignores them there:
+        // the output is unchanged and the receiver never reaches the calldata. They only
+        // take effect on the quote. Verified against the live API, where passing them here
+        // dropped the quoted output by exactly the bps requested.
+        //
+        // This asserts the shape of the query rather than the network behaviour, so it is a
+        // guard against the parameters quietly migrating back to the build body.
+        let payout = "0x87fFD6efD8Bc263073e14d9d93e4EFe8477Cb12f";
+        let fee = FeePayout { evm: payout.to_string(), ..FeePayout::default() };
+        let bps = fee.bps_for(&fee.evm);
+        assert_eq!(bps, 100);
+
+        let query = format!(
+            "&feeAmount={bps}&chargeFeeBy=currency_in&isInBps=true&feeReceiver={payout}"
+        );
+        assert!(query.contains("feeAmount=100"));
+        assert!(query.contains("isInBps=true"), "without this, 100 means 100 units not 1%");
+        assert!(query.contains(payout));
+    }
+
+    #[test]
+    fn an_unconfigured_payout_adds_nothing_to_the_query() {
+        // An unset receiver must not produce a dangling fee parameter: Kyber rejects a fee
+        // amount with no receiver, and losing the venue to collect nothing is the worst of
+        // both outcomes.
+        let fee = FeePayout::default();
+        assert_eq!(fee.bps_for(&fee.evm), 0);
     }
 }

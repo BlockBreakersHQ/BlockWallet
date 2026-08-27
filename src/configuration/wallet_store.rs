@@ -119,6 +119,8 @@ pub struct StoreSettings {
     #[serde(default)]
     pub fee_evm_address: String,
     #[serde(default)]
+    pub fee_lifi_integrator: String,
+    #[serde(default)]
     pub fee_solana_account: String,
     #[serde(default)]
     pub fee_thorchain_address: String,
@@ -225,6 +227,7 @@ impl Default for PayloadV1 {
                 btc_units: String::new(),
                 hide_zero_balances: false,
                 fee_evm_address: String::new(),
+                fee_lifi_integrator: String::new(),
                 fee_solana_account: String::new(),
                 fee_thorchain_address: String::new(),
                 fee_maya_address: String::new(),
@@ -509,6 +512,7 @@ mod tests {
                 btc_units: "btc".to_string(),
                 hide_zero_balances: false,
                 fee_evm_address: String::new(),
+                fee_lifi_integrator: String::new(),
                 fee_solana_account: String::new(),
                 fee_thorchain_address: String::new(),
                 fee_maya_address: String::new(),

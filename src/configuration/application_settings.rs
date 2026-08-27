@@ -78,6 +78,7 @@ pub struct ApplicationSettings {
     pub hide_zero_balances  : bool,
     /// Affiliate payout addresses. Empty means no swap fee is requested from that venue.
     pub fee_evm_address     : String,
+    pub fee_lifi_integrator : String,
     pub fee_solana_account  : String,
     pub fee_thorchain_address: String,
     pub fee_maya_address    : String,
@@ -267,6 +268,7 @@ impl ApplicationSettings {
             btc_units           : String::from("btc"),
             hide_zero_balances  : false,
             fee_evm_address     : crate::currencies::swap::DEFAULT_FEE_EVM_ADDRESS.to_string(),
+            fee_lifi_integrator : crate::currencies::swap::DEFAULT_FEE_LIFI_INTEGRATOR.to_string(),
             fee_solana_account  : crate::currencies::swap::DEFAULT_FEE_SOLANA_ACCOUNT.to_string(),
             fee_thorchain_address: crate::currencies::swap::DEFAULT_FEE_THORCHAIN_ADDRESS.to_string(),
             fee_maya_address    : crate::currencies::swap::DEFAULT_FEE_MAYA_ADDRESS.to_string(),
@@ -718,6 +720,7 @@ impl ApplicationSettings {
                 btc_units: self.btc_units.clone(),
                 hide_zero_balances: self.hide_zero_balances,
                 fee_evm_address: self.fee_evm_address.clone(),
+                fee_lifi_integrator: self.fee_lifi_integrator.clone(),
                 fee_solana_account: self.fee_solana_account.clone(),
                 fee_thorchain_address: self.fee_thorchain_address.clone(),
                 fee_maya_address: self.fee_maya_address.clone(),
@@ -818,6 +821,9 @@ impl ApplicationSettings {
         // default back out. Same rule the other defaulted settings use.
         if !payload.settings.fee_evm_address.trim().is_empty() {
             self.fee_evm_address = payload.settings.fee_evm_address;
+        }
+        if !payload.settings.fee_lifi_integrator.trim().is_empty() {
+            self.fee_lifi_integrator = payload.settings.fee_lifi_integrator;
         }
         self.fee_solana_account = payload.settings.fee_solana_account;
         self.fee_thorchain_address = payload.settings.fee_thorchain_address;

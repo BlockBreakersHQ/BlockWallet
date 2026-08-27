@@ -163,10 +163,10 @@ impl SwapProvider for LiFi {
         // sent one would have its quotes rejected and lose the venue entirely. The parameter
         // is therefore only added when a payout address is configured, and even then it is
         // LI.FI that decides whether to apply it. `fee` is a fraction here, not bps.
-        let payout = request.fee.evm.trim();
-        let fee_bps = request.fee.bps_for(payout);
+        let integrator = request.fee.lifi_integrator.trim();
+        let fee_bps = request.fee.bps_for(integrator);
         let fee_param = if fee_bps > 0 {
-            format!("&integrator=block-wallet&fee={}", fee_bps as f64 / 10_000.0)
+            format!("&integrator={integrator}&fee={}", fee_bps as f64 / 10_000.0)
         } else {
             String::new()
         };

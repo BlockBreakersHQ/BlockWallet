@@ -60,6 +60,7 @@ fn source_address(settings: &ApplicationSettings, chain: &str) -> Option<String>
 fn fee_payout(settings: &ApplicationSettings) -> swap::FeePayout {
     swap::FeePayout {
         evm: settings.fee_evm_address.clone(),
+        lifi_integrator: settings.fee_lifi_integrator.clone(),
         solana: settings.fee_solana_account.clone(),
         thorchain: settings.fee_thorchain_address.clone(),
         maya: settings.fee_maya_address.clone(),
