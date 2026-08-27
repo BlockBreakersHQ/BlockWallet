@@ -50,14 +50,14 @@
                     "type": "file",
                     "only-arches": ["aarch64"],
                     "url": "https://github.com/BlockBreakersHQ/BlockWallet/releases/download/v0.2.2/block_wallet-pureos-aarch64",
-                    "sha256": "SHA_AARCH64_TBD",
+                    "sha256": "b648b78ee0cdcba8360bbd686cdef2bb5d6534e819300913c4624066eafde3ec",
                     "dest-filename": "block_wallet"
                 },
                 {
                     "type": "file",
                     "only-arches": ["x86_64"],
                     "url": "https://github.com/BlockBreakersHQ/BlockWallet/releases/download/v0.2.2/block_wallet-pureos-x86_64",
-                    "sha256": "SHA_X86_64_TBD",
+                    "sha256": "8a662473d783f7a99b29fa08af6d5292210caf0f62223f097cdc141a56001feb",
                     "dest-filename": "block_wallet"
                 }
             ]
